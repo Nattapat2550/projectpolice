@@ -10,13 +10,9 @@ const morgan = require("morgan");
 const swaggerJsDoc = require("swagger-jsdoc");
 const swaggerUi = require("swagger-ui-express");
 
-// Route files
-const dentists = require("./routes/dentists");
+// นำเข้า Routes (ต้องแน่ใจว่าไฟล์เหล่านี้มีอยู่จริงและเขียนโค้ดตามด้านบน)
 const auth = require("./routes/auth");
-const bookings = require("./routes/bookings");
-const users = require("./routes/users");
-const records = require("./routes/records");
-const pdf = require("./routes/pdf"); // <- นำเข้าระบบสแกน PDF
+const pdf = require("./routes/pdf");
 
 const app = express();
 
@@ -24,11 +20,11 @@ const swaggerOptions = {
   swaggerDefinition: {
     openapi: "3.0.0",
     info: {
-      title: "Library API",
+      title: "Core API",
       version: "1.0.0",
-      description: "API for managing dentist appointments, schedules, and user bookings",
+      description: "API for Authentication and PDF Scanning",
     },
-    servers: [{ url: "http://localhost:5555/api/v1" }], // แก้ PORT ใน Swagger ให้ตรงกับ env
+    servers: [{ url: "http://localhost:5555/api/v1" }],
   },
   apis: ["./routes/*.js"],
 };
@@ -53,12 +49,10 @@ const generalLimiter = rateLimit({
   },
 });
 
-app.use("/api/v1/dentists", dentists);
+// เปิดใช้งานเฉพาะ Routes ที่เราเตรียมไว้
 app.use("/api/v1/auth", auth);
-app.use("/api/v1/bookings", bookings);
-app.use("/api/v1/users", users);
-app.use("/api/v1/records", records);
-app.use("/api/v1/pdf", pdf); // <- เปิดใช้งาน Route PDF
+app.use("/api/v1/pdf", pdf);
+
 app.set("query parser", "extended");
 
 module.exports = app;
