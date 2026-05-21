@@ -10,11 +10,13 @@ const morgan = require("morgan");
 const swaggerJsDoc = require("swagger-jsdoc");
 const swaggerUi = require("swagger-ui-express");
 
+// Route files
 const dentists = require("./routes/dentists");
 const auth = require("./routes/auth");
 const bookings = require("./routes/bookings");
 const users = require("./routes/users");
 const records = require("./routes/records");
+const pdf = require("./routes/pdf"); // <- นำเข้าระบบสแกน PDF
 
 const app = express();
 
@@ -26,7 +28,7 @@ const swaggerOptions = {
       version: "1.0.0",
       description: "API for managing dentist appointments, schedules, and user bookings",
     },
-    servers: [{ url: "http://localhost:5003/api/v1" }],
+    servers: [{ url: "http://localhost:5555/api/v1" }], // แก้ PORT ใน Swagger ให้ตรงกับ env
   },
   apis: ["./routes/*.js"],
 };
@@ -56,6 +58,7 @@ app.use("/api/v1/auth", auth);
 app.use("/api/v1/bookings", bookings);
 app.use("/api/v1/users", users);
 app.use("/api/v1/records", records);
+app.use("/api/v1/pdf", pdf); // <- เปิดใช้งาน Route PDF
 app.set("query parser", "extended");
 
 module.exports = app;
