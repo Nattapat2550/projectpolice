@@ -150,9 +150,8 @@ export default function AllTaskItem({date, createdAt, name, personInCharge, assi
                                         return (
                                             <span
                                             key={idx}
-                                            className="inline-flex items-center gap-2 px-2.5 py-1 rounded-md text-xs sm:text-sm font-bold whitespace-nowrap assignee-badge"
+                                            className="inline-flex items-center gap-2 px-3 py-0.5 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap assignee-badge"
                                             style={{
-                                                // light: โปร่งแสง / dark: ทึบสด (ผ่าน CSS variable)
                                                 ['--badge-bg-light' as string]: `rgba(${r},${g},${b},0.15)`,
                                                 ['--badge-bg-dark' as string]:  `rgba(${r},${g},${b},0.85)`,
                                                 ['--badge-border-light' as string]: `rgba(${r},${g},${b},0.4)`,
@@ -244,36 +243,50 @@ export default function AllTaskItem({date, createdAt, name, personInCharge, assi
                                 control: (base) => ({
                                     ...base,
                                     padding: "0.2rem 0.5rem",
-                                    boxShadow: "none", 
-                                    borderRadius: "0.7rem",
+                                    boxShadow: "0 1px 3px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.05)",
+                                    borderRadius: "999px",
                                     backgroundColor: themeStyle.bg,
-                                    border: `2px solid ${themeStyle.border}`,
+                                    border: `0.5px solid ${themeStyle.border}`,
                                     color: themeStyle.color,
-                                    minHeight: "44px", 
+                                    minHeight: "44px",
                                     cursor: "pointer",
-                                    flexWrap: "nowrap"
+                                    flexWrap: "nowrap",
+                                    transition: "all 0.2s ease",
                                 }),
                                 menuPortal: (base) => ({ ...base, zIndex: 999999 }),
-                                menu: (base) => ({ ...base, zIndex: 999999 }),
+                                menu: (base) => ({ 
+                                    ...base, 
+                                    zIndex: 999999,
+                                    borderRadius: "1rem",
+                                    overflow: "hidden",
+                                    border: "0.5px solid rgba(0,0,0,0.08)",
+                                    boxShadow: "0 4px 24px rgba(0,0,0,0.12), 0 1px 4px rgba(0,0,0,0.08)",
+                                    padding: "0.25rem",
+                                    backgroundColor: "var(--button)",
+                                }),
+                                dropdownIndicator: (base) => ({ ...base, color: themeStyle.color }),
                                 singleValue: (base) => ({
                                     ...base,
                                     whiteSpace: "normal",
                                     overflowWrap: "break-word",
                                     textAlign: "center",
                                     fontWeight: "bold",
-                                    color: themeStyle.color
+                                    color: themeStyle.color,
+                                    fontSize: "1rem",
                                 }),
-                                dropdownIndicator: (base) => ({ ...base, color: themeStyle.color }),
                                 indicatorSeparator: (base) => ({ ...base, display: "none" }),
                                 option: (base, state) => {
                                     const optionStatus = state.data.value as keyof typeof selectThemeMap;
                                     const optionTheme = selectThemeMap[optionStatus] || selectThemeMap.following;
                                     return {
                                         ...base,
-                                        backgroundColor: state.isFocused ? optionTheme.bg : "var(--button)",
+                                        backgroundColor: state.isFocused ? optionTheme.bg : "transparent",
                                         color: optionTheme.color,
                                         fontWeight: "bold",
                                         cursor: "pointer",
+                                        borderRadius: "0.6rem",
+                                        transition: "background-color 0.15s ease",
+                                        fontSize: "1rem",
                                         ":active": { backgroundColor: optionTheme.bg },
                                     };
                                 },
