@@ -30,6 +30,7 @@
     "@exortek/express-mongo-sanitize": "^2.0.1",
     "@google/generative-ai": "^0.24.1",
     "@napi-rs/canvas": "^1.0.0",
+    "@supabase/supabase-js": "^2.108.1",
     "bcryptjs": "^3.0.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",

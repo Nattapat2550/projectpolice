@@ -1,10 +1,16 @@
 const pool = require('../config/db');
 const fs = require('fs').promises;
-const { uploadToDrive } = require('../services/googleDriveService');
+const { uploadToSupabase } = require('../services/supabaseStorageService');
 const { generateHash } = require('../utils/duplicateChecker');
 
-const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID; 
+// 💡ดึงสิทธิ์ Supabase Client เข้ามาใช้งานเพื่อรองรับการทำ Signed URL (ตั๋วเข้าชมไฟล์ชั่วคราว)
+const { createClient } = require('@supabase/supabase-js');
+const supabase = createClient(
+  process.env.SUPABASE_URL || 'https://thlwwzvjjszjdykayufg.supabase.co', 
+  process.env.SUPABASE_ANON_KEY || ''
+);
 
+// 1. ดึงงานติดตามทั้งหมด
 exports.getAllTasks = async (req, res) => {
   try {
     const query = `
@@ -43,6 +49,7 @@ exports.getAllTasks = async (req, res) => {
   }
 };
 
+// 2. ดึงงานด่วนพิเศษ
 exports.getUrgentTasks = async (req, res) => {
   try {
     const query = `
@@ -82,6 +89,7 @@ exports.getUrgentTasks = async (req, res) => {
   }
 };
 
+// 3. อัปเดตสถานะงาน (เช่น กำลังดำเนินงาน / สำเร็จแล้ว)
 exports.updateTaskStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -98,7 +106,7 @@ exports.updateTaskStatus = async (req, res) => {
   }
 };
 
-// 🔥 แก้บัคข้อ 2: ย้ายสิทธิ์การบันทึกเอกสารลง DB และการอัปไฟล์ขึ้น Drive มาทำที่นี่เมื่อมีการยืนยันสำเร็จเท่านั้น
+// 4. ยืนยันการบันทึกเอกสารและกระจายงานติดตาม (ย้ายจาก Drive มา Supabase Storage สำเร็จ)
 exports.confirmTasks = async (req, res) => {
   const client = await pool.connect();
   try {
@@ -107,35 +115,34 @@ exports.confirmTasks = async (req, res) => {
     const validCreatorId = createdBy ? createdBy : null;
     let documentId = null;
 
-    // หากมีการส่งข้อมูลไฟล์มา และผ่านการกดยืนยันแล้ว ให้เริ่มกระบวนการจัดเก็บถาวร
     if (fileInfo && fileInfo.path) {
-      // A. อัปโหลดไฟล์ตัวจริงขึ้น Google Drive
-      const driveData = await uploadToDrive(
-        { path: fileInfo.path, originalname: fileInfo.originalname, mimetype: fileInfo.mimetype },
-        DRIVE_FOLDER_ID
-      );
+      // อัปเดตทราฟฟิกอัปโหลดไฟล์ขึ้น Supabase Storage Bucket
+      const supabaseFileData = await uploadToSupabase({
+        path: fileInfo.path,
+        originalname: fileInfo.originalname,
+        mimetype: fileInfo.mimetype
+      });
 
-      // B. สร้างรหัสแฮชเพื่อป้องกันการลงเอกสารซ้ำในตารางฐานข้อมูล
+      // เจนรหัสแฮชเพื่อเช็คและป้องกันไฟล์เอกสารซ้ำในตาราง
       const hash = generateHash(fileInfo.text + Date.now().toString());
 
-      // C. บันทึกลงตารางเอกสารต้นฉบับ (documents) และดึงรหัส ID ออกมาใช้งาน
+      // แมปเข้าคอลัมน์ใหม่ตาราง documents (storage_path และ public_url)
       const docRes = await client.query(
-        `INSERT INTO documents (filename, content, content_hash, keywords_found, drive_file_id, drive_web_view_link, created_by)
+        `INSERT INTO documents (filename, content, content_hash, keywords_found, storage_path, public_url, created_by)
          VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
         [
           fileInfo.originalname,
           fileInfo.text,
           hash,
           JSON.stringify({ memos }), 
-          driveData.id,
-          driveData.webViewLink,
+          supabaseFileData.id,             // เก็บ path ของไฟล์บนระบบ storage
+          supabaseFileData.publicUrl,       // ลิงก์ตรงสเปกดีฟอลต์ (สำหรับใช้บันทึกอ้างอิง)
           validCreatorId
         ]
       );
       documentId = docRes.rows[0].id;
     }
 
-    // ทำการบันทึกรายการงานติดตามทั้งหมดเข้าสู่ตารางระบบงาน
     if (memos && memos.length > 0) {
       for (const memo of memos) {
         const taskRes = await client.query(
@@ -181,12 +188,12 @@ exports.confirmTasks = async (req, res) => {
     
     await client.query('COMMIT');
 
-    // ลบไฟล์ชั่วคราวบน Local Server ออกทันทีหลังจากอัปโหลดเสร็จสมบูรณ์เรียบร้อยแล้ว
+    // ลบไฟล์ Temp ขยะในโฟลเดอร์ฝั่ง Backend คืนหน่วยความจำระบบ
     if (fileInfo && fileInfo.path) {
       try { await fs.unlink(fileInfo.path); } catch (e) { console.error("Warning: Cannot delete temp file", e.message); }
     }
 
-    res.status(200).json({ success: true, message: 'บันทึกเอกสารและงานติดตามสำเร็จเรียบร้อย!' });
+    res.status(200).json({ success: true, message: 'บันทึกเอกสารและงานติดตามลงระบบสำเร็จเรียบร้อย!' });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error("Confirm error:", err.message);
@@ -196,6 +203,7 @@ exports.confirmTasks = async (req, res) => {
   }
 };
 
+// 5. แก้ไขรายละเอียดงานติดตามชุดโครงสร้างย่อย
 exports.updateTaskDetail = async (req, res) => {
   const client = await pool.connect();
   try {
@@ -308,9 +316,11 @@ exports.updateTaskDetail = async (req, res) => {
   }
 };
 
+// 6. ดึงข้อมูลงานเดี่ยวผ่าน ID + 💡 มีระบบป้องกันการดึงลิงก์ไปเปิดนอกระบบ (Signed URL Hotlinking Protection)
 exports.getTaskById = async (req, res) => {
   try {
     const { id } = req.params;
+    
     const query = `
       SELECT 
         t.id, 
@@ -323,7 +333,7 @@ exports.getTaskById = async (req, res) => {
         t.memo_no, 
         t.memo_date,
         c.name AS "creatorName",
-        d.drive_web_view_link AS document_link,
+        d.storage_path AS document_path, -- ดึงตำแหน่งพาร์ติชันหลักของไฟล์มาตรวจสอบสิทธิ์ Private
         COALESCE(
           json_agg(
             json_build_object(
@@ -352,7 +362,7 @@ exports.getTaskById = async (req, res) => {
       LEFT JOIN documents d ON t.document_id = d.id
       LEFT JOIN users c ON t.created_by = c.id
       WHERE t.id = $1
-      GROUP BY t.id, d.drive_web_view_link, c.name
+      GROUP BY t.id, d.storage_path, c.name
     `;
     const { rows } = await pool.query(query, [id]);
     
@@ -362,6 +372,21 @@ exports.getTaskById = async (req, res) => {
     const task = rows[0];
     task.personInCharge = task.assignments.map(a => a.personInCharge).join(', ') || 'ไม่ระบุ';
 
+    // 💡 ระบบออกตั๋วเข้าถึงไฟล์ชั่วคราว (60 วินาทีเน่า) หมดสิทธิ์ก๊อปปี้ลิงก์ไปเปิดที่อื่นโดยตรง
+    if (task.document_path) {
+      const { data, error } = await supabase.storage
+        .from(process.env.SUPABASE_BUCKET_NAME || 'police-documents')
+        .createSignedUrl(task.document_path, 60);
+        
+      if (!error && data) {
+        task.document_link = data.signedUrl; 
+      } else {
+        task.document_link = null;
+      }
+    } else {
+      task.document_link = null;
+    }
+
     res.status(200).json({ success: true, data: task });
   } catch (err) {
     console.error("Get task by id error:", err.message);
@@ -369,6 +394,7 @@ exports.getTaskById = async (req, res) => {
   }
 };
 
+// 7. ลบงานติดตามระบบย่อย
 exports.deleteTask = async (req, res) => {
   const client = await pool.connect();
   try {
@@ -400,17 +426,15 @@ exports.deleteTask = async (req, res) => {
   }
 };
 
+// 8. สร้างชิ้นงานติดตามรายอันด้วยมือตนเอง (Manual Creation)
 exports.createTask = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     
-    // 💡 แก้ไข 1: เพิ่มการรับค่า createdBy หรือ created_by จาก req.body
     const { title, memo_no, memo_date, due_date, main_text, is_urgent, assignments, createdBy, created_by } = req.body;
-
     const validCreatorId = createdBy || created_by || null;
 
-    // 💡 แก้ไข 2: เพิ่มการบันทึก created_by ลงในคำสั่ง INSERT
     const taskRes = await client.query(
       `INSERT INTO tasks (title, memo_no, memo_date, main_text, due_date, is_urgent, status, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
