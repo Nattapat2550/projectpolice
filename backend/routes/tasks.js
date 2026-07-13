@@ -1,5 +1,13 @@
 const express = require('express');
-// 💡 เพิ่ม confirmTasks เข้าไปในปีกกานี้
+
+// 💡 1. นำเข้า Controller ใหม่ (เพิ่ม getUploadProgress เข้ามาด้วย)
+const { uploadExcelTasks, getUploadProgress } = require('../controllers/uploadExcelTaskController');
+
+// 💡 2. นำเข้า Middleware 
+const { protect } = require('../middleware/auth');
+const multer = require('multer');
+const uploadExcel = multer({ storage: multer.memoryStorage() });
+
 const { 
     getAllTasks, 
     getUrgentTasks, 
@@ -15,11 +23,18 @@ const router = express.Router();
 
 router.get('/', getAllTasks);
 router.get('/urgent', getUrgentTasks);
+router.post('/', createTask);
+router.post('/confirm', confirmTasks); 
+
+// 🚀 เพิ่มเส้นทางสำหรับเช็คหลอด Progress (ต้องอยู่ก่อน /:id)
+router.get('/upload-progress/:jobId', getUploadProgress);
+
+// เส้นทางอัปโหลด Excel
+router.post('/upload-excel', protect, uploadExcel.single('file'), uploadExcelTasks);
+
 router.put('/:id/status', updateTaskStatus);
-router.post('/confirm', confirmTasks); // เส้นทางสำหรับยืนยันงานที่แสกนมา
 router.get('/:id', getTaskById);
 router.put('/:id', updateTaskDetail);
 router.delete('/:id', deleteTask);
-router.post('/', createTask);
 
 module.exports = router;

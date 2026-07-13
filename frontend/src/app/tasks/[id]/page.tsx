@@ -82,7 +82,8 @@ export default function TaskPage() {
                     date: taskData.date,
                     notes: taskData.notes,
                     assignments: taskData.assignments,
-                    isUrgent: taskData.isUrgent // ส่งค่าความเร่งด่วนไปยัง Backend
+                    isUrgent: taskData.isUrgent, // ส่งค่าความเร่งด่วนไปยัง Backend
+                    main_text: taskData.main_text // ส่งค่าข้อความเต็มไปยัง Backend
                 }),
             });
             const data = await res.json();

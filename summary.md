@@ -23,11 +23,15 @@ This document provides deep technical details about the Project Police applicati
 ### Table: `tasks`
 - `id`: UUID/SERIAL PRIMARY KEY
 - `document_id`: INT REFERENCES documents(id)
-- `title`: VARCHAR(255)
-- `memo_no`: VARCHAR(100)
+- `title`: TEXT
+- `memo_no`: TEXT
 - `memo_date`: DATE
 - `main_text`: TEXT
-- `due_date`: TIMESTAMP
+- `department`: TEXT
+- `sender`: TEXT
+- `due_date`: DATE
+- `received_date`: DATE
+- `signed_date`: DATE
 - `status`: VARCHAR(20) DEFAULT 'following' (following, problem, completed)
 - `is_urgent`: BOOLEAN DEFAULT FALSE
 - `notes`: TEXT
@@ -37,7 +41,7 @@ This document provides deep technical details about the Project Police applicati
 - `id`: UUID PRIMARY KEY
 - `task_id`: REFERENCES tasks(id)
 - `user_id`: INT REFERENCES users(id)
-- `role_or_name`: VARCHAR(255) (Fall-back if user_id is null)
+- `role_or_name`: TEXT (Fall-back if user_id is null)
 
 ### Table: `task_topics`
 - `id`: SERIAL PRIMARY KEY

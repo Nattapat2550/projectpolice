@@ -6,8 +6,12 @@ import styles from "./TaskDisplayer.module.css";
 import Link from "next/link";
 import PersonMultiSelect from "./PersonMultiSelect";
 import StatusMultiSelect from "./StatusMultiSelect"; // 👈 Import new component
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 
 type TaskStatus = "following" | "problem" | "completed";
+
+// 💡 Global Cache แบบเดียวกับ Project Follow 
+const allTaskFetchCache = new Map<string, any[]>();
 
 export default function AllTask() {
     const initialTaskData = [
@@ -22,21 +26,42 @@ export default function AllTask() {
     const [statusFilter, setStatusFilter] = useState<string[]>([]); 
     const [personFilter, setPersonFilter] = useState<string[]>([]); 
 
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage, setItemsPerPage] = useState(10);
+
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [statusFilter, personFilter]);
+
     useEffect(() => {
         const fetchTasks = async () => {
             try {
                 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
-                const response = await fetch(`${backendUrl}/api/v1/tasks`);
+                const url = `${backendUrl}/api/v1/tasks`;
+
+                // 💡 โหลดข้อมูลจาก Cache ทันทีเพื่อให้แสดงผลไวที่สุด (SWR Pattern)
+                if (allTaskFetchCache.has(url)) {
+                    setTasks(allTaskFetchCache.get(url)!);
+                    setIsLoading(false);
+                }
+
+                const response = await fetch(url, { cache: "no-store" });
                 
                 if (response.ok) {
                     const data = await response.json();
-                    if (data && data.length > 0) setTasks(data);
-                    else setTasks(initialTaskData);
+                    if (data && data.length > 0) {
+                        allTaskFetchCache.set(url, data); // อัปเดต Cache
+                        setTasks(data);
+                    } else {
+                        setTasks(initialTaskData);
+                    }
                 } else {
-                    setTasks(initialTaskData);
+                    if (!allTaskFetchCache.has(url)) setTasks(initialTaskData);
                 }
             } catch (error) {
-                setTasks(initialTaskData);
+                if (!allTaskFetchCache.has(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003"}/api/v1/tasks`)) {
+                    setTasks(initialTaskData);
+                }
             } finally {
                 setIsLoading(false);
             }
@@ -130,6 +155,9 @@ export default function AllTask() {
         return dateA - dateB;
     });
 
+    const totalPages = Math.ceil(filteredTasks.length / itemsPerPage);
+    const paginatedTasks = filteredTasks.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
     return (
         <div className="flex flex-col w-full h-full min-h-[75vh]">
             
@@ -184,7 +212,84 @@ export default function AllTask() {
                             กำลังโหลดข้อมูล...
                         </div>
                     ) : (
-                        <TaskDisplayer tasks={filteredTasks} onStatusChange={handleStatusChange} />
+                        <>
+                            <TaskDisplayer tasks={paginatedTasks} onStatusChange={handleStatusChange} />
+                            
+                            {totalPages > 0 && (() => {
+                                let startPage = Math.max(1, currentPage - 5);
+                                let endPage = Math.min(totalPages, currentPage + 5);
+
+                                if (endPage - startPage < 10) {
+                                    if (startPage === 1) {
+                                        endPage = Math.min(totalPages, startPage + 10);
+                                    } else if (endPage === totalPages) {
+                                        startPage = Math.max(1, endPage - 10);
+                                    }
+                                }
+
+                                const pageNumbers = Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i);
+
+                                return (
+                                    <div className="flex flex-col md:flex-row justify-between items-center p-4 border rounded-sm mt-auto shadow-[0_1px_2px_var(--shadow)] bg-(--container) border-(--wrapper) gap-4">
+                                        <span className="text-sm font-medium opacity-70">
+                                            หน้า {currentPage} จาก {totalPages}
+                                        </span>
+
+                                        <div className="flex items-center gap-1 sm:gap-2">
+                                            <button
+                                                disabled={currentPage === 1}
+                                                onClick={() => setCurrentPage(1)}
+                                                className="px-3 py-2 border rounded-sm disabled:opacity-30 text-sm font-medium transition cursor-pointer bg-(--button) border-(--wrapper) hover:bg-[#e5e5e5] text-foreground"
+                                                title="หน้าแรกสุด"
+                                            >
+                                                &laquo;
+                                            </button>
+                                            <button
+                                                disabled={currentPage === 1}
+                                                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
+                                                className="px-3 py-2 border rounded-sm disabled:opacity-30 text-sm font-medium transition cursor-pointer bg-(--button) border-(--wrapper) hover:bg-[#e5e5e5] text-foreground"
+                                                title="ก่อนหน้า"
+                                            >
+                                                &lsaquo;
+                                            </button>
+
+                                            <div className="hidden sm:flex items-center gap-1 overflow-x-auto">
+                                                {pageNumbers.map((page) => (
+                                                    <button
+                                                        key={page}
+                                                        onClick={() => setCurrentPage(page)}
+                                                        className={`px-3 py-2 border rounded-sm text-sm font-medium transition cursor-pointer ${
+                                                            page === currentPage
+                                                                ? "bg-(--header) text-background font-bold pointer-events-none border-transparent"
+                                                                : "bg-(--button) border-(--wrapper) text-foreground hover:bg-[#e5e5e5]"
+                                                        }`}
+                                                    >
+                                                        {page}
+                                                    </button>
+                                                ))}
+                                            </div>
+
+                                            <button
+                                                disabled={currentPage === totalPages}
+                                                onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
+                                                className="px-3 py-2 border rounded-sm disabled:opacity-30 text-sm font-medium transition cursor-pointer bg-(--button) border-(--wrapper) hover:bg-[#e5e5e5] text-foreground"
+                                                title="ถัดไป"
+                                            >
+                                                &rsaquo;
+                                            </button>
+                                            <button
+                                                disabled={currentPage === totalPages}
+                                                onClick={() => setCurrentPage(totalPages)}
+                                                className="px-3 py-2 border rounded-sm disabled:opacity-30 text-sm font-medium transition cursor-pointer bg-(--button) border-(--wrapper) hover:bg-[#e5e5e5] text-foreground"
+                                                title="หน้าท้ายสุด"
+                                            >
+                                                &raquo;
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+                        </>
                     )}
                 </div>
             </div>

@@ -208,7 +208,28 @@ export default function DetailsDisplayer({
                                 overflowY: 'auto',
                                 borderRadius: '8px'
                             }}>
-                                {taskData?.main_text ? formatText(taskData.main_text) : "ไม่พบข้อความเนื้อหาในเอกสาร"}
+                                {isEditing ? (
+                                    <textarea
+                                        style={{
+                                            width: '100%',
+                                            minHeight: '200px',
+                                            padding: '0.5rem',
+                                            backgroundColor: 'var(--button)',
+                                            color: 'var(--header)',
+                                            border: '2px solid var(--wrapper)',
+                                            borderRadius: '6px',
+                                            resize: 'vertical',
+                                            outline: 'none',
+                                            fontFamily: 'inherit',
+                                            fontSize: 'inherit'
+                                        }}
+                                        value={taskData?.main_text || ""}
+                                        onChange={(e) => setTaskData((prev: any) => ({ ...prev, main_text: e.target.value }))}
+                                        placeholder="เพิ่มหรือแก้ไขข้อความเนื้อหาในเอกสาร..."
+                                    />
+                                ) : (
+                                    taskData?.main_text ? formatText(taskData.main_text) : "ไม่พบข้อความเนื้อหาในเอกสาร"
+                                )}
                             </div>
                         </div>
 

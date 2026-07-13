@@ -26,14 +26,18 @@ CREATE TABLE documents (
 CREATE TABLE tasks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
-  title VARCHAR(255),       -- ชื่อเรื่อง
-  memo_no VARCHAR(100),     -- เลขที่เอกสาร
-  memo_date VARCHAR(100),   -- วันที่บนเอกสาร
+  title TEXT,       -- ชื่อเรื่อง
+  memo_no TEXT,     -- เลขที่เอกสาร
+  memo_date DATE,   -- วันที่บนเอกสาร
   main_text TEXT,           -- เนื้อหารวมของงาน
+  department TEXT, -- เก็บชื่อ Sheet/สำนักงาน
+  sender TEXT, -- เก็บฟิลด์ "จาก"
   status VARCHAR(50) DEFAULT 'following',
   notes TEXT, 
   is_urgent BOOLEAN DEFAULT FALSE,
   due_date DATE,
+  received_date DATE, -- เก็บฟิลด์ "วันที่รับ"
+  signed_date DATE, -- เก็บฟิลด์ "วันที่ลงนาม"
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
   created_by UUID REFERENCES users(id) ON DELETE SET NULL
@@ -44,7 +48,7 @@ CREATE TABLE task_assignments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
   user_id UUID REFERENCES users(id) ON DELETE SET NULL, -- เชื่อมโยงดึงข้อมูลมาจากตารางผู้ใช้งาน
-  role_or_name VARCHAR(100), -- เก็บชื่อดิบที่แสกนได้ (เผื่อกรณีระบบหาตัว User ในตารางไม่เจอ)
+  role_or_name TEXT, -- เก็บชื่อดิบที่แสกนได้ (เผื่อกรณีระบบหาตัว User ในตารางไม่เจอ)
   created_at TIMESTAMP DEFAULT NOW()
 );
 

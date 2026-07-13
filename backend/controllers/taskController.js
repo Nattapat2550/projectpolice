@@ -11,31 +11,34 @@ const UPLOADS_DIR = path.resolve(__dirname, '../../uploads');
 exports.getAllTasks = async (req, res) => {
   try {
     const query = `
+      WITH unique_assignees AS (
+        SELECT DISTINCT 
+          ta.task_id, 
+          COALESCE(u.name, ta.role_or_name) AS name, 
+          COALESCE(u.color, '#e5e7eb') AS color
+        FROM task_assignments ta
+        LEFT JOIN users u ON ta.user_id = u.id
+        WHERE COALESCE(u.name, ta.role_or_name) IS NOT NULL
+      ),
+      agg_assignees AS (
+        SELECT 
+          task_id,
+          STRING_AGG(name, ', ') AS "personInCharge",
+          JSON_AGG(json_build_object('name', name, 'color', color)) AS "assigneesData"
+        FROM unique_assignees
+        GROUP BY task_id
+      )
       SELECT 
         t.id AS id, 
         t.title AS name, 
-        COALESCE(STRING_AGG(DISTINCT COALESCE(u.name, ta.role_or_name), ', '), 'ไม่ระบุ') AS "personInCharge", 
-        COALESCE(
-          (
-            SELECT json_agg(json_build_object('name', sub.name, 'color', sub.color))
-            FROM (
-              SELECT DISTINCT 
-                COALESCE(u2.name, ta2.role_or_name) AS name, 
-                COALESCE(u2.color, '#e5e7eb') AS color
-              FROM task_assignments ta2
-              LEFT JOIN users u2 ON ta2.user_id = u2.id
-              WHERE ta2.task_id = t.id AND (u2.name IS NOT NULL OR ta2.role_or_name IS NOT NULL)
-            ) sub
-          ), '[]'::json
-        ) AS "assigneesData",
+        COALESCE(aa."personInCharge", 'ไม่ระบุ') AS "personInCharge", 
+        COALESCE(aa."assigneesData", '[]'::json) AS "assigneesData",
         TO_CHAR(t.due_date, 'YYYY-MM-DD') AS date, 
         t.created_at AS "createdAt",
         t.status,
         t.is_urgent AS "isUrgent"
       FROM tasks t
-      LEFT JOIN task_assignments ta ON t.id = ta.task_id
-      LEFT JOIN users u ON ta.user_id = u.id
-      GROUP BY t.id
+      LEFT JOIN agg_assignees aa ON t.id = aa.task_id
       ORDER BY t.due_date ASC NULLS LAST
     `;
     const { rows } = await pool.query(query);
@@ -49,32 +52,35 @@ exports.getAllTasks = async (req, res) => {
 exports.getUrgentTasks = async (req, res) => {
   try {
     const query = `
+      WITH unique_assignees AS (
+        SELECT DISTINCT 
+          ta.task_id, 
+          COALESCE(u.name, ta.role_or_name) AS name, 
+          COALESCE(u.color, '#e5e7eb') AS color
+        FROM task_assignments ta
+        LEFT JOIN users u ON ta.user_id = u.id
+        WHERE COALESCE(u.name, ta.role_or_name) IS NOT NULL
+      ),
+      agg_assignees AS (
+        SELECT 
+          task_id,
+          STRING_AGG(name, ', ') AS "personInCharge",
+          JSON_AGG(json_build_object('name', name, 'color', color)) AS "assigneesData"
+        FROM unique_assignees
+        GROUP BY task_id
+      )
       SELECT 
         t.id AS id, 
         t.title AS name, 
-        COALESCE(STRING_AGG(DISTINCT COALESCE(u.name, ta.role_or_name), ', '), 'ไม่ระบุ') AS "personInCharge", 
-        COALESCE(
-          (
-            SELECT json_agg(json_build_object('name', sub.name, 'color', sub.color))
-            FROM (
-              SELECT DISTINCT 
-                COALESCE(u2.name, ta2.role_or_name) AS name, 
-                COALESCE(u2.color, '#e5e7eb') AS color
-              FROM task_assignments ta2
-              LEFT JOIN users u2 ON ta2.user_id = u2.id
-              WHERE ta2.task_id = t.id AND (u2.name IS NOT NULL OR ta2.role_or_name IS NOT NULL)
-            ) sub
-          ), '[]'::json
-        ) AS "assigneesData",
+        COALESCE(aa."personInCharge", 'ไม่ระบุ') AS "personInCharge", 
+        COALESCE(aa."assigneesData", '[]'::json) AS "assigneesData",
         TO_CHAR(t.due_date, 'YYYY-MM-DD') AS date, 
         t.created_at AS "createdAt",
         t.status,
         t.is_urgent AS "isUrgent"
       FROM tasks t
-      LEFT JOIN task_assignments ta ON t.id = ta.task_id
-      LEFT JOIN users u ON ta.user_id = u.id
+      LEFT JOIN agg_assignees aa ON t.id = aa.task_id
       WHERE t.is_urgent = true
-      GROUP BY t.id
       ORDER BY t.due_date ASC NULLS LAST
     `;
     const { rows } = await pool.query(query);
@@ -200,25 +206,26 @@ exports.confirmTasks = async (req, res) => {
 };
 
 exports.updateTaskDetail = async (req, res) => {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const { id } = req.params;
-    const { name, date, notes, assignments, isUrgent } = req.body;
-
-    const validDate = (date === "" || !date) ? null : date;
-    const urgentValue = isUrgent !== undefined ? isUrgent : null; 
-
-    await client.query(
-      `UPDATE tasks 
-       SET title = COALESCE($1, title), 
-           due_date = COALESCE($2, due_date), 
-           notes = COALESCE($3, notes), 
-           is_urgent = COALESCE($4, is_urgent),
-           updated_at = NOW() 
-       WHERE id = $5`,
-      [name, validDate, notes, urgentValue, id]
-    );
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { id } = req.params;
+      const { name, date, notes, assignments, isUrgent, main_text } = req.body;
+  
+      const validDate = (date === "" || !date) ? null : date;
+      const urgentValue = isUrgent !== undefined ? isUrgent : null; 
+  
+      await client.query(
+        `UPDATE tasks 
+         SET title = COALESCE($1, title), 
+             due_date = COALESCE($2, due_date), 
+             notes = COALESCE($3, notes), 
+             is_urgent = COALESCE($4, is_urgent),
+             main_text = COALESCE($5, main_text),
+             updated_at = NOW() 
+         WHERE id = $6`,
+        [name, validDate, notes, urgentValue, main_text, id]
+      );
 
     if (Array.isArray(assignments)) {
       const keepAssignmentIds = assignments
