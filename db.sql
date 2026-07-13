@@ -36,8 +36,6 @@ CREATE TABLE tasks (
   notes TEXT, 
   is_urgent BOOLEAN DEFAULT FALSE,
   due_date DATE,
-  received_date DATE, -- เก็บฟิลด์ "วันที่รับ"
-  signed_date DATE, -- เก็บฟิลด์ "วันที่ลงนาม"
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
   created_by UUID REFERENCES users(id) ON DELETE SET NULL

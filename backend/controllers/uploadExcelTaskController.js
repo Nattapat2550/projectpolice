@@ -21,7 +21,62 @@ exports.uploadExcelTasks = async (req, res) => {
         const action = req.query.action || "upload";
         const jobId = req.query.jobId; // รับ Job ID มาเพื่อทำ Progress
         
-        // อ่านไฟล์ Excel จาก Buffer
+        // 1. อ่านไฟล์ด้วย exceljs เพื่อดึงสีตัวอักษร
+        const ExcelJS = require('exceljs');
+        const excelWorkbook = new ExcelJS.Workbook();
+        await excelWorkbook.xlsx.load(req.file.buffer);
+
+        const redSubjects = new Set();
+        excelWorkbook.eachSheet((worksheet) => {
+            let subjectCol = -1;
+            worksheet.eachRow((row, rowNumber) => {
+                if (subjectCol === -1) {
+                    row.eachCell((cell, colNumber) => {
+                        const val = cell.value ? String(cell.value).trim() : '';
+                        if (val === 'เรื่อง') subjectCol = colNumber;
+                    });
+                } else {
+                    const cell = row.getCell(subjectCol);
+                    let isRed = false;
+                    
+                    if (cell.value && cell.value.richText) {
+                        isRed = cell.value.richText.some(rt => {
+                            if (!rt.font || !rt.font.color || !rt.font.color.argb) return false;
+                            const upper = rt.font.color.argb.toUpperCase();
+                            if (upper === 'FFFF0000') return true;
+                            if (upper.length === 8) {
+                                const r = parseInt(upper.substring(2, 4), 16);
+                                const g = parseInt(upper.substring(4, 6), 16);
+                                const b = parseInt(upper.substring(6, 8), 16);
+                                if (r > 150 && g < 100 && b < 100) return true;
+                            }
+                            return false;
+                        });
+                    } else if (cell.font && cell.font.color && cell.font.color.argb) {
+                        const upper = cell.font.color.argb.toUpperCase();
+                        if (upper === 'FFFF0000') isRed = true;
+                        else if (upper.length === 8) {
+                            const r = parseInt(upper.substring(2, 4), 16);
+                            const g = parseInt(upper.substring(4, 6), 16);
+                            const b = parseInt(upper.substring(6, 8), 16);
+                            if (r > 150 && g < 100 && b < 100) isRed = true;
+                        }
+                    }
+                    
+                    if (isRed) {
+                        let textValue = cell.value;
+                        if (textValue && textValue.richText) {
+                            textValue = textValue.richText.map(rt => rt.text).join('');
+                        }
+                        if (textValue) {
+                            redSubjects.add(String(textValue).trim());
+                        }
+                    }
+                }
+            });
+        });
+
+        // อ่านไฟล์ Excel จาก Buffer ด้วย xlsx เพื่อดึงข้อมูลดิบ
         const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
         
         let allData = [];
@@ -29,17 +84,29 @@ exports.uploadExcelTasks = async (req, res) => {
         const parseDateSafe = (d) => {
             if (!d) return null;
             
-            // Handle Excel serial date numbers (e.g. 45488 -> 2024-07-15)
+            // Handle Excel serial date numbers (e.g. 45488 -> 2024-07-15, 244460 -> 2569-04-21)
             const num = Number(d);
-            if (!isNaN(num) && num > 20000 && num < 100000) {
-                const dateObj = new Date(Math.round((num - 25569) * 86400 * 1000));
-                return dateObj.getFullYear() + '-' + String(dateObj.getMonth()+1).padStart(2, '0') + '-' + String(dateObj.getDate()).padStart(2, '0');
+            let dateObj;
+            if (!isNaN(num) && num > 20000 && num < 300000) {
+                dateObj = new Date(Math.round((num - 25569) * 86400 * 1000));
+            } else {
+                const t = Date.parse(d);
+                if (isNaN(t)) return null;
+                dateObj = new Date(t);
             }
 
-            const t = Date.parse(d);
-            if (isNaN(t)) return null;
-            const dateObj = new Date(t);
-            return dateObj.getFullYear() + '-' + String(dateObj.getMonth()+1).padStart(2, '0') + '-' + String(dateObj.getDate()).padStart(2, '0');
+            let year = dateObj.getFullYear();
+            
+            // Convert Buddhist Era to AD
+            if (year >= 2500 && year <= 2650) {
+                year -= 543;
+            }
+            // Reject absurd years
+            if (year < 1900 || year > 2150) {
+                return null;
+            }
+            
+            return year + '-' + String(dateObj.getMonth()+1).padStart(2, '0') + '-' + String(dateObj.getDate()).padStart(2, '0');
         };
 
         workbook.SheetNames.forEach(sheetName => {
@@ -48,17 +115,43 @@ exports.uploadExcelTasks = async (req, res) => {
             rawData.forEach((row, index) => {
                 if (!row["เรื่อง"] && !row["ที่หนังสือ"] && !row["ข้อสั่งการ"]) return;
 
+                const subject = row["เรื่อง"] ? String(row["เรื่อง"]).trim() : "";
+                
+                // ถ้าไม่มีเรื่อง (subject ว่างหรือเป็น null) ให้คัดออกเลย
+                if (!subject) return;
+
+                // คัดออกถ้าเรื่องใช้ตัวอักษรแดง
+                if (redSubjects.has(subject)) return;
+
+                const command = row["ข้อสั่งการ"] ? String(row["ข้อสั่งการ"]).trim() : "";
+                
+                // แยกย่อยข้อสั่งการด้วยการขึ้นบรรทัดใหม่
+                const commandTopics = command 
+                    ? command.split(/\r?\n/).map(c => c.trim()).filter(c => c.length > 0)
+                    : [];
+
+                let receivedDate = parseDateSafe(row["วันที่รับ"]);
+                let dueDate = parseDateSafe(row["วันที่"]);
+                
+                // ถ้าไม่มีข้อมูลช่อง วันที่ (due date) ให้บวกเพิ่ม 14 วันจาก วันที่รับ (received date)
+                if (!dueDate && receivedDate) {
+                    const rDate = new Date(receivedDate);
+                    rDate.setDate(rDate.getDate() + 14);
+                    dueDate = rDate.getFullYear() + '-' + String(rDate.getMonth() + 1).padStart(2, '0') + '-' + String(rDate.getDate()).padStart(2, '0');
+                }
+
                 allData.push({
                     original_row: index + 1,
                     department: sheetName,
-                    received_date: parseDateSafe(row["วันที่รับ"]),
+                    received_date: receivedDate,
                     memo_no: row["ที่หนังสือ"] ? String(row["ที่หนังสือ"]).trim() : null,
                     memo_date: parseDateSafe(row["ลงวันที่"]),
                     sender: row["จาก"] ? String(row["จาก"]).trim() : null,
-                    title: row["เรื่อง"] ? String(row["เรื่อง"]).trim() : "ไม่มีชื่อเรื่อง",
+                    title: subject || "ไม่มีชื่องาน",
                     assignee_name: row["ผู้ปฏิบัติ"] ? String(row["ผู้ปฏิบัติ"]).trim() : null,
-                    due_date_str: parseDateSafe(row["วันที่"]),
-                    main_text: row["ข้อสั่งการ"] ? String(row["ข้อสั่งการ"]).trim() : null,
+                    due_date_str: dueDate,
+                    main_text: subject || null,
+                    command_text: commandTopics, // Send array of topics
                     signed_date: parseDateSafe(row["วันที่ลงนาม"]),
                     notes: row["หมายเหตุ"] ? String(row["หมายเหตุ"]).trim() : null,
                     raw_data: row
@@ -98,9 +191,8 @@ exports.uploadExcelTasks = async (req, res) => {
 
                 chunk.forEach(item => {
                     let parsedDueDate = item.due_date_str;
-                    let parsedMemoDate = item.memo_date;
-                    let parsedReceivedDate = item.received_date;
-                    let parsedSignedDate = item.signed_date;
+                    let parsedMemoDate = item.signed_date || item.memo_date;
+                    let parsedCreatedAt = item.received_date || new Date().toISOString();
 
                     let safeTitle = item.title ? String(item.title) : 'ไม่มีชื่อเรื่อง';
                     let safeMemoNo = item.memo_no ? String(item.memo_no) : null;
@@ -108,21 +200,21 @@ exports.uploadExcelTasks = async (req, res) => {
                     let safeSender = item.sender ? String(item.sender) : null;
 
                     let rowPlaceholders = [];
-                    for(let j = 0; j < 11; j++) {
+                    for(let j = 0; j < 10; j++) {
                         rowPlaceholders.push(`$${counter++}`);
                     }
                     valuesPlaceholders.push(`(${rowPlaceholders.join(', ')})`);
                     
                     flatValues.push(
                         safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, 
-                        safeDept, safeSender, parsedReceivedDate, parsedSignedDate, parsedDueDate, created_by
+                        safeDept, safeSender, parsedDueDate, created_by, parsedCreatedAt
                     );
                 });
 
                 // 1. Bulk Insert ลงตาราง tasks
                 const taskQuery = `
                     INSERT INTO tasks 
-                    (title, memo_no, memo_date, main_text, notes, department, sender, received_date, signed_date, due_date, created_by) 
+                    (title, memo_no, memo_date, main_text, notes, department, sender, due_date, created_by, created_at) 
                     VALUES ${valuesPlaceholders.join(', ')} 
                     RETURNING id
                 `;
@@ -146,8 +238,39 @@ exports.uploadExcelTasks = async (req, res) => {
                     const assignQuery = `
                         INSERT INTO task_assignments (task_id, role_or_name)
                         VALUES ${assignPlaceholders.join(', ')}
+                        RETURNING id
                     `;
-                    await pool.query(assignQuery, assignFlatValues);
+                    const assignRes = await pool.query(assignQuery, assignFlatValues);
+                    
+                    // 3. เตรียมข้อมูล Bulk Insert ลงตาราง task_topics
+                    let topicPlaceholders = [];
+                    let topicFlatValues = [];
+                    let topicCounter = 1;
+                    
+                    let assignIndex = 0;
+                    taskRes.rows.forEach((row, index) => {
+                        const assignee = chunk[index].assignee_name;
+                        const commandTopics = chunk[index].command_text;
+                        if (assignee) {
+                            const assignmentId = assignRes.rows[assignIndex].id;
+                            assignIndex++;
+                            
+                            if (commandTopics && commandTopics.length > 0) {
+                                commandTopics.forEach((cmd) => {
+                                    topicPlaceholders.push(`($${topicCounter++}, $${topicCounter++}, $${topicCounter++})`);
+                                    topicFlatValues.push(assignmentId, String(cmd), false);
+                                });
+                            }
+                        }
+                    });
+
+                    if (topicPlaceholders.length > 0) {
+                        const topicQuery = `
+                            INSERT INTO task_topics (assignment_id, detail, is_completed)
+                            VALUES ${topicPlaceholders.join(', ')}
+                        `;
+                        await pool.query(topicQuery, topicFlatValues);
+                    }
                 }
 
                 successCount += chunk.length;

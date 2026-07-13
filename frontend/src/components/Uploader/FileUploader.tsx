@@ -175,6 +175,12 @@ export default function FileUploader({ setExtractedData, progress, setProgress }
                 >
                     เพิ่มงานติดตามด้วยตนเอง
                 </button>
+                <button 
+                    className={styles.Button} 
+                    onClick={() => router.push("/addFile/excel-upload")}
+                >
+                    นำเข้าจาก Excel
+                </button>
             </div>
         </div>
     );
