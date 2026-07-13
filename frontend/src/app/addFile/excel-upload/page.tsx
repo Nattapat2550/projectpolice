@@ -148,10 +148,10 @@ export default function TaskExcelUploadPage() {
 
       <form onSubmit={handlePreview} className="mb-8 p-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-sm max-w-xl">
         <div className="flex flex-col gap-4">
-          <label className="font-semibold text-sm text-blue-900 dark:text-blue-100">เลือกไฟล์ Excel ของคุณ (.xlsx, .xls)</label>
+          <label className="font-semibold text-sm text-blue-900 dark:text-blue-100">เลือกไฟล์ Excel หรือ Word ของคุณ (.xlsx, .xls, .docx)</label>
           <input 
             type="file" 
-            accept=".xlsx, .xls" 
+            accept=".xlsx, .xls, .docx" 
             onChange={handleFileChange}
             className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-zinc-200 dark:border-zinc-700 p-2 rounded-md bg-white dark:bg-zinc-950 text-blue-900 dark:text-blue-100 cursor-pointer w-full text-sm"
           />

@@ -21,13 +21,17 @@ exports.uploadExcelTasks = async (req, res) => {
         const action = req.query.action || "upload";
         const jobId = req.query.jobId; // รับ Job ID มาเพื่อทำ Progress
         
-        // 1. อ่านไฟล์ด้วย exceljs เพื่อดึงสีตัวอักษร
+        const filename = req.file.originalname || "";
+        // 1. อ่านไฟล์ด้วย exceljs เพื่อดึงสีตัวอักษร เฉพาะไฟล์ Excel
         const ExcelJS = require('exceljs');
         const excelWorkbook = new ExcelJS.Workbook();
-        await excelWorkbook.xlsx.load(req.file.buffer);
+        if (!filename.toLowerCase().endsWith(".docx")) {
+            await excelWorkbook.xlsx.load(req.file.buffer);
+        }
 
         const redSubjects = new Set();
-        excelWorkbook.eachSheet((worksheet) => {
+        if (!filename.toLowerCase().endsWith(".docx")) {
+            excelWorkbook.eachSheet((worksheet) => {
             let subjectCol = -1;
             worksheet.eachRow((row, rowNumber) => {
                 if (subjectCol === -1) {
@@ -75,9 +79,17 @@ exports.uploadExcelTasks = async (req, res) => {
                 }
             });
         });
+        }
 
-        // อ่านไฟล์ Excel จาก Buffer ด้วย xlsx เพื่อดึงข้อมูลดิบ
-        const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
+        // อ่านไฟล์ Excel หรือ Word จาก Buffer ด้วย xlsx เพื่อดึงข้อมูลดิบ
+        let workbook;
+        if (filename.toLowerCase().endsWith(".docx")) {
+            const mammoth = require("mammoth");
+            const result = await mammoth.convertToHtml({ buffer: req.file.buffer });
+            workbook = xlsx.read(result.value, { type: "string" });
+        } else {
+            workbook = xlsx.read(req.file.buffer, { type: "buffer" });
+        }
         
         let allData = [];
 
