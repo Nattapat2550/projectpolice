@@ -14,7 +14,7 @@ class User {
     const query = `
       INSERT INTO users (name, password, color) 
       VALUES ($1, $2, $3) 
-      RETURNING id, name, color
+      RETURNING id, name, color, role
     `;
     const values = [name, hashedPassword, userColor];
 
@@ -24,8 +24,8 @@ class User {
 
   // หาข้อมูลผู้ใช้งานด้วย ID
   static async findById(id) {
-    // 💡 FIX: เพิ่มการ SELECT color คืนค่ากลับไป
-    const { rows } = await pool.query(`SELECT id, name, color FROM users WHERE id = $1`, [id]);
+    // 💡 FIX: เพิ่มการ SELECT color และ role คืนค่ากลับไป
+    const { rows } = await pool.query(`SELECT id, name, color, role FROM users WHERE id = $1`, [id]);
     return rows[0];
   }
 
@@ -40,8 +40,8 @@ class User {
 
   // ดึงผู้ใช้งานทั้งหมด
   static async find() {
-    // 💡 FIX: เพิ่มการ SELECT color
-    const { rows } = await pool.query(`SELECT id, name, color FROM users`);
+    // 💡 FIX: เพิ่มการ SELECT color และ role
+    const { rows } = await pool.query(`SELECT id, name, color, role FROM users`);
     return rows;
   }
 
@@ -59,7 +59,7 @@ class User {
       UPDATE users 
       SET ${setString} 
       WHERE id = $1 
-      RETURNING id, name, color -- 💡 FIX: คืนค่า color กลับไปด้วยหลังอัปเดตเสร็จ
+      RETURNING id, name, color, role -- 💡 FIX: คืนค่า color และ role กลับไปด้วยหลังอัปเดตเสร็จ
     `;
     
     const { rows } = await pool.query(query, [id, ...values]);

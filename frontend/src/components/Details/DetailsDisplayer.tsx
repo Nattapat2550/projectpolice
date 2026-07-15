@@ -37,6 +37,7 @@ export default function DetailsDisplayer({
 }) {
     const router = useRouter();
     const [users, setUsers] = useState<any[]>([]);
+    const [currentUser, setCurrentUser] = useState<any>(null);
 
     useEffect(() => {
         const fetchUsers = async () => {
@@ -50,7 +51,23 @@ export default function DetailsDisplayer({
                 console.error("Fetch users failed", err);
             }
         };
+
+        const fetchMe = async () => {
+            try {
+                const token = localStorage.getItem("token") || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1];
+                if (!token) return;
+                const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003"}/api/v1/auth/me`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setCurrentUser(data.data);
+                }
+            } catch (err) {}
+        };
+
         fetchUsers();
+        fetchMe();
     }, []);
 
     const handleAddAssignment = () => {
@@ -278,7 +295,9 @@ export default function DetailsDisplayer({
                                                         onChange={(e) => handleUserSelect(index, e.target.value)}
                                                     >
                                                         <option value="">-- เลือกระบุบุคคล --</option>
-                                                        {users.map(u => (
+                                                        {users
+                                                            .filter(u => currentUser?.role !== 'admin' || (u.id || u._id) === currentUser?.id)
+                                                            .map(u => (
                                                             <option key={u.id || u._id} value={u.id || u._id}>
                                                                 {u.name} {u.role ? `(${u.role})` : ''}
                                                             </option>

@@ -14,10 +14,7 @@ type TaskStatus = "following" | "problem" | "completed";
 const allTaskFetchCache = new Map<string, any[]>();
 
 export default function AllTask() {
-    const initialTaskData = [
-        { id: "1", name: "ชื่องานติดตาม", personInCharge: "ชื่อชั่วคราว", date: "2026-05-22", status: "following" },
-        { id: "2", name: "งานใหม่", personInCharge: "สมชาย", date: "2026-05-25", status: "problem" },
-    ];
+    const initialTaskData: any[] = [];
 
     const [tasks, setTasks] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -85,9 +82,15 @@ export default function AllTask() {
     const handleStatusChange = async (id: string, newStatus: TaskStatus) => {
         try {
             const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
+            const token = typeof window !== 'undefined' ? localStorage.getItem("token") || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1] : null;
+            const headers: HeadersInit = { "Content-Type": "application/json" };
+            if (token) {
+                headers["Authorization"] = `Bearer ${token}`;
+            }
+
             const response = await fetch(`${backendUrl}/api/v1/tasks/${id}/status`, {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
+                headers: headers,
                 body: JSON.stringify({ status: newStatus }),
             });
 

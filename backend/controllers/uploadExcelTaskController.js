@@ -154,7 +154,6 @@ exports.uploadExcelTasks = async (req, res) => {
 
                 allData.push({
                     original_row: index + 1,
-                    department: sheetName,
                     received_date: receivedDate,
                     memo_no: row["ที่หนังสือ"] ? String(row["ที่หนังสือ"]).trim() : null,
                     memo_date: parseDateSafe(row["ลงวันที่"]),
@@ -208,25 +207,24 @@ exports.uploadExcelTasks = async (req, res) => {
 
                     let safeTitle = item.title ? String(item.title) : 'ไม่มีชื่อเรื่อง';
                     let safeMemoNo = item.memo_no ? String(item.memo_no) : null;
-                    let safeDept = item.department ? String(item.department) : null;
                     let safeSender = item.sender ? String(item.sender) : null;
 
                     let rowPlaceholders = [];
-                    for(let j = 0; j < 10; j++) {
+                    for(let j = 0; j < 9; j++) {
                         rowPlaceholders.push(`$${counter++}`);
                     }
                     valuesPlaceholders.push(`(${rowPlaceholders.join(', ')})`);
                     
                     flatValues.push(
                         safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, 
-                        safeDept, safeSender, parsedDueDate, created_by, parsedCreatedAt
+                        safeSender, parsedDueDate, created_by, parsedCreatedAt
                     );
                 });
 
                 // 1. Bulk Insert ลงตาราง tasks
                 const taskQuery = `
                     INSERT INTO tasks 
-                    (title, memo_no, memo_date, main_text, notes, department, sender, due_date, created_by, created_at) 
+                    (title, memo_no, memo_date, main_text, notes, sender, due_date, created_by, created_at) 
                     VALUES ${valuesPlaceholders.join(', ')} 
                     RETURNING id
                 `;
@@ -294,8 +292,8 @@ exports.uploadExcelTasks = async (req, res) => {
                     try {
                         const fallbackTaskQuery = `
                             INSERT INTO tasks 
-                            (title, memo_no, memo_date, main_text, notes, department, sender, received_date, signed_date, due_date, created_by) 
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id
+                            (title, memo_no, memo_date, main_text, notes, sender, receive_date, sign_date, due_date, created_by) 
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id
                         `;
                         const parsedDueDate = item.due_date_str;
                         const parsedMemoDate = item.memo_date;
@@ -304,12 +302,11 @@ exports.uploadExcelTasks = async (req, res) => {
                         
                         const safeTitle = item.title ? String(item.title) : 'ไม่มีชื่อเรื่อง';
                         const safeMemoNo = item.memo_no ? String(item.memo_no) : null;
-                        const safeDept = item.department ? String(item.department) : null;
                         const safeSender = item.sender ? String(item.sender) : null;
 
                         const fallbackValues = [
                             safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, 
-                            safeDept, safeSender, parsedReceivedDate, parsedSignedDate, parsedDueDate, created_by
+                            safeSender, parsedReceivedDate, parsedSignedDate, parsedDueDate, created_by
                         ];
                         
                         const tRes = await pool.query(fallbackTaskQuery, fallbackValues);

@@ -14,6 +14,7 @@ const getFutureDateStr = (daysToAdd: number) => {
 
 export default function MemoForm() {
   const [users, setUsers] = useState<any[]>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   
   const [formData, setFormData] = useState({
     title: "งานติดตามคีย์ด้วยมือ",
@@ -48,7 +49,24 @@ export default function MemoForm() {
         console.error("Failed to fetch users");
       }
     };
+
+    const fetchMe = async () => {
+      try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
+        if (!token) return;
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
+        const res = await fetch(`${backendUrl}/api/v1/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setCurrentUser(data.data);
+        }
+      } catch (err) {}
+    };
+
     fetchUsers();
+    fetchMe();
 
     // ตั้งค่าคน Login เป็น Default Checklist
     const loggedInUserId = typeof window !== 'undefined' ? localStorage.getItem("user_id") || localStorage.getItem("userId") || "" : "";
@@ -239,12 +257,18 @@ export default function MemoForm() {
                  <h3 className="font-bold text-sm mb-3" style={{ color: "var(--header)" }}>เลือกผู้รับผิดชอบ (เลือกได้หลายคน)</h3>
                  
                  <div className="flex flex-col gap-2 max-h-48 overflow-y-auto border border-(--shadow) p-3 rounded bg-(--button)">
-                     <label className="flex items-center gap-3 cursor-pointer font-bold text-blue-600">
-                         <input type="checkbox" checked={selectedUsers.includes("all")} onChange={(e) => handleToggleUser("all", e.target.checked)} className="w-4 h-4 cursor-pointer" />
-                         ทุกหน่วยงาน (ส่วนกลาง)
-                     </label>
-                     <hr className="my-1 border-(--shadow)/60" />
-                     {users.map(u => {
+                         {(!currentUser || currentUser.role !== 'admin') && (
+                         <>
+                             <label className="flex items-center gap-3 cursor-pointer font-bold text-blue-600">
+                                 <input type="checkbox" checked={selectedUsers.includes("all")} onChange={(e) => handleToggleUser("all", e.target.checked)} className="w-4 h-4 cursor-pointer" />
+                                 ทุกหน่วยงาน (ส่วนกลาง)
+                             </label>
+                             <hr className="my-1 border-(--shadow)/60" />
+                         </>
+                         )}
+                         {users
+                             .filter(u => currentUser?.role !== 'admin' || (u.id || u._id) === currentUser?.id)
+                             .map(u => {
                          const uid = String(u.id || u._id);
                          return (
                              <label key={uid} className="flex items-center gap-3 cursor-pointer text-foreground">

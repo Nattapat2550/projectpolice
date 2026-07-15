@@ -235,9 +235,7 @@ export default function TaskExcelUploadPage() {
                   {paginatedData?.map((row: any, idx: number) => (
                     <tr key={idx} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition">
                       <td className="p-4 font-bold border-r border-zinc-200 dark:border-zinc-800 text-center align-top text-zinc-500 dark:text-zinc-400">
-                        <span className="bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300 py-1 px-2 rounded text-xs whitespace-nowrap">
-                          {row.department}
-                        </span>
+
                         <div className="text-[10px] text-zinc-400 mt-2">แถวที่ {row.original_row}</div>
                       </td>
                       <td className="p-4 border-r border-zinc-200 dark:border-zinc-800 bg-blue-50/10 dark:bg-blue-950/5 align-top text-blue-900 dark:text-blue-100">

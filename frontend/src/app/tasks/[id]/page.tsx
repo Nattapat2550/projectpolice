@@ -17,8 +17,38 @@ export default function TaskPage() {
     const [taskData, setTaskData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
+    const [currentUser, setCurrentUser] = useState<any>(null);
+    const [logs, setLogs] = useState<any[]>([]);
 
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
+
+    const fetchMe = async () => {
+        try {
+            const token = localStorage.getItem("token") || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1];
+            if (!token) return;
+            const res = await fetch(`${backendUrl}/api/v1/auth/me`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setCurrentUser(data.data);
+                return data.data;
+            }
+        } catch (err) {}
+        return null;
+    };
+
+    const fetchLogs = async (token: string) => {
+        try {
+            const res = await fetch(`${backendUrl}/api/v1/tasks/${id}/logs`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setLogs(data.data || []);
+            }
+        } catch (err) {}
+    };
 
     const fetchTask = async () => {
         try {
@@ -36,7 +66,15 @@ export default function TaskPage() {
     };
 
     useEffect(() => {
-        if (id) fetchTask();
+        if (id) {
+            fetchTask();
+            fetchMe().then(user => {
+                if (user?.role === 'superadmin') {
+                    const token = localStorage.getItem("token") || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1];
+                    if (token) fetchLogs(token);
+                }
+            });
+        }
     }, [id]);
 
     
@@ -239,6 +277,58 @@ export default function TaskPage() {
                     />
                 </div>
             </div>
+            
+            {currentUser?.role === 'superadmin' && (
+                <div className="flex flex-col bg-(--container) rounded-xl border border-(--shadow) p-6 mt-6 shadow-sm w-full">
+                    <h2 className="text-xl font-bold mb-4" style={{ color: "var(--header)" }}>บันทึกประวัติการเปลี่ยนแปลง (Log)</h2>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="border-b border-(--shadow)">
+                                    <th className="p-3 font-semibold" style={{ color: "var(--header)" }}>เวลา</th>
+                                    <th className="p-3 font-semibold" style={{ color: "var(--header)" }}>ผู้ใช้งาน</th>
+                                    <th className="p-3 font-semibold" style={{ color: "var(--header)" }}>เหตุการณ์</th>
+                                    <th className="p-3 font-semibold" style={{ color: "var(--header)" }}>รายละเอียด</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {logs.map((log: any) => (
+                                    <tr key={log.id} className="border-b border-(--shadow) hover:bg-zinc-50 dark:hover:bg-zinc-900/30">
+                                        <td className="p-3 text-sm text-(--foreground)">{new Date(log.created_at).toLocaleString('th-TH')}</td>
+                                        <td className="p-3">
+                                            {log.user_name ? (
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-white text-xs" style={{ backgroundColor: log.user_color || '#3B82F6' }}>
+                                                        {log.user_name.charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <span className="text-sm font-medium text-(--foreground)">{log.user_name}</span>
+                                                </div>
+                                            ) : (
+                                                <span className="text-sm text-zinc-500">ระบบ</span>
+                                            )}
+                                        </td>
+                                        <td className="p-3 text-sm text-(--foreground)">
+                                            {log.action === 'created_task' ? 'สร้างงาน' :
+                                             log.action === 'updated_status' ? 'อัปเดตสถานะ' :
+                                             log.action === 'updated_details' ? 'แก้ไขข้อมูล' :
+                                             log.action === 'assigned_user' ? 'มอบหมายงาน' :
+                                             log.action === 'deleted_task' ? 'ลบงาน' : log.action}
+                                        </td>
+                                        <td className="p-3 text-xs text-zinc-500 max-w-xs truncate" title={log.details}>
+                                            {log.details || '-'}
+                                        </td>
+                                    </tr>
+                                ))}
+                                {logs.length === 0 && (
+                                    <tr>
+                                        <td colSpan={4} className="p-6 text-center text-zinc-500">ไม่มีประวัติการเปลี่ยนแปลง</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

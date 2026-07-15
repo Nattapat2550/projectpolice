@@ -7,7 +7,7 @@ import { LogOut, Settings, LogIn } from 'lucide-react';
 import DarkModeBtn from './DarkModeBtn';
 
 export default function TopBar() {
-    const [user, setUser] = useState<{ id: string; name: string; color?: string } | null>(null);
+    const [user, setUser] = useState<{ id: string; name: string; color?: string; role?: string } | null>(null);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5003';
@@ -144,6 +144,15 @@ export default function TopBar() {
                                 >
                                     <Settings size={18} /> จัดการโปรไฟล์
                                 </Link>
+                                {user.role === 'superadmin' && (
+                                    <Link 
+                                        href="/admin/users" 
+                                        className="flex items-center gap-3 px-4 py-3 hover:bg-(--button) text-foreground transition-colors"
+                                        onClick={() => setDropdownOpen(false)}
+                                    >
+                                        <Settings size={18} /> จัดการผู้ใช้งาน
+                                    </Link>
+                                )}
                                 <button 
                                     onClick={handleLogout}
                                     className="flex items-center gap-3 px-4 py-3 hover:bg-red-500/10 text-red-500 transition-colors w-full text-left"

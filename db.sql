@@ -29,8 +29,11 @@ CREATE TABLE tasks (
   title TEXT,       -- ชื่อเรื่อง
   memo_no TEXT,     -- เลขที่เอกสาร
   memo_date DATE,   -- วันที่บนเอกสาร
+  sign_date DATE,   -- วันที่ลงนาม
+  receive_date DATE,-- วันที่รับ
+  urgency_level VARCHAR(50), -- ระดับความด่วน
+  secret_level VARCHAR(50),  -- ระดับความลับ
   main_text TEXT,           -- เนื้อหารวมของงาน
-  department TEXT, -- เก็บชื่อ Sheet/สำนักงาน
   sender TEXT, -- เก็บฟิลด์ "จาก"
   status VARCHAR(50) DEFAULT 'following',
   notes TEXT, 
@@ -57,5 +60,26 @@ CREATE TABLE task_topics (
   detail TEXT NOT NULL,     -- ข้อความงานย่อย
   status VARCHAR(50) DEFAULT 'pending',
   is_completed BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 5. ตาราง "การประชุม" (เชื่อมกับ Tasks)
+CREATE TABLE task_meetings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,       -- หัวข้อการประชุม
+  meeting_date TIMESTAMP,    -- วันเวลาที่ประชุม
+  location TEXT,             -- สถานที่ประชุม
+  notes TEXT,                -- บันทึก/รายละเอียด
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- 6. ตาราง "Log การทำงาน" (เชื่อมกับ Tasks และ Users)
+CREATE TABLE task_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  action VARCHAR(100) NOT NULL, -- e.g. 'created_task', 'assigned_user', 'updated_status'
+  details TEXT, -- JSON or text format detailing the change
   created_at TIMESTAMP DEFAULT NOW()
 );

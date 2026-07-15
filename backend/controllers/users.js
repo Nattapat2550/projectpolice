@@ -67,3 +67,19 @@ exports.changePassword = async (req, res, next) => {
         res.status(400).json({ success: false, message: err.message });
     }
 };
+
+// @desc    Change user role (Superadmin only)
+// @route   PUT /api/v1/users/:id/role
+// @access  Private/Superadmin
+exports.updateUserRole = async (req, res, next) => {
+    try {
+        const { role } = req.body;
+        if (!role || !['user', 'admin', 'superadmin'].includes(role)) {
+            return res.status(400).json({ success: false, message: "Invalid role specified" });
+        }
+        const user = await User.findByIdAndUpdate(req.params.id, { role });
+        res.status(200).json({ success: true, data: user, message: "User role updated successfully" });
+    } catch (err) {
+        res.status(400).json({ success: false, message: err.message });
+    }
+};

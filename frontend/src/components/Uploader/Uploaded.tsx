@@ -78,7 +78,11 @@ export default function Uploaded({ extractedData }: UploadedProps) {
     useEffect(() => {
         const fetchUsers = async () => {
             try {
-                const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003"}/api/v1/users`);
+                const token = typeof window !== 'undefined' ? localStorage.getItem("token") || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1] : null;
+                const headers: HeadersInit = {};
+                if (token) headers["Authorization"] = `Bearer ${token}`;
+
+                const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003"}/api/v1/users`, { headers });
                 if (res.ok) {
                     const data = await res.json();
                     setUsers(data.data || []);
@@ -261,9 +265,13 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                     return { ...memo, assignments: finalAssignments, due_date: baseDate.toISOString().split('T')[0] };
                 });
 
+                const token = typeof window !== 'undefined' ? localStorage.getItem("token") || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1] : null;
+                const headers: HeadersInit = { "Content-Type": "application/json" };
+                if (token) headers["Authorization"] = `Bearer ${token}`;
+
                 const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003"}/api/v1/tasks/confirm`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: headers,
                     body: JSON.stringify({ 
                         fileInfo: file.fileInfo,
                         documentId: file.documentId, 

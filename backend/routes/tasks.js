@@ -16,25 +16,27 @@ const {
     getTaskById,
     updateTaskDetail,
     deleteTask,
-    createTask
+    createTask,
+    getTaskLogs
 } = require('../controllers/taskController');
 
 const router = express.Router();
 
 router.get('/', getAllTasks);
 router.get('/urgent', getUrgentTasks);
-router.post('/', createTask);
-router.post('/confirm', confirmTasks); 
+router.post('/', protect, createTask);
+router.post('/confirm', protect, confirmTasks); 
 
 // 🚀 เพิ่มเส้นทางสำหรับเช็คหลอด Progress (ต้องอยู่ก่อน /:id)
-router.get('/upload-progress/:jobId', getUploadProgress);
+router.get('/upload-progress/:jobId', protect, getUploadProgress);
 
 // เส้นทางอัปโหลด Excel
 router.post('/upload-excel', protect, uploadExcel.single('file'), uploadExcelTasks);
 
-router.put('/:id/status', updateTaskStatus);
+router.put('/:id/status', protect, updateTaskStatus);
 router.get('/:id', getTaskById);
-router.put('/:id', updateTaskDetail);
-router.delete('/:id', deleteTask);
+router.get('/:id/logs', protect, getTaskLogs);
+router.put('/:id', protect, updateTaskDetail);
+router.delete('/:id', protect, deleteTask);
 
 module.exports = router;

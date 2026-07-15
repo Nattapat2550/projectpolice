@@ -36,6 +36,7 @@ export default function DetailsPanel({
     const router = useRouter();
     const [taskStatus, setStatus] = useState<TaskStatus>((taskData?.status as TaskStatus) || "following");
     const [isLoggedIn, setIsLoggedIn] = useState(false);
+    const [currentUser, setCurrentUser] = useState<any>(null);
     
     // 💡 ฟังก์ชันตรวจสอบสถานะ Login ที่ถูกต้องแม่นยำ
     const getValidToken = () => {
@@ -47,7 +48,16 @@ export default function DetailsPanel({
 
     useEffect(() => {
         if (taskData?.status) setStatus(taskData.status as TaskStatus);
-        setIsLoggedIn(!!getValidToken());
+        const token = getValidToken();
+        setIsLoggedIn(!!token);
+        
+        if (token) {
+            fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003"}/api/v1/auth/me`, {
+                headers: { Authorization: `Bearer ${token}` }
+            }).then(res => res.json()).then(data => {
+                if (data.success) setCurrentUser(data.data);
+            }).catch(() => {});
+        }
     }, [taskData?.status]);
 
     const checkAuthAndExecute = (action: () => void) => {
@@ -66,6 +76,29 @@ export default function DetailsPanel({
             });
             return;
         }
+
+        if (currentUser?.role === 'user') {
+             Swal.fire({
+                 icon: 'error',
+                 title: 'ไม่มีสิทธิ์เข้าถึง',
+                 text: 'บัญชีของคุณเป็นเพียงผู้เยี่ยมชม ไม่สามารถแก้ไขข้อมูลได้'
+             });
+             return;
+        }
+
+        if (currentUser?.role === 'admin') {
+            const isCreator = taskData?.created_by === currentUser?.id;
+            const isAssigned = taskData?.assignments?.some((a: any) => a.user_id === currentUser?.id);
+            if (!isCreator && !isAssigned) {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'ไม่มีสิทธิ์เข้าถึง',
+                    text: 'คุณสามารถแก้ไขได้เฉพาะงานที่คุณสร้างหรือได้รับมอบหมายเท่านั้น'
+                });
+                return;
+            }
+        }
+
         action();
     };
 
