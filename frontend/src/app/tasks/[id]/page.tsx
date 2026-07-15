@@ -77,12 +77,20 @@ export default function TaskPage() {
         }
     }, [id]);
 
-    
+    const getAuthHeaders = () => {
+        const token = typeof window !== 'undefined' ? localStorage.getItem("token") || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1] : null;
+        const headers: HeadersInit = { "Content-Type": "application/json" };
+        if (token) {
+            headers["Authorization"] = `Bearer ${token}`;
+        }
+        return headers;
+    };
+
     const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
         try {
             const res = await fetch(`${backendUrl}/api/v1/tasks/${taskId}/status`, {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({ status: newStatus }),
             });
             
@@ -114,14 +122,16 @@ export default function TaskPage() {
         try {
             const res = await fetch(`${backendUrl}/api/v1/tasks/${id}`, {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({
                     name: taskData.name,
                     date: taskData.date,
                     notes: taskData.notes,
                     assignments: taskData.assignments,
                     isUrgent: taskData.isUrgent, // ส่งค่าความเร่งด่วนไปยัง Backend
-                    main_text: taskData.main_text // ส่งค่าข้อความเต็มไปยัง Backend
+                    main_text: taskData.main_text, // ส่งค่าข้อความเต็มไปยัง Backend
+                    urgency_level: taskData.urgency_level,
+                    secret_level: taskData.secret_level
                 }),
             });
             const data = await res.json();
@@ -162,8 +172,13 @@ export default function TaskPage() {
         if (!result.isConfirmed) return;
 
         try {
+            const headers: HeadersInit = {};
+            const token = typeof window !== 'undefined' ? localStorage.getItem("token") || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1] : null;
+            if (token) headers["Authorization"] = `Bearer ${token}`;
+
             const res = await fetch(`${backendUrl}/api/v1/tasks/${id}`, {
-                method: "DELETE"
+                method: "DELETE",
+                headers: headers
             });
             const data = await res.json();
             if (data.success) {
@@ -197,13 +212,16 @@ export default function TaskPage() {
         try {
             const res = await fetch(`${backendUrl}/api/v1/tasks/${id}`, {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
+                headers: getAuthHeaders(),
                 body: JSON.stringify({
                     name: taskData.name,
                     date: taskData.date,
                     notes: taskData.notes,
                     assignments: taskData.assignments,
-                    isUrgent: newUrgentStatus 
+                    isUrgent: newUrgentStatus,
+                    main_text: taskData.main_text,
+                    urgency_level: taskData.urgency_level,
+                    secret_level: taskData.secret_level
                 }),
             });
             

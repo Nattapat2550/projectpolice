@@ -18,16 +18,18 @@ export default function UrgentTask() {
     const [tasks, setTasks] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     
-    // 💡 Changed from string "all" to string[] to support multi-select status filtering
     const [statusFilter, setStatusFilter] = useState<string[]>([]); 
     const [personFilter, setPersonFilter] = useState<string[]>([]); 
+    const [searchText, setSearchText] = useState("");
+    const [urgencyFilter, setUrgencyFilter] = useState("");
+    const [secrecyFilter, setSecrecyFilter] = useState("");
 
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
     useEffect(() => {
         setCurrentPage(1);
-    }, [statusFilter, personFilter]);
+    }, [statusFilter, personFilter, searchText, urgencyFilter, secrecyFilter]);
 
     useEffect(() => {
         const fetchUrgentTasks = async () => {
@@ -129,7 +131,11 @@ export default function UrgentTask() {
             taskPersons.includes("ทุกหน่วยงาน") ||
             taskPersons.some((p: string) => personFilter.includes(p)); 
 
-        return matchStatus && matchPerson;
+        const matchSearch = searchText === "" || task.name?.toLowerCase().includes(searchText.toLowerCase()) || task.personInCharge?.toLowerCase().includes(searchText.toLowerCase());
+        const matchUrgency = urgencyFilter === "" || task.urgency_level === urgencyFilter;
+        const matchSecrecy = secrecyFilter === "" || task.secret_level === secrecyFilter;
+
+        return matchStatus && matchPerson && matchSearch && matchUrgency && matchSecrecy;
     }).sort((a, b) => {
         if (a.status === "completed" && b.status !== "completed") return 1;
         if (a.status !== "completed" && b.status === "completed") return -1;
@@ -166,8 +172,16 @@ export default function UrgentTask() {
                         งานติดตามเร่งด่วน
                     </h1>
 
-                    <div className={styles.ContentHeader} >
+                    <div className={styles.ContentHeader} style={{ flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }} >
                         
+                        <input 
+                            type="text" 
+                            placeholder="🔍 ค้นหางาน หรือ ผู้รับผิดชอบ..." 
+                            value={searchText}
+                            onChange={(e) => setSearchText(e.target.value)}
+                            style={{ padding: '0.5rem 1rem', borderRadius: '0.7rem', border: '2px solid var(--wrapper)', minWidth: '250px', outline: 'none' }}
+                        />
+
                         {/* 💡 Replaced legacy dropdown with custom multi-select selector */}
                         <StatusMultiSelect 
                             statusFilter={statusFilter}
@@ -179,6 +193,28 @@ export default function UrgentTask() {
                             personFilter={personFilter}
                             setPersonFilter={setPersonFilter}
                         />
+
+                        <select 
+                            value={urgencyFilter} 
+                            onChange={(e) => setUrgencyFilter(e.target.value)}
+                            style={{ padding: '0.5rem 1rem', borderRadius: '0.7rem', border: '2px solid var(--wrapper)', outline: 'none', backgroundColor: 'var(--button)', fontWeight: 'bold' }}
+                        >
+                            <option value="">ทั้งหมด (ความเร่งด่วน)</option>
+                            <option value="ด่วน">ด่วน</option>
+                            <option value="ด่วนมาก">ด่วนมาก</option>
+                            <option value="ด่วนที่สุด">ด่วนที่สุด</option>
+                        </select>
+
+                        <select 
+                            value={secrecyFilter} 
+                            onChange={(e) => setSecrecyFilter(e.target.value)}
+                            style={{ padding: '0.5rem 1rem', borderRadius: '0.7rem', border: '2px solid var(--wrapper)', outline: 'none', backgroundColor: 'var(--button)', fontWeight: 'bold' }}
+                        >
+                            <option value="">ทั้งหมด (ชั้นความลับ)</option>
+                            <option value="ลับ">ลับ</option>
+                            <option value="ลับมาก">ลับมาก</option>
+                            <option value="ลับที่สุด">ลับที่สุด</option>
+                        </select>
                     </div>
                     <hr className={styles.Line}></hr>
                     

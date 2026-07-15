@@ -15,6 +15,8 @@ type Task = {
     status: string;
     createdAt?: string; // 💡 เพิ่มฟิลด์รับวันที่สร้าง
     assigneesData?: AssigneeData[]; // 💡 เพิ่มฟิลด์รับข้อมูลสี
+    urgency_level?: string;
+    secret_level?: string;
 };
 
 type Props = {
@@ -45,6 +47,8 @@ export default function TaskDisplayer({
                         status={task.status}
                         createdAt={task.createdAt} // 💡 ส่งต่อวันที่สร้างงานให้หลอด Progress
                         assigneesData={task.assigneesData} // 💡 ส่งต่อข้อมูลสีให้กล่องรายชื่อ
+                        urgency_level={task.urgency_level}
+                        secret_level={task.secret_level}
                         onStatusChange={onStatusChange}
                     />
                 ))}

@@ -20,6 +20,8 @@ type TaskItemProps = {
   assigneesData?: AssigneeData[]; 
   status: string;
   id: string;
+  urgency_level?: string;
+  secret_level?: string;
   onStatusChange: (id: string, status: TaskStatus) => void;
 };
 
@@ -30,7 +32,7 @@ type StatusOption = {
   label: string;
 };
 
-export default function AllTaskItem({date, createdAt, name, personInCharge, assigneesData, status, id, onStatusChange}:TaskItemProps){
+export default function AllTaskItem({date, createdAt, name, personInCharge, assigneesData, status, id, urgency_level, secret_level, onStatusChange}:TaskItemProps){
     const router = useRouter();
     
     const parsedDate = new Date(date);
@@ -131,6 +133,18 @@ export default function AllTaskItem({date, createdAt, name, personInCharge, assi
 
                     <div className={`${styles.Content} w-full min-w-0`}>
                         <h1 className={styles.Header} title={name}>{name}</h1>
+                        <p className="flex flex-row flex-wrap gap-2 mt-1 mb-1">
+                            {urgency_level && (
+                                <span style={{ fontWeight: 'bold', color: 'var(--redText)', backgroundColor: 'var(--redBG)', padding: '0.1rem 0.6rem', borderRadius: '1rem', fontSize: '0.75rem' }}>
+                                    🔥 {urgency_level}
+                                </span>
+                            )}
+                            {secret_level && (
+                                <span style={{ fontWeight: 'bold', color: 'var(--blueText)', backgroundColor: '#DBEAFE', padding: '0.1rem 0.6rem', borderRadius: '1rem', fontSize: '0.75rem' }}>
+                                    🔒 {secret_level}
+                                </span>
+                            )}
+                        </p>
                         <div className={`${styles.DetailContainer} mt-2 w-full pr-4 flex flex-col`}>
                             
                             <div className="flex flex-wrap gap-1.5">

@@ -194,7 +194,7 @@ export default function DetailsPanel({
                                         </div>
                                         
                                         {isEditing ? (
-                                            <div className="flex flex-col gap-2 mt-2">
+                                            <div className="flex flex-col gap-2 mt-2 w-full">
                                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                                                     <strong>เปลี่ยนกำหนดส่ง: </strong>
                                                     <input 
@@ -207,9 +207,49 @@ export default function DetailsPanel({
                                                         }} 
                                                     />
                                                 </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                                                    <strong>ชั้นความเร่งด่วน: </strong>
+                                                    <select
+                                                        className={styles.CustomSelect}
+                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
+                                                        value={taskData?.urgency_level || ""}
+                                                        onChange={(e) => setTaskData({ ...taskData, urgency_level: e.target.value })}
+                                                    >
+                                                        <option value="">ปกติ (ไม่ระบุ)</option>
+                                                        <option value="ด่วน">ด่วน</option>
+                                                        <option value="ด่วนมาก">ด่วนมาก</option>
+                                                        <option value="ด่วนที่สุด">ด่วนที่สุด</option>
+                                                    </select>
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                                                    <strong>ชั้นความลับ: </strong>
+                                                    <select
+                                                        className={styles.CustomSelect}
+                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
+                                                        value={taskData?.secret_level || ""}
+                                                        onChange={(e) => setTaskData({ ...taskData, secret_level: e.target.value })}
+                                                    >
+                                                        <option value="">ปกติ (ไม่ระบุ)</option>
+                                                        <option value="ลับ">ลับ</option>
+                                                        <option value="ลับมาก">ลับมาก</option>
+                                                        <option value="ลับที่สุด">ลับที่สุด</option>
+                                                    </select>
+                                                </div>
                                             </div>
                                         ) : (
                                             <div className="flex flex-col gap-1 mt-3">
+                                                <p className="flex flex-row flex-wrap gap-2 mb-2">
+                                                    {taskData?.urgency_level && (
+                                                        <span style={{ fontWeight: 'bold', color: 'var(--redText)', backgroundColor: 'var(--redBG)', padding: '0.2rem 0.8rem', borderRadius: '1rem', fontSize: '0.85rem' }}>
+                                                            🔥 {taskData.urgency_level}
+                                                        </span>
+                                                    )}
+                                                    {taskData?.secret_level && (
+                                                        <span style={{ fontWeight: 'bold', color: 'var(--blueText)', backgroundColor: '#DBEAFE', padding: '0.2rem 0.8rem', borderRadius: '1rem', fontSize: '0.85rem' }}>
+                                                            🔒 {taskData.secret_level}
+                                                        </span>
+                                                    )}
+                                                </p>
                                                 <p className="flex flex-row">
                                                     <strong>กำหนดส่ง: &nbsp; </strong> 
                                                     {isValidDate ? `${day} ${monthYear} เวลา ${timeText} น.` : "ไม่ระบุ"}

@@ -91,7 +91,9 @@ exports.getAllTasks = async (req, res) => {
         TO_CHAR(t.due_date, 'YYYY-MM-DD') AS date, 
         t.created_at AS "createdAt",
         t.status,
-        t.is_urgent AS "isUrgent"
+        t.is_urgent AS "isUrgent",
+        t.urgency_level,
+        t.secret_level
       FROM tasks t
       LEFT JOIN agg_assignees aa ON t.id = aa.task_id
       ORDER BY t.due_date ASC NULLS LAST
@@ -132,7 +134,9 @@ exports.getUrgentTasks = async (req, res) => {
         TO_CHAR(t.due_date, 'YYYY-MM-DD') AS date, 
         t.created_at AS "createdAt",
         t.status,
-        t.is_urgent AS "isUrgent"
+        t.is_urgent AS "isUrgent",
+        t.urgency_level,
+        t.secret_level
       FROM tasks t
       LEFT JOIN agg_assignees aa ON t.id = aa.task_id
       WHERE t.is_urgent = true
