@@ -103,3 +103,15 @@
   background-color: var(--shadow); 
   border-radius: 10px;
 }
+
+.indeterminateBar {
+    background-color: #2563eb;
+    animation: indeterminate 2s infinite linear;
+    width: 30%;
+    border-radius: 9999px;
+    height: 100%;
+}
+@keyframes indeterminate {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(350%); }
+}

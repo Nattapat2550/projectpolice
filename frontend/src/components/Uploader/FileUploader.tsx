@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, DragEvent, ChangeEvent } from "react";
+import { useState, useRef, DragEvent, ChangeEvent, useEffect } from "react";
 import styles from "./fileUploader.module.css";
 import axios from "axios";
 import { useRouter } from "next/navigation";
@@ -15,8 +15,22 @@ export default function FileUploader({ setExtractedData, progress, setProgress }
     const router = useRouter();
     const [files, setFiles] = useState<File[]>([]);
     const [isUploading, setIsUploading] = useState(false);
+    const [elapsedTime, setElapsedTime] = useState(0);
     const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Timer effect
+    useEffect(() => {
+        let timer: NodeJS.Timeout;
+        if (isUploading && progress === 100) {
+            timer = setInterval(() => {
+                setElapsedTime((prev) => prev + 1);
+            }, 1000);
+        } else {
+            setElapsedTime(0);
+        }
+        return () => clearInterval(timer);
+    }, [isUploading, progress]);
 
     const handleDragOver = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); };
 
@@ -149,9 +163,22 @@ export default function FileUploader({ setExtractedData, progress, setProgress }
                 </div>
             )}
 
-            {progress > 0 && progress < 100 && (
-                <div className="w-full bg-(--wrapper) rounded-full h-2.5">
-                    <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
+            {progress > 0 && (
+                <div className="w-full flex flex-col gap-1">
+                    <div className="w-full bg-(--wrapper) rounded-full h-2.5 overflow-hidden">
+                        {progress < 100 ? (
+                            <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${progress}%` }}></div>
+                        ) : isUploading ? (
+                            <div className={styles.indeterminateBar}></div>
+                        ) : (
+                            <div className="bg-green-600 h-2.5 rounded-full" style={{ width: `100%` }}></div>
+                        )}
+                    </div>
+                    {isUploading && progress === 100 && (
+                        <div className="text-xs text-center text-gray-500 mt-1">
+                            ผ่านไปแล้ว {elapsedTime} วินาที (การใช้ AI บนเครื่องของคุณอาจใช้เวลา 1-3 นาที)
+                        </div>
+                    )}
                 </div>
             )}
 

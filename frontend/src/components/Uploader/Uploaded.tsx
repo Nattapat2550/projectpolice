@@ -102,7 +102,8 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                 .filter(file => file.status === "success")
                 .map(file => {
                     const strictFilteredMemos = (file.extractedData || []).filter(memo => {
-                        return memo.ที่?.trim() && memo.วันที่?.trim() && memo.เรื่อง?.trim() && memo.เรียน?.trim();
+                        // ผ่อนปรนเงื่อนไขสำหรับ Local OCR: ขอแค่มีข้อมูลบางส่วนก็ให้ผ่านได้
+                        return memo.ที่?.trim() || memo.วันที่?.trim() || memo.เรื่อง?.trim() || memo.เรียน?.trim() || memo.main_text?.trim();
                     });
 
                     const scannedAssignees = new Set<string>();
