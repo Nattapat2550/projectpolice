@@ -237,6 +237,9 @@ exports.confirmTasks = async (req, res) => {
       documentId = docRes.rows[0].id;
     }
 
+    const createdTaskIds = [];
+    const updatedTaskIds = [];
+
     if (Array.isArray(memos) && memos.length > 0) {
       for (const memo of memos) {
           const parsedMemoDate = parseThaiDateToIso(memo.วันที่) || null;
@@ -264,6 +267,7 @@ exports.confirmTasks = async (req, res) => {
               );
               await logTaskAction(client, taskId, validCreatorId, 'updated_task', { source: 'confirm_tasks_upsert' });
               await client.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
+              updatedTaskIds.push(taskId);
           } else {
               const taskRes = await client.query(
                 `INSERT INTO tasks (document_id, title, memo_no, memo_date, main_text, task_detail, due_date, is_urgent, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, created_at)
@@ -290,6 +294,7 @@ exports.confirmTasks = async (req, res) => {
               );
               taskId = taskRes.rows[0].id;
               await logTaskAction(client, taskId, validCreatorId, 'created_task', { source: 'confirm_tasks' });
+              createdTaskIds.push(taskId);
           }
         
 
@@ -312,6 +317,33 @@ exports.confirmTasks = async (req, res) => {
     }
     
     await client.query('COMMIT');
+
+    // Sync to Google Sheets
+    try {
+        const getFullData = async (ids) => {
+            if (ids.length === 0) return [];
+            const query = `
+                SELECT t.*, 
+                (SELECT string_agg(role_or_name, ', ') FROM task_assignments ta WHERE ta.task_id = t.id) as "personInCharge"
+                FROM tasks t WHERE t.id = ANY($1)
+            `;
+            const { rows } = await pool.query(query, [ids]);
+            return rows;
+        };
+
+        if (createdTaskIds.length > 0) {
+            const createdData = await getFullData(createdTaskIds);
+            appendMultipleTasksToSheet(createdData).catch(e => console.error(e));
+        }
+        if (updatedTaskIds.length > 0) {
+            const updatedData = await getFullData(updatedTaskIds);
+            for (const row of updatedData) {
+                updateTaskInSheet(row).catch(e => console.error(e));
+            }
+        }
+    } catch (e) {
+        console.error("Sheet sync error in confirmTasks", e.message);
+    }
 
     if (fileInfo && fileInfo.path) {
       try { await fs.unlink(fileInfo.path); } catch (e) { console.error("Warning: Cannot delete temp file", e.message); }

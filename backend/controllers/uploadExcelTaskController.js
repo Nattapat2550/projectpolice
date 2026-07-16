@@ -1,5 +1,6 @@
 const xlsx = require("xlsx");
 const pool = require("../config/db");
+const { appendMultipleTasksToSheet, appendTaskToSheet } = require('../services/googleSheetsService');
 
 // สร้างตัวแปร Global สำหรับเก็บ Progress 
 if (!global.uploadProgress) { 
@@ -307,6 +308,25 @@ exports.uploadExcelTasks = async (req, res) => {
                     const assignRes = await pool.query(assignQuery, assignFlatValues);
                 }
 
+                // Sync to Google Sheets
+                try {
+                    const sheetsPayload = chunk.map((item, index) => ({
+                        id: taskRes.rows[index].id,
+                        receive_no: item.receive_no,
+                        receive_year: item.receive_year,
+                        created_at: item.received_date,
+                        memo_no: item.memo_no,
+                        memo_date: item.memo_date || item.signed_date,
+                        sender: item.sender,
+                        title: item.title,
+                        personInCharge: item.assignee_name,
+                        due_date: item.due_date_str,
+                        task_detail: item.command_text && item.command_text.length > 0 ? item.command_text.join('\n') : '',
+                        sign_date: item.signed_date
+                    }));
+                    appendMultipleTasksToSheet(sheetsPayload).catch(e => console.error("Sheet Batch Error:", e));
+                } catch(e) { console.error("Failed to prepare sheet batch", e); }
+
                 successCount += chunk.length;
 
             } catch (err) {
@@ -345,6 +365,24 @@ exports.uploadExcelTasks = async (req, res) => {
                             `;
                             await pool.query(assignQuery, [tRes.rows[0].id, String(item.assignee_name)]);
                         }
+
+                        try {
+                            appendTaskToSheet({
+                                id: tRes.rows[0].id,
+                                receive_no: item.receive_no,
+                                receive_year: item.receive_year,
+                                created_at: item.received_date,
+                                memo_no: item.memo_no,
+                                memo_date: item.memo_date || item.signed_date,
+                                sender: item.sender,
+                                title: item.title,
+                                personInCharge: item.assignee_name,
+                                due_date: item.due_date_str,
+                                task_detail: item.command_text && item.command_text.length > 0 ? item.command_text.join('\n') : '',
+                                sign_date: item.signed_date
+                            }).catch(e => console.error("Sheet fallback Error:", e));
+                        } catch(e) {}
+
                         successCount++;
                     } catch (fallbackErr) {
                         errors.push(`ข้อผิดพลาดแถวที่ ${item.original_row}: ${fallbackErr.message}`);
