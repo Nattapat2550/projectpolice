@@ -8,20 +8,15 @@ exports.handleSheetUpdate = async (req, res) => {
     return res.status(400).json({ success: false, message: 'Missing Task ID' });
   }
 
-  // Map sheet columns to DB fields based on our known structure
-  // 'ID', 'เลขทะเบียน', 'ปีทะเบียน', 'วันที่รับ', 'ที่หนังสือ', 'ลงวันที่', 'จาก', 'เรื่อง', 'ผู้ปฏิบัติ', 'วันที่', 'ข้อสั่งการ', 'วันที่ลงนาม'
-  
-  const receive_no = data['เลขทะเบียน'];
-  const receive_year = data['ปีทะเบียน'];
-  // const created_at = data['วันที่รับ']; // Typically we don't update created_at
-  const memo_no = data['ที่หนังสือ'];
-  const memo_date = data['ลงวันที่'];
-  const sender = data['จาก'];
-  const title = data['เรื่อง'];
-  // const personInCharge = data['ผู้ปฏิบัติ']; // Updating assignments requires more logic (deleting and inserting)
-  const due_date = data['วันที่'];
-  const task_detail = data['ข้อสั่งการ'];
-  const sign_date = data['วันที่ลงนาม'];
+  const receive_no = data.receive_no;
+  const receive_year = data.receive_year;
+  const memo_no = data.memo_no;
+  const memo_date = data.memo_date;
+  const sender = data.sender;
+  const title = data.title;
+  const due_date = data.due_date;
+  const task_detail = data.task_detail;
+  const sign_date = data.sign_date;
 
   const parseDate = (d) => {
     if (!d) return null;
