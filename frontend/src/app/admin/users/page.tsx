@@ -55,6 +55,7 @@ export default function UserManagementPage() {
       const data = await res.json();
       if (data.success) {
         setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
+        // ถ้าโปรเจกต์มี SweetAlert2 แนะนำให้เปลี่ยน alert() เป็น Swal.fire() ครับ
         alert("อัปเดตสิทธิ์ผู้ใช้งานสำเร็จ");
       } else {
         alert("เกิดข้อผิดพลาด: " + data.message);
@@ -65,63 +66,106 @@ export default function UserManagementPage() {
     }
   };
 
+  // ฟังก์ชันช่วยเลือกสีของ Badge ให้ตรงกับ globals.css
+  const getRoleBadgeStyle = (role: string) => {
+    switch (role) {
+      case 'superadmin':
+        return 'bg-[var(--redBG)]/20 text-[var(--redText)] border border-[var(--redBorder)]/30';
+      case 'admin':
+        return 'bg-[var(--blueText)]/10 text-[var(--blueText)] border border-[var(--blueText)]/30';
+      case 'user':
+      default:
+        return 'bg-[var(--wrapper)] text-[var(--foreground)]/70 border border-[var(--shadow)]/40';
+    }
+  };
+
   if (loading) {
-    return <div className="p-8 text-center text-zinc-500">กำลังโหลด...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] space-y-3">
+        <div className="w-8 h-8 border-4 border-[var(--blueText)] border-t-transparent rounded-full animate-spin"></div>
+        <p className="text-sm text-[var(--foreground)]/60">กำลังดึงข้อมูลผู้ใช้งาน...</p>
+      </div>
+    );
   }
 
   return (
-    <div className="p-4 sm:p-8 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6 text-foreground">จัดการสิทธิ์ผู้ใช้งาน (Superadmin)</h1>
-      <div className="bg-(--container) rounded-xl border border-(--shadow) overflow-hidden shadow-sm">
-        <table className="w-full text-left">
-          <thead className="bg-zinc-100 dark:bg-zinc-800/50">
-            <tr>
-              <th className="p-4 font-semibold text-zinc-600 dark:text-zinc-300 border-b border-zinc-200 dark:border-zinc-800">ชื่อผู้ใช้งาน</th>
-              <th className="p-4 font-semibold text-zinc-600 dark:text-zinc-300 border-b border-zinc-200 dark:border-zinc-800 w-1/3">สิทธิ์ (Role)</th>
-              <th className="p-4 font-semibold text-zinc-600 dark:text-zinc-300 border-b border-zinc-200 dark:border-zinc-800 w-1/4">จัดการ</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-            {users.map(u => (
-              <tr key={u.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/30 transition">
-                <td className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div 
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
-                      style={{ backgroundColor: u.color || '#3B82F6' }}
-                    >
-                      {u.name.substring(0, 1).toUpperCase()}
-                    </div>
-                    <span className="font-medium text-foreground">{u.name}</span>
-                  </div>
-                </td>
-                <td className="p-4">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${
-                    u.role === 'superadmin' ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' :
-                    u.role === 'admin' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' :
-                    'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300'
-                  }`}>
-                    {u.role || 'user'}
-                  </span>
-                </td>
-                <td className="p-4">
-                  <select
-                    className="w-full p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-                    value={u.role || 'user'}
-                    onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                  >
-                    <option value="user">User (ดูได้อย่างเดียว)</option>
-                    <option value="admin">Admin (เพิ่ม/แก้ไขงานตัวเอง)</option>
-                    <option value="superadmin">Superadmin (จัดการระบบ)</option>
-                  </select>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {users.length === 0 && (
-          <div className="p-8 text-center text-zinc-500">ไม่พบข้อมูลผู้ใช้งาน</div>
-        )}
+    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] transition-colors duration-300 p-4 sm:p-8">
+      <div className="max-w-4xl mx-auto space-y-6">
+        
+        {/* Header Section */}
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">จัดการสิทธิ์ผู้ใช้งาน</h1>
+          <p className="text-sm text-[var(--foreground)]/60 mt-1">ส่วนควบคุมระบบ (Superadmin Only)</p>
+        </div>
+
+        {/* Table Container (Apple Sheet Style) */}
+        <div className="bg-[var(--container)] border border-[var(--shadow)]/30 rounded-2xl overflow-hidden shadow-sm transition-all duration-300">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-[var(--wrapper)]/30">
+                <tr>
+                  <th className="p-4 text-xs font-semibold uppercase tracking-wider text-[var(--foreground)]/70 border-b border-[var(--shadow)]/20">ผู้ใช้งาน</th>
+                  <th className="p-4 text-xs font-semibold uppercase tracking-wider text-[var(--foreground)]/70 border-b border-[var(--shadow)]/20 w-1/3 text-center">สิทธิ์การเข้าถึง (Role)</th>
+                  <th className="p-4 text-xs font-semibold uppercase tracking-wider text-[var(--foreground)]/70 border-b border-[var(--shadow)]/20 w-1/4">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[var(--shadow)]/20 text-sm">
+                {users.map(u => (
+                  <tr key={u.id} className="hover:bg-[var(--wrapper)]/20 transition-colors">
+                    {/* User Profile Column */}
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm ring-2 ring-[var(--background)]"
+                          style={{ backgroundColor: u.color || 'var(--blueText)' }}
+                        >
+                          {u.name.substring(0, 1).toUpperCase()}
+                        </div>
+                        <span className="font-medium text-[var(--foreground)]">{u.name}</span>
+                      </div>
+                    </td>
+
+                    {/* Role Badge Column */}
+                    <td className="p-4 text-center">
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${getRoleBadgeStyle(u.role)}`}>
+                        {u.role === 'superadmin' ? 'Superadmin' : u.role === 'admin' ? 'Admin' : 'User'}
+                      </span>
+                    </td>
+
+                    {/* Action Column */}
+                    <td className="p-4">
+                      <select
+                        className="w-full px-3 py-2 rounded-xl bg-[var(--wrapper)]/40 border border-[var(--shadow)]/40 text-[var(--foreground)] text-sm focus:bg-[var(--background)] focus:ring-2 focus:ring-[var(--blueText)]/50 focus:border-transparent outline-none transition-all appearance-none cursor-pointer"
+                        value={u.role || 'user'}
+                        onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                        // เพิ่มลูกศรลงไปใน CSS พื้นหลังเพื่อให้ดูเป็น Select หรูๆ
+                        style={{
+                          backgroundImage: `url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e")`,
+                          backgroundRepeat: 'no-repeat',
+                          backgroundPosition: 'right 0.75rem center',
+                          backgroundSize: '1em'
+                        }}
+                      >
+                        <option value="user" className="text-black">User (ดูได้อย่างเดียว)</option>
+                        <option value="admin" className="text-black">Admin (เพิ่ม/แก้ไขงาน)</option>
+                        <option value="superadmin" className="text-black">Superadmin (จัดการระบบ)</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Empty State */}
+          {users.length === 0 && (
+            <div className="p-12 text-center text-[var(--foreground)]/50 flex flex-col items-center">
+              <span className="text-4xl mb-2 opacity-50">👥</span>
+              <p className="text-sm">ไม่พบข้อมูลผู้ใช้งาน</p>
+            </div>
+          )}
+        </div>
+        
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ export interface SearchFilters {
   status: string;
   urgency_level: string;
   secret_level: string;
+  assignees: string[]; // เก็บเป็น user_id ของผู้รับผิดชอบที่เลือก (เลือกได้หลายคน)
 }
 
 export const emptyFilters: SearchFilters = {
@@ -21,11 +22,18 @@ export const emptyFilters: SearchFilters = {
   status: '',
   urgency_level: '',
   secret_level: '',
+  assignees: [],
 };
+
+export interface UserOption {
+  id: string;
+  name: string;
+}
 
 interface HeaderProps {
   filters: SearchFilters;
   setFilters: React.Dispatch<React.SetStateAction<SearchFilters>>;
+  users?: UserOption[];
 }
 
 // ค่าตาม ENUM จริงของ DB (ดู db.sql / be.md)
@@ -45,18 +53,43 @@ const inputClass =
 
 const labelClass = 'text-xs font-semibold uppercase tracking-wider text-[var(--foreground)]/60';
 
-export const Header: React.FC<HeaderProps> = ({ filters, setFilters }) => {
+export const Header: React.FC<HeaderProps> = ({ filters, setFilters, users = [] }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isAssigneeOpen, setIsAssigneeOpen] = useState(false);
+  const [assigneeSearch, setAssigneeSearch] = useState('');
 
   const handleClear = () => {
     setFilters({ ...emptyFilters });
   };
 
-  const isFiltering = Object.values(filters).some((v) => v && v.trim() !== '');
+  const toggleAssignee = (id: string) => {
+    setFilters((prev) => {
+      const exists = prev.assignees.includes(id);
+      return {
+        ...prev,
+        assignees: exists
+          ? prev.assignees.filter((a) => a !== id)
+          : [...prev.assignees, id],
+      };
+    });
+  };
+
+  const removeAssignee = (id: string) => {
+    setFilters((prev) => ({ ...prev, assignees: prev.assignees.filter((a) => a !== id) }));
+  };
+
+  const selectedUsers = users.filter((u) => filters.assignees.includes(u.id));
+  const filteredUserOptions = users.filter((u) =>
+    u.name.toLowerCase().includes(assigneeSearch.trim().toLowerCase())
+  );
+
+  const isFiltering = Object.values(filters).some((v) =>
+    Array.isArray(v) ? v.length > 0 : v && v.trim() !== ''
+  );
 
   return (
     <>
-      <div className="pt-6 px-4 sm:px-6 md:px-8 flex justify-end max-w-7xl mx-auto">
+      <div className="pt-6 px-4 sm:px-6 md:px-8 flex justify-end w-full max-w-[1920px] mx-auto">
         <button
           onClick={() => setIsModalOpen(true)}
           className="relative flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-full bg-[var(--container)] border border-[var(--shadow)]/30 shadow-sm hover:shadow-md hover:border-[var(--blueText)]/50 focus:outline-none active:scale-95 transition-all"
@@ -153,6 +186,103 @@ export const Header: React.FC<HeaderProps> = ({ filters, setFilters }) => {
                     onChange={(e) => setFilters({ ...filters, receive_year: e.target.value })}
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1.5 relative">
+                <label className={labelClass}>
+                  ผู้รับผิดชอบ <span className="normal-case font-normal text-[var(--foreground)]/40">(เลือกได้หลายคน — ต้องมีครบทุกคนที่เลือก)</span>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAssigneeOpen((v) => !v)}
+                  className={`${selectClass} flex items-center justify-between text-left`}
+                >
+                  <span className={selectedUsers.length ? 'text-[var(--foreground)]' : 'text-[var(--foreground)]/50'}>
+                    {selectedUsers.length > 0 ? `เลือกแล้ว ${selectedUsers.length} คน` : 'ทั้งหมด'}
+                  </span>
+                  <svg className={`w-4 h-4 text-[var(--foreground)]/50 shrink-0 transition-transform ${isAssigneeOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+
+                {selectedUsers.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 pt-1">
+                    {selectedUsers.map((u) => (
+                      <span
+                        key={u.id}
+                        className="inline-flex items-center gap-1 pl-2.5 pr-1.5 py-1 rounded-full text-xs bg-[var(--blueText)]/10 text-[var(--blueText)] border border-[var(--blueText)]/30"
+                      >
+                        {u.name}
+                        <button
+                          type="button"
+                          onClick={() => removeAssignee(u.id)}
+                          className="p-0.5 rounded-full hover:bg-[var(--blueText)]/20 transition-colors"
+                        >
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {isAssigneeOpen && (
+                  <div className="absolute z-10 mt-1 w-full rounded-xl border border-[var(--shadow)]/40 bg-[var(--background)] shadow-lg overflow-hidden">
+                    <div className="p-2 border-b border-[var(--shadow)]/20">
+                      <input
+                        type="text"
+                        autoFocus
+                        placeholder="ค้นหาชื่อ..."
+                        className="w-full px-3 py-2 text-sm rounded-lg bg-[var(--wrapper)]/40 border border-[var(--shadow)]/30 outline-none focus:ring-2 focus:ring-[var(--blueText)]/40"
+                        value={assigneeSearch}
+                        onChange={(e) => setAssigneeSearch(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="max-h-52 overflow-y-auto py-1">
+                      {filteredUserOptions.length === 0 ? (
+                        <div className="px-4 py-3 text-xs text-[var(--foreground)]/40 text-center">ไม่พบชื่อที่ค้นหา</div>
+                      ) : (
+                        filteredUserOptions.map((u) => {
+                          const checked = filters.assignees.includes(u.id);
+                          return (
+                            <label
+                              key={u.id}
+                              className="flex items-center gap-2.5 px-4 py-2 text-sm hover:bg-[var(--wrapper)]/40 cursor-pointer transition-colors"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleAssignee(u.id)}
+                                className="w-4 h-4 rounded accent-[var(--blueText)]"
+                              />
+                              <span className="text-[var(--foreground)]/90">{u.name}</span>
+                            </label>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    <div className="px-3 py-2 border-t border-[var(--shadow)]/20 flex justify-between bg-[var(--wrapper)]/10">
+                      <button
+                        type="button"
+                        onClick={() => setFilters({ ...filters, assignees: [] })}
+                        className="text-xs font-medium text-[var(--foreground)]/60 hover:text-[var(--redText)] transition-colors"
+                      >
+                        ล้างที่เลือก
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAssigneeOpen(false)}
+                        className="text-xs font-semibold text-[var(--blueText)] hover:opacity-80 transition-colors"
+                      >
+                        เสร็จสิ้น
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">

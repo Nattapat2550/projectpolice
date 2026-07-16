@@ -2,27 +2,56 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Header, SearchFilters, emptyFilters } from '@/components/firstpage/Header';
+import { Header, SearchFilters, emptyFilters, UserOption } from '@/components/firstpage/Header';
 import { StatCard } from '@/components/firstpage/StatCard';
 import { TaskTable, Task, SortKey, SortConfig } from '@/components/firstpage/TaskTable';
 
 const PAGE_SIZE = 20;
 
+// resolve ชื่อผู้รับผิดชอบจริง: ถ้ามี user_id และหาเจอใน users map ให้ใช้ชื่อนั้นก่อนเสมอ
+// (ข้อมูลดิบจาก backend บางทีมีแค่ user_id โดยไม่มีชื่อติดมาด้วย)
+// 🐛 FIX: GET /api/v1/tasks (backend) รวม assignee มาเป็น `assigneesData: [{ name, color }]`
+// โดย "ไม่มี" user_id ติดมาด้วยเลย (ดู be.md — "Aggregates and yields assignees names and colors")
+// เดิมฟังก์ชันนี้เช็คแค่ personInCharge / role_or_name / responsible_person เลยไม่เจอ `name`
+// แล้ว fallback ไปเป็น 'ไม่ระบุชื่อ' ทุกครั้ง — นี่คือสาเหตุที่ตารางขึ้นชื่อผู้รับผิดชอบผิด
+function resolveAssigneeName(assign: any, usersMap: Map<string, string>): string {
+  if (assign?.user_id && usersMap.has(assign.user_id)) {
+    return usersMap.get(assign.user_id)!;
+  }
+  return (
+    assign?.name ||
+    assign?.personInCharge ||
+    assign?.role_or_name ||
+    assign?.responsible_person ||
+    'ไม่ระบุชื่อ'
+  );
+}
+
 // 💡 API ของ backend มีการส่งข้อมูลมาได้ 2 รูปแบบ (list แบบย่อ กับ detail แบบเต็ม)
 // ฟังก์ชันนี้ทำหน้าที่ normalize ให้กลายเป็นรูปแบบเดียวกันเสมอ ไม่ว่า backend จะส่ง
 // title/name, is_urgent/isUrgent, assignments/assigneesData แบบไหนมาก็ตาม
-function normalizeTask(raw: any): Task {
-  const rawAssignments = raw.assignments ?? raw.assigneesData ?? [];
+function normalizeTask(raw: any, usersMap: Map<string, string>): Task {
+  const rawAssignments: any[] = raw.assignments ?? raw.assigneesData ?? [];
+
   const assignments =
     Array.isArray(rawAssignments) && rawAssignments.length > 0
-      ? rawAssignments
+      ? rawAssignments.map((a, idx) => {
+          const name = resolveAssigneeName(a, usersMap);
+          return {
+            assignment_id: a.assignment_id || `${raw.id}-${a.user_id || idx}`,
+            user_id: a.user_id ?? null,
+            role_or_name: a.role_or_name || name,
+            personInCharge: name,
+          };
+        })
       : raw.personInCharge && raw.personInCharge !== 'ไม่ระบุ'
       ? [
           {
             assignment_id: `${raw.id}-person`,
             user_id: raw.user_id ?? null,
             role_or_name: raw.personInCharge,
-            personInCharge: raw.personInCharge,
+            personInCharge:
+              (raw.user_id && usersMap.get(raw.user_id)) || raw.personInCharge,
           },
         ]
       : [];
@@ -86,6 +115,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<SearchFilters>({ ...emptyFilters });
+  const [usersList, setUsersList] = useState<UserOption[]>([]);
 
   // เรียงตาม receive_year ก่อน แล้วต่อด้วย receive_no จากน้อยไปมาก เป็นค่าเริ่มต้น
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'receive_no', direction: 'asc' });
@@ -104,6 +134,37 @@ export default function HomePage() {
     const fetchTasks = async () => {
       try {
         setLoading(true);
+
+        // 👥 ดึงรายชื่อ users ทั้งหมดมาก่อน เพื่อทำ map user_id -> name
+        // ใช้สำหรับ resolve ชื่อผู้รับผิดชอบที่ backend ส่งมาแค่ user_id
+        const usersMap = new Map<string, string>();
+        try {
+          const usersRes = await fetch(`${backendUrl}/api/v1/users`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          if (usersRes.ok) {
+            const usersData = await usersRes.json();
+            const rawUsers: any[] = usersData.success && Array.isArray(usersData.data)
+              ? usersData.data
+              : Array.isArray(usersData)
+              ? usersData
+              : [];
+            const options: UserOption[] = [];
+            rawUsers.forEach((u) => {
+              if (u?.id && u?.name) {
+                usersMap.set(u.id, u.name);
+                options.push({ id: u.id, name: u.name });
+              }
+            });
+            setUsersList(options.sort((a, b) => a.name.localeCompare(b.name, 'th')));
+          }
+        } catch {
+          // ถ้าดึง users ไม่ได้ ไม่ต้อง block การแสดง tasks แค่จะไม่มีชื่อ resolve ให้
+        }
 
         const response = await fetch(`${backendUrl}/api/v1/tasks`, {
           method: 'GET',
@@ -133,7 +194,7 @@ export default function HomePage() {
           ? resData
           : [];
 
-        setTasks(rawList.map(normalizeTask));
+        setTasks(rawList.map((raw) => normalizeTask(raw, usersMap)));
       } catch (err: any) {
         setError(err.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
       } finally {
@@ -184,6 +245,14 @@ export default function HomePage() {
     const urgency = filters.urgency_level.trim();
     const secret = filters.secret_level.trim();
 
+    // 👥 ผู้รับผิดชอบเลือกได้หลายคน (intersect): งานต้องมี "ครบทุกคน" ที่เลือกไว้ ไม่ใช่แค่คนใดคนหนึ่ง
+    // Backend ไม่ส่ง user_id ต่อ assignment มาด้วย (ดู resolveAssigneeName ด้านบน) จึงต้อง match กันด้วย "ชื่อ"
+    // ซึ่งปลอดภัยเพราะ users.name เป็น UNIQUE ใน DB (ดู be.md ตาราง users)
+    const idToName = new Map(usersList.map((u) => [u.id, u.name]));
+    const selectedAssigneeNames = filters.assignees
+      .map((id) => idToName.get(id))
+      .filter((n): n is string => !!n);
+
     return tasks.filter((task) => {
       const matchTitle = !t || task.title?.toLowerCase().includes(t);
       const matchReceiveNo = !rNo || task.receive_no?.toString().includes(rNo);
@@ -194,6 +263,13 @@ export default function HomePage() {
       const matchUrgency = !urgency || task.urgency_level === urgency;
       const matchSecret = !secret || task.secret_level === secret;
 
+      const taskAssigneeNames = (task.assignments || [])
+        .map((a) => a.personInCharge || a.role_or_name)
+        .filter((n): n is string => !!n);
+      const matchAssignee =
+        selectedAssigneeNames.length === 0 ||
+        selectedAssigneeNames.every((name) => taskAssigneeNames.includes(name));
+
       return (
         matchTitle &&
         matchReceiveNo &&
@@ -202,10 +278,11 @@ export default function HomePage() {
         matchSender &&
         matchStatus &&
         matchUrgency &&
-        matchSecret
+        matchSecret &&
+        matchAssignee
       );
     });
-  }, [tasks, filters]);
+  }, [tasks, filters, usersList]);
 
   // ↕️ เรียงข้อมูล: ถ้าไม่มีการเลือกคอลัมน์เอง ใช้ค่าเริ่มต้น receive_year -> receive_no
   const sortedTasks = useMemo(() => {
@@ -256,9 +333,9 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] transition-colors duration-300">
 
-      <Header filters={filters} setFilters={setFilters} />
+      <Header filters={filters} setFilters={setFilters} users={usersList} />
 
-      <main className="max-w-7xl mx-auto p-4 sm:p-6 md:p-8 space-y-6">
+      <main className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 md:p-8 space-y-6">
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard

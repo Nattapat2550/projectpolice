@@ -64,7 +64,7 @@ interface TaskTableProps {
 const COLUMNS: { key: SortKey; label: string; className?: string }[] = [
   { key: 'receive_no', label: 'เลขรับ / ปี', className: 'w-24' },
   { key: 'memo_no', label: 'เลขที่หนังสือ', className: 'w-32' },
-  { key: 'title', label: 'ชื่อเรื่อง / รายละเอียด', className: 'w-64' },
+  { key: 'title', label: 'ชื่อเรื่อง / รายละเอียด', className: 'w-[420px] min-w-[420px]' },
 ];
 
 const COLUMNS_AFTER_ASSIGNEE: { key: SortKey; label: string; className?: string }[] = [
@@ -182,7 +182,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       {/* 🖥️ [1] Desktop & iPad แนวนอน (ตารางเต็มรูปแบบ พร้อม sort) */}
       <div className="hidden lg:block bg-[var(--container)] border border-[var(--shadow)]/30 rounded-2xl shadow-sm overflow-hidden transition-all">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1300px]">
+          <table className="w-full text-left border-collapse min-w-[1500px]">
             <thead>
               <tr className="border-b border-[var(--shadow)]/30 bg-[var(--wrapper)]/30 text-xs font-semibold uppercase tracking-wider text-[var(--foreground)]/70">
                 {COLUMNS.map((col) => {
@@ -234,8 +234,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                   <td className="px-3 py-4.5 whitespace-nowrap font-mono text-xs text-[var(--foreground)]/80">
                     {task.memo_no || '-'}
                   </td>
-                  <td className="px-3 py-4.5">
-                    <div className="font-medium text-[var(--foreground)] line-clamp-1 group-hover:text-[var(--blueText)] transition-colors">
+                  <td className="px-3 py-4.5 align-top">
+                    <div className="font-medium text-[var(--foreground)] whitespace-normal break-words leading-snug group-hover:text-[var(--blueText)] transition-colors">
                       {task.title || 'ไม่มีชื่อเรื่อง'}
                     </div>
                     {task.is_urgent && (
