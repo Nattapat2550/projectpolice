@@ -9,3 +9,6 @@ backend/config/config.env
 .vscode/
 
 backend/config/drive-credentials.json
+
+# ignore generated backend documentation
+be.md

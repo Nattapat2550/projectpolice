@@ -1,0 +1,221 @@
+import React, { useState } from 'react';
+
+// 💡 อัปเดต Interface ให้ครอบคลุมฟิลด์ที่มีจริงใน DB (tasks table)
+export interface SearchFilters {
+  title: string;
+  receive_no: string;
+  receive_year: string;
+  memo_no: string;
+  sender: string;
+  status: string;
+  urgency_level: string;
+  secret_level: string;
+}
+
+export const emptyFilters: SearchFilters = {
+  title: '',
+  receive_no: '',
+  receive_year: '',
+  memo_no: '',
+  sender: '',
+  status: '',
+  urgency_level: '',
+  secret_level: '',
+};
+
+interface HeaderProps {
+  filters: SearchFilters;
+  setFilters: React.Dispatch<React.SetStateAction<SearchFilters>>;
+}
+
+// ค่าตาม ENUM จริงของ DB (ดู db.sql / be.md)
+const URGENCY_OPTIONS = ['ปกติ', 'ด่วน', 'ด่วนมาก', 'ด่วนที่สุด'];
+const SECRET_OPTIONS = ['ปกติ', 'ลับ', 'ลับมาก', 'ลับที่สุด'];
+const STATUS_OPTIONS: { value: string; label: string }[] = [
+  { value: 'following', label: 'กำลังติดตาม' },
+  { value: 'success', label: 'เสร็จสิ้น' },
+  { value: 'pending', label: 'รอดำเนินการ' },
+];
+
+const selectClass =
+  'w-full px-4 py-2.5 text-sm rounded-xl bg-[var(--wrapper)]/40 border border-[var(--shadow)]/40 focus:bg-[var(--background)] focus:ring-2 focus:ring-[var(--blueText)]/50 focus:border-transparent outline-none transition-all appearance-none';
+
+const inputClass =
+  'w-full px-4 py-2.5 text-sm rounded-xl bg-[var(--wrapper)]/40 border border-[var(--shadow)]/40 focus:bg-[var(--background)] focus:ring-2 focus:ring-[var(--blueText)]/50 focus:border-transparent outline-none transition-all';
+
+const labelClass = 'text-xs font-semibold uppercase tracking-wider text-[var(--foreground)]/60';
+
+export const Header: React.FC<HeaderProps> = ({ filters, setFilters }) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handleClear = () => {
+    setFilters({ ...emptyFilters });
+  };
+
+  const isFiltering = Object.values(filters).some((v) => v && v.trim() !== '');
+
+  return (
+    <>
+      <div className="pt-6 px-4 sm:px-6 md:px-8 flex justify-end max-w-7xl mx-auto">
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="relative flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-full bg-[var(--container)] border border-[var(--shadow)]/30 shadow-sm hover:shadow-md hover:border-[var(--blueText)]/50 focus:outline-none active:scale-95 transition-all"
+        >
+          <svg className="w-4 h-4 text-[var(--foreground)]/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <span className="text-[var(--foreground)]/80">
+            {isFiltering ? 'แก้ไขตัวกรองค้นหา' : 'ค้นหาข้อมูล...'}
+          </span>
+
+          {isFiltering && (
+            <span className="absolute top-0 right-0 w-3 h-3 bg-[var(--redBG)] border-2 border-[var(--background)] rounded-full -mt-0.5 -mr-0.5"></span>
+          )}
+        </button>
+      </div>
+
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setIsModalOpen(false)}
+          ></div>
+
+          <div className="relative bg-[var(--container)] w-full sm:max-w-xl rounded-t-3xl sm:rounded-2xl shadow-2xl border border-[var(--shadow)]/30 overflow-hidden flex flex-col slide-in-from-bottom sm:slide-in-from-bottom-0 sm:zoom-in-95 transition-all duration-300 max-h-[90vh]">
+
+            <div className="px-6 py-4 border-b border-[var(--shadow)]/20 flex justify-between items-center bg-[var(--header-bg)]/5">
+              <h2 className="text-lg font-semibold text-[var(--foreground)]">ค้นหาข้อมูล</h2>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-1.5 rounded-full bg-[var(--wrapper)]/80 text-[var(--foreground)]/60 hover:text-[var(--redText)] transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5 overflow-y-auto">
+              <div className="space-y-1.5">
+                <label className={labelClass}>ชื่อเรื่อง / รายละเอียด</label>
+                <input
+                  type="text"
+                  placeholder="เช่น ขออนุมัติโครงการ..."
+                  className={inputClass}
+                  value={filters.title}
+                  onChange={(e) => setFilters({ ...filters, title: e.target.value })}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <label className={labelClass}>เลขที่หนังสือ</label>
+                  <input
+                    type="text"
+                    placeholder="เช่น ตช 0001/25"
+                    className={inputClass}
+                    value={filters.memo_no}
+                    onChange={(e) => setFilters({ ...filters, memo_no: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelClass}>จากหน่วยงาน (ผู้ส่ง)</label>
+                  <input
+                    type="text"
+                    placeholder="เช่น กองกำกับการ 1..."
+                    className={inputClass}
+                    value={filters.sender}
+                    onChange={(e) => setFilters({ ...filters, sender: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <label className={labelClass}>เลขรับ</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="เช่น 843"
+                    className={inputClass}
+                    value={filters.receive_no}
+                    onChange={(e) => setFilters({ ...filters, receive_no: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelClass}>ปี (receive_year)</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="เช่น 2568"
+                    className={inputClass}
+                    value={filters.receive_year}
+                    onChange={(e) => setFilters({ ...filters, receive_year: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+                <div className="space-y-1.5">
+                  <label className={labelClass}>สถานะ</label>
+                  <select
+                    className={selectClass}
+                    value={filters.status}
+                    onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+                  >
+                    <option value="">ทั้งหมด</option>
+                    {STATUS_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelClass}>ความเร่งด่วน</label>
+                  <select
+                    className={selectClass}
+                    value={filters.urgency_level}
+                    onChange={(e) => setFilters({ ...filters, urgency_level: e.target.value })}
+                  >
+                    <option value="">ทั้งหมด</option>
+                    {URGENCY_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelClass}>ชั้นความลับ</label>
+                  <select
+                    className={selectClass}
+                    value={filters.secret_level}
+                    onChange={(e) => setFilters({ ...filters, secret_level: e.target.value })}
+                  >
+                    <option value="">ทั้งหมด</option>
+                    {SECRET_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-[var(--wrapper)]/10 border-t border-[var(--shadow)]/20 flex justify-end gap-3 pb-8 sm:pb-4">
+              <button
+                onClick={handleClear}
+                className="px-5 py-2 text-sm font-medium rounded-xl text-[var(--foreground)]/70 hover:bg-[var(--wrapper)]/50 transition-colors"
+              >
+                ล้างค่า
+              </button>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="px-5 py-2 text-sm font-semibold rounded-xl bg-[var(--foreground)] text-[var(--background)] shadow-md hover:opacity-90 active:scale-95 transition-all"
+              >
+                ดูผลลัพธ์
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
