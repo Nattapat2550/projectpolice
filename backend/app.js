@@ -89,4 +89,15 @@ app.get("/", (req, res) => {
   });
 });
 
+// Global Error Handler
+app.use((err, req, res, next) => {
+  console.error("Global Error Handler:", err);
+  const status = err.status || 500;
+  res.status(status).json({
+    success: false,
+    message: err.message || "Internal Server Error",
+    stack: process.env.NODE_ENV === "development" ? err.stack : undefined
+  });
+});
+
 module.exports = app;

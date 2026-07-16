@@ -37,6 +37,8 @@ export default function DetailsPanel({
     const [taskStatus, setStatus] = useState<TaskStatus>((taskData?.status as TaskStatus) || "following");
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
+    const [users, setUsers] = useState<any[]>([]);
+
     
     // 💡 ฟังก์ชันตรวจสอบสถานะ Login ที่ถูกต้องแม่นยำ
     const getValidToken = () => {
@@ -57,8 +59,44 @@ export default function DetailsPanel({
             }).then(res => res.json()).then(data => {
                 if (data.success) setCurrentUser(data.data);
             }).catch(() => {});
+            
+            fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003"}/api/v1/users`, {
+                headers: { Authorization: `Bearer ${token}` }
+            }).then(res => res.json()).then(data => {
+                if (data.success) setUsers(data.data);
+            }).catch(() => {});
         }
     }, [taskData?.status]);
+
+    const handleUserSelect = (uid: string, checked: boolean) => {
+        let currentAssignments = Array.isArray(taskData.assignments) ? [...taskData.assignments] : [];
+        if (uid === "all") {
+            if (checked) {
+                currentAssignments = [{ user_id: null, role_or_name: "all" }];
+            } else {
+                currentAssignments = [];
+            }
+        } else {
+            // Remove "all" if present
+            currentAssignments = currentAssignments.filter(a => a.role_or_name !== "all");
+            
+            if (checked) {
+                const matchedUser = users.find(u => String(u.id || u._id) === uid);
+                if (matchedUser) {
+                    currentAssignments.push({ user_id: matchedUser.id || matchedUser._id, role_or_name: matchedUser.name });
+                }
+            } else {
+                currentAssignments = currentAssignments.filter(a => String(a.user_id) !== uid);
+            }
+        }
+        setTaskData({ ...taskData, assignments: currentAssignments });
+    };
+
+    const isUserSelected = (uid: string) => {
+        if (!taskData?.assignments) return false;
+        if (uid === "all") return taskData.assignments.some((a: any) => a.role_or_name === "all");
+        return taskData.assignments.some((a: any) => String(a.user_id) === uid);
+    };
 
     const checkAuthAndExecute = (action: () => void) => {
         if (!getValidToken()) {
@@ -192,9 +230,75 @@ export default function DetailsPanel({
                                             </span>
                                         </div>
                                         
+                                        
                                         {isEditing ? (
                                             <div className="flex flex-col gap-2 mt-2 w-full">
-                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                                                <div className="flex flex-col mt-2 mb-2 w-full">
+                                                    <strong className="mb-2 block">เปลี่ยนผู้รับผิดชอบ (เลือกได้หลายคน): </strong>
+                                                    <Select
+                                                        isMulti
+                                                        options={[
+                                                            { value: "all", label: "📢 เลือกทั้งหมด (ทุกคน)" },
+                                                            ...users.map(u => ({ value: String(u.id || u._id), label: `${u.name} ${u.role ? `(${u.role})` : ''}` }))
+                                                        ]}
+                                                        value={taskData?.assignments?.map((a: any) => {
+                                                            if (a.role_or_name === "all") return { value: "all", label: "📢 เลือกทั้งหมด (ทุกคน)" };
+                                                            const user = users.find(u => String(u.id || u._id) === String(a.user_id));
+                                                            if (user) return { value: String(user.id || user._id), label: `${user.name} ${user.role ? `(${user.role})` : ''}` };
+                                                            return { value: String(a.user_id), label: a.role_or_name };
+                                                        }).filter(Boolean) || []}
+                                                        onChange={(selectedOptions: any) => {
+                                                            const isAllSelected = selectedOptions?.some((opt: any) => opt.value === "all");
+                                                            if (isAllSelected) {
+                                                                setTaskData({ ...taskData, assignments: [{ user_id: null, role_or_name: "all" }] });
+                                                            } else {
+                                                                setTaskData({
+                                                                    ...taskData,
+                                                                    assignments: selectedOptions ? selectedOptions.map((opt: any) => {
+                                                                        const matchedUser = users.find(u => String(u.id || u._id) === opt.value);
+                                                                        return matchedUser 
+                                                                            ? { user_id: matchedUser.id || matchedUser._id, role_or_name: matchedUser.name } 
+                                                                            : { user_id: opt.value, role_or_name: opt.label };
+                                                                    }) : []
+                                                                });
+                                                            }
+                                                        }}
+                                                        placeholder="🔍 พิมพ์เพื่อค้นหาผู้รับผิดชอบ..."
+                                                        className="text-sm"
+                                                        styles={{
+                                                            control: (base) => ({
+                                                                ...base,
+                                                                backgroundColor: 'var(--wrapper)',
+                                                                borderColor: 'var(--shadow)',
+                                                                color: 'var(--foreground)',
+                                                                padding: '0.1rem'
+                                                            }),
+                                                            menu: (base) => ({
+                                                                ...base,
+                                                                backgroundColor: 'var(--wrapper)',
+                                                                color: 'var(--foreground)',
+                                                                zIndex: 9999
+                                                            }),
+                                                            option: (base, state) => ({
+                                                                ...base,
+                                                                backgroundColor: state.isFocused ? 'var(--button)' : 'transparent',
+                                                                color: 'var(--foreground)',
+                                                                cursor: 'pointer'
+                                                            }),
+                                                            multiValue: (base) => ({
+                                                                ...base,
+                                                                backgroundColor: 'var(--button)',
+                                                                borderRadius: '4px'
+                                                            }),
+                                                            multiValueLabel: (base) => ({
+                                                                ...base,
+                                                                color: 'var(--foreground)',
+                                                                fontWeight: 'bold'
+                                                            })
+                                                        }}
+                                                    />
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
                                                     <strong>เปลี่ยนกำหนดส่ง: </strong>
                                                     <input 
                                                         type="datetime-local" 
@@ -265,16 +369,6 @@ export default function DetailsPanel({
                                                     />
                                                 </div>
                                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
-                                                    <strong>วันที่รับ: </strong>
-                                                    <input 
-                                                        type="date" 
-                                                        className={styles.CustomSelect}
-                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
-                                                        value={taskData?.receive_date ? new Date(taskData.receive_date).toISOString().split('T')[0] : ""} 
-                                                        onChange={(e) => setTaskData({ ...taskData, receive_date: e.target.value })} 
-                                                    />
-                                                </div>
-                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
                                                     <strong>วันที่ลงนาม: </strong>
                                                     <input 
                                                         type="date" 
@@ -322,10 +416,10 @@ export default function DetailsPanel({
                                                         {taskData.receive_no}
                                                     </p>
                                                 )}
-                                                {taskData?.receive_date && (
+                                                {taskData?.createdAt && (
                                                     <p className="flex flex-row" style={{ color: 'var(--foreground)' }}>
-                                                        <strong>📅 วันที่ลงรับ: &nbsp; </strong> 
-                                                        {new Date(taskData.receive_date).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}
+                                                        <strong>📅 วันที่นำเข้าสู่ระบบ: &nbsp; </strong> 
+                                                        {new Date(taskData.createdAt).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}
                                                     </p>
                                                 )}
                                                 {taskData?.sign_date && (

@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./fileUploader.module.css";
-import Swal from "sweetalert2"; // 💡 นำเข้า SweetAlert2
+import Swal from "sweetalert2";
+import Select from "react-select";
 
 interface ResponsibilityAssignment {
     responsible_person: string;
@@ -302,7 +303,66 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                                                 </select>
                                             </div>
                                             
-
+                                            <div className="flex flex-col gap-1 flex-1 min-w-[250px]">
+                                                <strong className="shrink-0 whitespace-nowrap">มอบหมายให้ (เลือกได้หลายคน)</strong>
+                                                <Select
+                                                    isMulti
+                                                    options={[
+                                                        { value: "all", label: "📢 เลือกทั้งหมด (ทุกคน)" },
+                                                        ...users.map(u => ({ value: String(u.id || u._id), label: `${u.name} ${u.role ? `(${u.role})` : ''}` }))
+                                                    ]}
+                                                    value={file.selectedAssignees.includes("all") 
+                                                        ? [{ value: "all", label: "📢 เลือกทั้งหมด (ทุกคน)" }] 
+                                                        : file.selectedAssignees.map(uid => {
+                                                            const u = users.find(x => String(x.id || x._id) === uid);
+                                                            return u ? { value: String(u.id || u._id), label: `${u.name} ${u.role ? `(${u.role})` : ''}` } : null;
+                                                        }).filter(Boolean)}
+                                                    onChange={(selectedOptions: any) => {
+                                                        const isAllSelected = selectedOptions?.some((opt: any) => opt.value === "all");
+                                                        let newAssignees: string[] = [];
+                                                        if (isAllSelected) {
+                                                            newAssignees = ["all"];
+                                                        } else {
+                                                            newAssignees = selectedOptions ? selectedOptions.map((opt: any) => opt.value) : [];
+                                                        }
+                                                        handleFileSettingChange(fileIdx, "selectedAssignees", newAssignees);
+                                                    }}
+                                                    placeholder="🔍 ค้นหาผู้รับผิดชอบ..."
+                                                    className="text-sm w-full"
+                                                    styles={{
+                                                        control: (base) => ({
+                                                            ...base,
+                                                            backgroundColor: 'var(--wrapper)',
+                                                            borderColor: 'var(--shadow)',
+                                                            color: 'var(--foreground)',
+                                                            minHeight: '38px',
+                                                            borderRadius: '0.5rem'
+                                                        }),
+                                                        menu: (base) => ({
+                                                            ...base,
+                                                            backgroundColor: 'var(--wrapper)',
+                                                            color: 'var(--foreground)',
+                                                            zIndex: 9999
+                                                        }),
+                                                        option: (base, state) => ({
+                                                            ...base,
+                                                            backgroundColor: state.isFocused ? 'var(--button)' : 'transparent',
+                                                            color: 'var(--foreground)',
+                                                            cursor: 'pointer'
+                                                        }),
+                                                        multiValue: (base) => ({
+                                                            ...base,
+                                                            backgroundColor: 'var(--button)',
+                                                            borderRadius: '4px'
+                                                        }),
+                                                        multiValueLabel: (base) => ({
+                                                            ...base,
+                                                            color: 'var(--foreground)',
+                                                            fontWeight: 'bold'
+                                                        })
+                                                    }}
+                                                />
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -342,9 +402,10 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                                                             <input type="number" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.receive_no || ''} onChange={(e) => handleMemoChange(fileIdx, index, "receive_no", e.target.value)} />
                                                         </div>
                                                         <div className="flex items-center gap-2">
-                                                            <strong className="w-24 shrink-0">วันที่ลงรับ:</strong>
+                                                            <strong className="w-24 shrink-0">วันที่รับ:</strong>
                                                             <input type="date" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.receive_date || ''} onChange={(e) => handleMemoChange(fileIdx, index, "receive_date", e.target.value)} />
                                                         </div>
+
                                                         <div className="flex items-center gap-2">
                                                             <strong className="w-24 shrink-0">วันที่ลงนาม:</strong>
                                                             <input type="date" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.sign_date || ''} onChange={(e) => handleMemoChange(fileIdx, index, "sign_date", e.target.value)} />
@@ -396,7 +457,6 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                                                         onChange={(e) => handleMemoChange(fileIdx, index, "main_text", e.target.value)} 
                                                     />
                                                 </div>
-                                                
                                                 {file.selectedAssignees.length > 0 ? (
                                                     <div className="mt-2 shrink-0">
                                                         <strong className="text-base" style={{ color: "var(--header)" }}>การมอบหมายงาน/ความรับผิดชอบ:</strong>
@@ -425,7 +485,7 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                                                                         rows={3} 
                                                                         value={memo.task_detail || ''} 
                                                                         onChange={(e) => handleMemoChange(fileIdx, index, "task_detail", e.target.value)} 
-                                                                        placeholder="ระบุสิ่งที่ต้องดำเนินการ..."
+                                                                        placeholder="ระบุสิ่งที่ต้องดำเนินการ (สามารถใส่เป็น Checkbox ได้)..."
                                                                     />
                                                                 </div>
                                                             </div>

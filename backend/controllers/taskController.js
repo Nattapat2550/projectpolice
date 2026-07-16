@@ -254,15 +254,15 @@ exports.confirmTasks = async (req, res) => {
           if (existingRes.rows.length > 0) {
               taskId = existingRes.rows[0].id;
               await client.query(
-                  `UPDATE tasks SET document_id = COALESCE($1, document_id), title = $2, memo_no = $3, memo_date = $4, main_text = $5, task_detail = $6, due_date = COALESCE($7, due_date), is_urgent = $8, urgency_level = $9, secret_level = $10, sign_date = $11, receive_date = $12, meeting_date = $13, reply_due_date = $14, updated_at = NOW() WHERE id = $15`,
+                  `UPDATE tasks SET document_id = COALESCE($1, document_id), title = $2, memo_no = $3, memo_date = $4, main_text = $5, task_detail = $6, due_date = COALESCE($7, due_date), is_urgent = $8, urgency_level = $9, secret_level = $10, sign_date = $11, meeting_date = $13, reply_due_date = $14, created_at = COALESCE(CAST($12 AS timestamp), created_at), updated_at = NOW() WHERE id = $15`,
                   [documentId, memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', memo.ที่, parsedMemoDate, memo.main_text, memo.task_detail || null, finalDueDate, memo.isUrgent || false, memo.urgency_level || null, memo.secret_level || null, parsedSignDate, parsedReceiveDate, parsedMeetingDate, parsedReplyDueDate, taskId]
               );
               await logTaskAction(client, taskId, validCreatorId, 'updated_task', { source: 'confirm_tasks_upsert' });
               await client.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
           } else {
               const taskRes = await client.query(
-                `INSERT INTO tasks (document_id, title, memo_no, memo_date, main_text, task_detail, due_date, is_urgent, created_by, urgency_level, secret_level, sign_date, receive_date, meeting_date, reply_due_date, receive_no, receive_year)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
+                `INSERT INTO tasks (document_id, title, memo_no, memo_date, main_text, task_detail, due_date, is_urgent, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, created_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $14, $15, $16, $17, COALESCE(CAST($13 AS timestamp), NOW())) RETURNING id`,
                 [ 
                   documentId, 
                   memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', 
@@ -342,7 +342,7 @@ exports.updateTaskDetail = async (req, res) => {
              task_detail = COALESCE($6, task_detail),
              urgency_level = COALESCE($7, urgency_level),
              secret_level = COALESCE($8, secret_level),
-             receive_date = COALESCE($9, receive_date),
+             created_at = COALESCE(CAST($9 AS timestamp), created_at),
              sign_date = COALESCE($10, sign_date),
              meeting_date = COALESCE($11, meeting_date),
              reply_due_date = COALESCE($12, reply_due_date),
@@ -431,7 +431,7 @@ exports.getTaskById = async (req, res) => {
         t.urgency_level,
         t.secret_level,
         t.receive_no,
-        t.receive_date,
+        t.created_at AS "createdAt",
         t.sign_date,
         t.meeting_date,
         t.reply_due_date,
@@ -528,15 +528,15 @@ exports.createTask = async (req, res) => {
     if (existingRes.rows.length > 0) {
         taskId = existingRes.rows[0].id;
         await client.query(
-          `UPDATE tasks SET title = COALESCE($1, title), memo_no = $2, memo_date = $3, main_text = $4, due_date = COALESCE($5, due_date), is_urgent = COALESCE($6, is_urgent), urgency_level = $7, secret_level = $8, receive_date = $9, sign_date = $10, meeting_date = $11, reply_due_date = $12, updated_at = NOW() WHERE id = $13`,
+          `UPDATE tasks SET title = COALESCE($1, title), memo_no = $2, memo_date = $3, main_text = $4, due_date = COALESCE($5, due_date), is_urgent = COALESCE($6, is_urgent), urgency_level = $7, secret_level = $8, sign_date = $10, meeting_date = $11, reply_due_date = $12, created_at = COALESCE(CAST($9 AS timestamp), created_at), updated_at = NOW() WHERE id = $13`,
           [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, taskId]
         );
         await logTaskAction(client, taskId, validCreatorId, 'updated_task', { source: 'manual_create_upsert' });
         await client.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
     } else {
         const taskRes = await client.query(
-          `INSERT INTO tasks (title, memo_no, memo_date, main_text, due_date, is_urgent, status, created_by, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, receive_no, receive_year)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
+          `INSERT INTO tasks (title, memo_no, memo_date, main_text, due_date, is_urgent, status, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $12, $13, $14, $15, $16, COALESCE(CAST($11 AS timestamp), NOW())) RETURNING id`,
           [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent || false, 'following', validCreatorId, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, receiveNo, receiveYear]
         );
         taskId = taskRes.rows[0].id;

@@ -157,6 +157,9 @@ exports.uploadExcelTasks = async (req, res) => {
                     : [];
 
                 let receivedDate = parseDateSafe(row["วันที่รับ"]);
+                // ถ้าไม่มีวันที่รับ ให้ข้ามแถวนี้ไปเลยตามเงื่อนไข
+                if (!receivedDate) return;
+
                 let dueDate = parseDateSafe(row["วันที่"]);
                 
                 // ค้นหาเลขรับ (Registration Number) จากคอลัมน์ที่เป็นไปได้
@@ -185,9 +188,9 @@ exports.uploadExcelTasks = async (req, res) => {
                     receiveYear = receivedDate ? new Date(receivedDate).getFullYear() : new Date().getFullYear();
                 }
 
-                // ถ้าไม่มีข้อมูลช่อง วันที่ (due date) ให้บวกเพิ่ม 14 วันจาก วันที่รับ (received date)
-                if (!dueDate && receivedDate) {
-                    const rDate = new Date(receivedDate);
+                // ถ้าไม่มีข้อมูลช่อง วันที่ (due date) ให้บวกเพิ่ม 14 วันจาก วันที่รับ (received date) หรือวันที่ปัจจุบัน
+                if (!dueDate) {
+                    const rDate = receivedDate ? new Date(receivedDate) : new Date();
                     rDate.setDate(rDate.getDate() + 14);
                     dueDate = rDate.getFullYear() + '-' + String(rDate.getMonth() + 1).padStart(2, '0') + '-' + String(rDate.getDate()).padStart(2, '0');
                 }
@@ -206,8 +209,12 @@ exports.uploadExcelTasks = async (req, res) => {
                     main_text: subject || null,
                     command_text: commandTopics, // Send array of topics
                     signed_date: parseDateSafe(row["วันที่ลงนาม"]),
+                    meeting_date: parseDateSafe(row["วันประชุม"]),
+                    reply_due_date: parseDateSafe(row["กำหนดส่งตอบรับ"]),
+                    urgency_level: row["ความเร่งด่วน"] ? String(row["ความเร่งด่วน"]).trim() : "ปกติ",
+                    secret_level: row["ความลับ"] ? String(row["ความลับ"]).trim() : "ปกติ",
                     notes: row["หมายเหตุ"] ? String(row["หมายเหตุ"]).trim() : null,
-                    is_urgent: isUrgent,
+                    is_urgent: row["ความเร่งด่วน"] && String(row["ความเร่งด่วน"]).trim() !== "ปกติ" ? true : isUrgent,
                     raw_data: row
                 });
             });
@@ -255,7 +262,7 @@ exports.uploadExcelTasks = async (req, res) => {
                     let safeTaskDetail = item.command_text && item.command_text.length > 0 ? item.command_text.join('\n') : null;
 
                     let rowPlaceholders = [];
-                    for(let j = 0; j < 13; j++) {
+                    for(let j = 0; j < 18; j++) {
                         rowPlaceholders.push(`$${counter++}`);
                     }
                     valuesPlaceholders.push(`(${rowPlaceholders.join(', ')})`);
@@ -263,14 +270,15 @@ exports.uploadExcelTasks = async (req, res) => {
                     flatValues.push(
                         safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, 
                         safeSender, parsedDueDate, created_by, parsedCreatedAt, safeTaskDetail, item.is_urgent,
-                        item.receive_no, item.receive_year
+                        item.receive_no, item.receive_year, item.signed_date, 
+                        item.meeting_date || null, item.reply_due_date || null, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ'
                     );
                 });
 
                 // 1. Bulk Insert ลงตาราง tasks
                 const taskQuery = `
                     INSERT INTO tasks 
-                    (title, memo_no, memo_date, main_text, notes, sender, due_date, created_by, created_at, task_detail, is_urgent, receive_no, receive_year) 
+                    (title, memo_no, memo_date, main_text, notes, sender, due_date, created_by, created_at, task_detail, is_urgent, receive_no, receive_year, sign_date, meeting_date, reply_due_date, urgency_level, secret_level) 
                     VALUES ${valuesPlaceholders.join(', ')} 
                     RETURNING id
                 `;
@@ -308,8 +316,8 @@ exports.uploadExcelTasks = async (req, res) => {
                     try {
                         const fallbackTaskQuery = `
                             INSERT INTO tasks 
-                            (title, memo_no, memo_date, main_text, notes, sender, receive_date, sign_date, due_date, created_by, task_detail, receive_no, receive_year) 
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id
+                            (title, memo_no, memo_date, main_text, notes, sender, due_date, created_by, created_at, task_detail, is_urgent, receive_no, receive_year) 
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CAST($9 AS timestamp), $10, $11, $12, $13) RETURNING id
                         `;
                         const parsedDueDate = item.due_date_str;
                         const parsedMemoDate = item.memo_date;
@@ -324,7 +332,7 @@ exports.uploadExcelTasks = async (req, res) => {
 
                         const fallbackValues = [
                             safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, 
-                            safeSender, parsedReceivedDate, parsedSignedDate, parsedDueDate, created_by, safeTaskDetail,
+                            safeSender, parsedDueDate, created_by, parsedReceivedDate || new Date().toISOString(), safeTaskDetail, item.is_urgent,
                             item.receive_no, item.receive_year
                         ];
                         

@@ -284,12 +284,15 @@ export default function TaskExcelUploadPage() {
 
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <span className="text-[10px] font-semibold text-zinc-400 uppercase block mb-1">ผู้ปฏิบัติงาน</span>
-                                <span className="font-medium">{row.assignee_name || renderNull()}</span>
+                                <span className="text-[10px] font-semibold text-zinc-400 uppercase block mb-1">ความเร่งด่วน / ความลับ</span>
+                                <div className="text-sm"><span className="text-zinc-500 mr-2">[ความเร่งด่วน]</span> <span className="font-medium text-red-600 dark:text-red-400">{row.urgency_level || renderNull()}</span></div>
+                                <div className="text-sm"><span className="text-zinc-500 mr-2">[ความลับ]</span> <span className="font-medium text-purple-600 dark:text-purple-400">{row.secret_level || renderNull()}</span></div>
                             </div>
                             <div>
-                                <span className="text-[10px] font-semibold text-zinc-400 uppercase block mb-1">วันที่ติดตาม (Due Date)</span>
-                                <span className="font-medium text-amber-600 dark:text-amber-400">{row.due_date_str || renderNull()}</span>
+                                <span className="text-[10px] font-semibold text-zinc-400 uppercase block mb-1">สถานะวันที่ติดตาม</span>
+                                <div className="text-sm"><span className="text-zinc-500 mr-2">[วันกำหนดส่ง]</span> <span className="font-medium text-amber-600 dark:text-amber-400">{row.due_date_str || renderNull()}</span></div>
+                                <div className="text-sm"><span className="text-zinc-500 mr-2">[วันประชุม]</span> <span className="font-medium text-blue-600 dark:text-blue-400">{row.meeting_date || renderNull()}</span></div>
+                                <div className="text-sm"><span className="text-zinc-500 mr-2">[ส่งตอบรับ]</span> <span className="font-medium text-teal-600 dark:text-teal-400">{row.reply_due_date || renderNull()}</span></div>
                             </div>
                         </div>
 

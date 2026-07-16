@@ -32,7 +32,6 @@ CREATE TABLE tasks (
   receive_no INT,   -- เลขรับ
   receive_year INT, -- ปีของเลขรับ
   sign_date DATE,   -- วันที่ลงนาม
-  receive_date DATE,-- วันที่รับ
   urgency_level VARCHAR(50), -- ระดับความด่วน
   secret_level VARCHAR(50),  -- ระดับความลับ
   task_detail TEXT,         -- รายละเอียดสิ่งที่ต้องดำเนินการรวม

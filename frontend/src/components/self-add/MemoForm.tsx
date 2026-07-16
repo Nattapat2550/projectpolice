@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import styles from "./SelfAdd.module.css"; 
-import Swal from "sweetalert2"; // 💡 นำเข้า SweetAlert2
+import Swal from "sweetalert2";
+import Select from "react-select";
 
 // ฟังก์ชันหาเวลาอนาคตเพื่อตั้งเป็น default
 const getFutureDateStr = (daysToAdd: number) => {
@@ -113,6 +114,16 @@ export default function MemoForm() {
     e.preventDefault();
 
     const validAssignments: any[] = [];
+    if (selectedUsers.includes("all")) {
+        validAssignments.push({ user_id: null, role_or_name: "all" });
+    } else {
+        selectedUsers.forEach(uid => {
+            const matchedUser = users.find(u => String(u.id || u._id) === uid);
+            if (matchedUser) {
+                validAssignments.push({ user_id: matchedUser.id || matchedUser._id, role_or_name: matchedUser.name });
+            }
+        });
+    }
 
     // 💡 ดึง ID ของคนที่กำลังล็อกอินอยู่
     const currentUserId = typeof window !== 'undefined' ? String(localStorage.getItem("user_id") || localStorage.getItem("userId") || "") : "";
@@ -214,7 +225,7 @@ export default function MemoForm() {
                   <input type="number" name="receive_no" value={formData.receive_no} onChange={handleMainChange} placeholder="ถ้าไม่ระบุ ระบบจะรันเลขอัตโนมัติ" className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
                 </div>
                 <div>
-                  <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>วันที่ลงรับ (Receive Date)</label>
+                  <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>วันที่รับ (จะบันทึกเป็นวันที่เข้าระบบ)</label>
                   <input type="date" name="receive_date" value={formData.receive_date} onChange={handleMainChange} className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
                 </div>
                 <div>
@@ -252,6 +263,64 @@ export default function MemoForm() {
               <div>
                 <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>สิ่งที่ต้องดำเนินการ (Task Detail)</label>
                 <textarea name="task_detail" value={formData.task_detail} onChange={handleMainChange} rows={3} className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--yellowBorder)", backgroundColor: "var(--yellowBG)", color: "var(--foreground)" }}/>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold mb-2" style={{ color: "var(--header)" }}>ผู้รับผิดชอบ (เลือกได้หลายคน)</label>
+                <Select
+                    isMulti
+                    options={[
+                        { value: "all", label: "📢 เลือกทั้งหมด (ทุกคน)" },
+                        ...users.map(u => ({ value: String(u.id || u._id), label: `${u.name} ${u.role ? `(${u.role})` : ''}` }))
+                    ]}
+                    value={selectedUsers.includes("all") 
+                        ? [{ value: "all", label: "📢 เลือกทั้งหมด (ทุกคน)" }] 
+                        : selectedUsers.map(uid => {
+                            const u = users.find(x => String(x.id || x._id) === uid);
+                            return u ? { value: String(u.id || u._id), label: `${u.name} ${u.role ? `(${u.role})` : ''}` } : null;
+                        }).filter(Boolean)}
+                    onChange={(selectedOptions: any) => {
+                        const isAllSelected = selectedOptions?.some((opt: any) => opt.value === "all");
+                        if (isAllSelected) {
+                            setSelectedUsers(["all"]);
+                        } else {
+                            setSelectedUsers(selectedOptions ? selectedOptions.map((opt: any) => opt.value) : []);
+                        }
+                    }}
+                    placeholder="🔍 พิมพ์เพื่อค้นหาผู้รับผิดชอบ..."
+                    className="text-sm"
+                    styles={{
+                        control: (base) => ({
+                            ...base,
+                            backgroundColor: 'var(--wrapper)',
+                            borderColor: 'var(--shadow)',
+                            color: 'var(--foreground)',
+                            padding: '0.1rem'
+                        }),
+                        menu: (base) => ({
+                            ...base,
+                            backgroundColor: 'var(--wrapper)',
+                            color: 'var(--foreground)',
+                            zIndex: 9999
+                        }),
+                        option: (base, state) => ({
+                            ...base,
+                            backgroundColor: state.isFocused ? 'var(--button)' : 'transparent',
+                            color: 'var(--foreground)',
+                            cursor: 'pointer'
+                        }),
+                        multiValue: (base) => ({
+                            ...base,
+                            backgroundColor: 'var(--button)',
+                            borderRadius: '4px'
+                        }),
+                        multiValueLabel: (base) => ({
+                            ...base,
+                            color: 'var(--foreground)',
+                            fontWeight: 'bold'
+                        })
+                    }}
+                />
               </div>
 
               <div className="flex items-center gap-2 pt-2">
