@@ -33,12 +33,16 @@ CREATE TABLE tasks (
   receive_date DATE,-- วันที่รับ
   urgency_level VARCHAR(50), -- ระดับความด่วน
   secret_level VARCHAR(50),  -- ระดับความลับ
+  task_detail TEXT,         -- รายละเอียดสิ่งที่ต้องดำเนินการรวม
   main_text TEXT,           -- เนื้อหารวมของงาน
   sender TEXT, -- เก็บฟิลด์ "จาก"
   status VARCHAR(50) DEFAULT 'following',
-  notes TEXT, 
+  notes TEXT,                -- บันทึก/รายละเอียด
   is_urgent BOOLEAN DEFAULT FALSE,
   due_date DATE,
+  meeting_date TIMESTAMP,    -- วันเวลาที่ประชุม
+  reply_due_date TIMESTAMP,  -- วันส่งแบบตอบรับ
+  location TEXT,             -- สถานที่ประชุม
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
   created_by UUID REFERENCES users(id) ON DELETE SET NULL
@@ -53,28 +57,7 @@ CREATE TABLE task_assignments (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
--- 4. ตาราง "รายละเอียดย่อย" (งานที่ผู้รับผิดชอบต้องทำ)
-CREATE TABLE task_topics (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  assignment_id UUID REFERENCES task_assignments(id) ON DELETE CASCADE,
-  detail TEXT NOT NULL,     -- ข้อความงานย่อย
-  status VARCHAR(50) DEFAULT 'pending',
-  is_completed BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
--- 5. ตาราง "การประชุม" (เชื่อมกับ Tasks)
-CREATE TABLE task_meetings (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,       -- หัวข้อการประชุม
-  meeting_date TIMESTAMP,    -- วันเวลาที่ประชุม
-  location TEXT,             -- สถานที่ประชุม
-  notes TEXT,                -- บันทึก/รายละเอียด
-  created_at TIMESTAMP DEFAULT NOW()
-);
-
--- 6. ตาราง "Log การทำงาน" (เชื่อมกับ Tasks และ Users)
+-- 4. ตาราง "Log การทำงาน" (เชื่อมกับ Tasks และ Users)
 CREATE TABLE task_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,

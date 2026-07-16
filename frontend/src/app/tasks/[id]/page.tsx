@@ -130,8 +130,11 @@ export default function TaskPage() {
                     assignments: taskData.assignments,
                     isUrgent: taskData.isUrgent, // ส่งค่าความเร่งด่วนไปยัง Backend
                     main_text: taskData.main_text, // ส่งค่าข้อความเต็มไปยัง Backend
+                    task_detail: taskData.task_detail, // ส่งค่ารายละเอียดงานรวมไปยัง Backend
                     urgency_level: taskData.urgency_level,
-                    secret_level: taskData.secret_level
+                    secret_level: taskData.secret_level,
+                    meeting_date: taskData.meeting_date,
+                    reply_due_date: taskData.reply_due_date
                 }),
             });
             const data = await res.json();
@@ -220,8 +223,11 @@ export default function TaskPage() {
                     assignments: taskData.assignments,
                     isUrgent: newUrgentStatus,
                     main_text: taskData.main_text,
+                    task_detail: taskData.task_detail,
                     urgency_level: taskData.urgency_level,
-                    secret_level: taskData.secret_level
+                    secret_level: taskData.secret_level,
+                    meeting_date: taskData.meeting_date,
+                    reply_due_date: taskData.reply_due_date
                 }),
             });
             

@@ -21,13 +21,15 @@ export default function MemoForm() {
     memo_no: "123/2567",
     memo_date: new Date().toISOString().split('T')[0], // วันนี้
     due_date: getFutureDateStr(14), // ค่าเริ่มต้น 14 วันล่วงหน้า
+    meeting_date: "",
+    reply_due_date: "",
     main_text: "รายละเอียดงานที่เพิ่มเข้ามาด้วยตนเอง...",
+    task_detail: "สิ่งที่ต้องดำเนินการทั้งหมด...",
     is_urgent: true,
   });
 
   // ใช้ Checklist แทน Dropdown
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
-  const [userTopics, setUserTopics] = useState<Record<string, { detail: string }[]>>({});
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -72,7 +74,6 @@ export default function MemoForm() {
     const loggedInUserId = typeof window !== 'undefined' ? localStorage.getItem("user_id") || localStorage.getItem("userId") || "" : "";
     if (loggedInUserId) {
         setSelectedUsers([loggedInUserId]);
-        setUserTopics({ [loggedInUserId]: [{ detail: "" }] });
     }
   }, []);
 
@@ -89,37 +90,19 @@ export default function MemoForm() {
   const handleToggleUser = (uid: string, checked: boolean) => {
     if (uid === "all") {
         setSelectedUsers(checked ? ["all"] : []);
-        if (checked && !userTopics["all"]) {
-            setUserTopics(prev => ({ ...prev, "all": [{ detail: "" }] }));
-        }
         return;
     }
 
     let newSelected = [...selectedUsers].filter(id => id !== "all");
     if (checked) {
         newSelected.push(uid);
-        if (!userTopics[uid]) setUserTopics(prev => ({ ...prev, [uid]: [{ detail: "" }] }));
     } else {
         newSelected = newSelected.filter(id => id !== uid);
     }
     setSelectedUsers(newSelected);
   };
 
-  const handleTopicChange = (uid: string, tIndex: number, value: string) => {
-    setUserTopics(prev => {
-        const newTopics = [...(prev[uid] || [])];
-        newTopics[tIndex] = { detail: value };
-        return { ...prev, [uid]: newTopics };
-    });
-  };
 
-  const addTopic = (uid: string) => {
-    setUserTopics(prev => ({ ...prev, [uid]: [...(prev[uid] || []), { detail: "" }] }));
-  };
-
-  const removeTopic = (uid: string, tIndex: number) => {
-    setUserTopics(prev => ({ ...prev, [uid]: prev[uid].filter((_, i) => i !== tIndex) }));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,16 +120,14 @@ export default function MemoForm() {
     if (selectedUsers.includes("all")) {
         formattedAssignments = users.map(u => ({
             user_id: u.id || u._id,
-            role_or_name: u.name,
-            topics: (userTopics["all"] || []).map(t => t.detail.trim()).filter(t => t !== "")
+            role_or_name: u.name
         }));
     } else {
         formattedAssignments = selectedUsers.map(uid => {
             const u = users.find(x => String(x.id || x._id) === uid);
             return {
                 user_id: Number(uid) || uid,
-                role_or_name: u?.name || null,
-                topics: (userTopics[uid] || []).map(t => t.detail.trim()).filter(t => t !== "")
+                role_or_name: u?.name || null
             };
         });
     }
@@ -236,9 +217,25 @@ export default function MemoForm() {
                 <input type="datetime-local" name="due_date" value={formData.due_date} onChange={handleMainChange} required className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>วันประชุม (Meeting Date)</label>
+                  <input type="datetime-local" name="meeting_date" value={formData.meeting_date} onChange={handleMainChange} className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>วันส่งแบบตอบรับ (Reply Due Date)</label>
+                  <input type="datetime-local" name="reply_due_date" value={formData.reply_due_date} onChange={handleMainChange} className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+                </div>
+              </div>
+
               <div>
-                <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>รายละเอียด (Main Text)</label>
+                <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>รายละเอียดเอกสาร (Main Text)</label>
                 <textarea name="main_text" value={formData.main_text} onChange={handleMainChange} rows={4} className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>สิ่งที่ต้องดำเนินการ (Task Detail)</label>
+                <textarea name="task_detail" value={formData.task_detail} onChange={handleMainChange} rows={3} className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--yellowBorder)", backgroundColor: "var(--yellowBG)", color: "var(--foreground)" }}/>
               </div>
 
               <div className="flex items-center gap-2 pt-2">
@@ -280,45 +277,7 @@ export default function MemoForm() {
                  </div>
               </div>
 
-              {/* ส่วนกำหนดหัวข้องานตามรายชื่อคนที่ถูก Checklist ไว้ */}
-              {selectedUsers.length > 0 && (
-                  <div className="space-y-4">
-                      <h3 className="font-bold text-md text-(--header)">กำหนดงานย่อยสำหรับผู้ที่เลือก:</h3>
-                      {(selectedUsers.includes("all") ? ["all"] : selectedUsers).map(uid => {
-                          const userName = uid === "all" ? "ทุกหน่วยงาน (ส่วนกลาง)" : users.find(u => String(u.id || u._id) === uid)?.name || "ไม่ระบุ";
-                          const topics = userTopics[uid] || [{ detail: "" }];
-                          
-                          return (
-                              <div key={uid} className="p-4 rounded-xl shadow-sm bg-(--container)" style={{ border: "1px solid var(--shadow)" }}>
-                                  <label className="font-bold text-md text-blue-700 block mb-3">
-                                      งานสำหรับ: {userName}
-                                  </label>
-                                  <div className="pl-4 border-l-2 border-blue-200">
-                                      {topics.map((topic, tIndex) => (
-                                          <div key={tIndex} className="flex gap-2 items-center mb-2">
-                                              <span className="font-bold text-(--foreground)/50 w-4">•</span>
-                                              <input 
-                                                  type="text" 
-                                                  className="rounded-md p-2 w-full outline-none focus:ring-2 focus:ring-blue-400 bg-(--button) border border-(--shadow)" 
-                                                  placeholder="ระบุรายละเอียดงานย่อย (ไม่บังคับ)..."
-                                                  value={topic.detail} 
-                                                  onChange={(e) => handleTopicChange(uid, tIndex, e.target.value)}
-                                                  /* 💡 FIX: เอา required ออก เพื่อให้เว้นช่องว่างได้โดยไม่โดนบล็อคฟอร์ม */
-                                              />
-                                              {topics.length > 1 && (
-                                                  <button type="button" className="text-red-500 font-bold px-2 hover:bg-red-50 rounded text-lg shrink-0" onClick={() => removeTopic(uid, tIndex)}>✕</button>
-                                              )}
-                                          </div>
-                                      ))}
-                                      <button type="button" className="text-xs font-bold mt-2 text-blue-600 hover:underline bg-blue-50 px-2 py-1 rounded" onClick={() => addTopic(uid)}>
-                                          + เพิ่มงานย่อย
-                                      </button>
-                                  </div>
-                              </div>
-                          );
-                      })}
-                  </div>
-              )}
+              </div>
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4 w-full pt-4" style={{ borderTop: '1px solid var(--wrapper)' }}>

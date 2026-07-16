@@ -235,6 +235,26 @@ export default function DetailsPanel({
                                                         <option value="ลับที่สุด">ลับที่สุด</option>
                                                     </select>
                                                 </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                                                    <strong>วันนัดประชุม: </strong>
+                                                    <input 
+                                                        type="date" 
+                                                        className={styles.CustomSelect}
+                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
+                                                        value={taskData?.meeting_date ? new Date(taskData.meeting_date).toISOString().split('T')[0] : ""} 
+                                                        onChange={(e) => setTaskData({ ...taskData, meeting_date: e.target.value })} 
+                                                    />
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                                                    <strong>วันนัดส่งแบบตอบรับ (ประชุม): </strong>
+                                                    <input 
+                                                        type="date" 
+                                                        className={styles.CustomSelect}
+                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
+                                                        value={taskData?.reply_due_date ? new Date(taskData.reply_due_date).toISOString().split('T')[0] : ""} 
+                                                        onChange={(e) => setTaskData({ ...taskData, reply_due_date: e.target.value })} 
+                                                    />
+                                                </div>
                                             </div>
                                         ) : (
                                             <div className="flex flex-col gap-1 mt-3">
@@ -254,7 +274,21 @@ export default function DetailsPanel({
                                                     <strong>กำหนดส่ง: &nbsp; </strong> 
                                                     {isValidDate ? `${day} ${monthYear} เวลา ${timeText} น.` : "ไม่ระบุ"}
                                                 </p>
-                                                <p className="flex flex-row text-sm" style={{ color: "var(--header)" }}>
+                                                
+                                                {taskData?.meeting_date && (
+                                                    <p className="flex flex-row" style={{ color: 'var(--blueText)' }}>
+                                                        <strong>📅 วันนัดประชุม: &nbsp; </strong> 
+                                                        {new Date(taskData.meeting_date).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}
+                                                    </p>
+                                                )}
+                                                {taskData?.reply_due_date && (
+                                                    <p className="flex flex-row" style={{ color: 'var(--redText)' }}>
+                                                        <strong>📩 วันนัดส่งแบบตอบรับ: &nbsp; </strong> 
+                                                        {new Date(taskData.reply_due_date).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}
+                                                    </p>
+                                                )}
+
+                                                <p className="flex flex-row text-sm mt-1" style={{ color: "var(--header)" }}>
                                                     <strong>สถานะเวลา: &nbsp; </strong>  
                                                     <span style={{ fontWeight: 'bold', color: diffTotalMinutes < 0 ? 'var(--redText)' : 'var(--blueText)' }}>
                                                         {timeRemainingDisplay}

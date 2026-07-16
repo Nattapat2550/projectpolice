@@ -93,7 +93,9 @@ exports.getAllTasks = async (req, res) => {
         t.status,
         t.is_urgent AS "isUrgent",
         t.urgency_level,
-        t.secret_level
+        t.secret_level,
+        t.meeting_date,
+        t.reply_due_date
       FROM tasks t
       LEFT JOIN agg_assignees aa ON t.id = aa.task_id
       ORDER BY t.due_date ASC NULLS LAST
@@ -136,7 +138,9 @@ exports.getUrgentTasks = async (req, res) => {
         t.status,
         t.is_urgent AS "isUrgent",
         t.urgency_level,
-        t.secret_level
+        t.secret_level,
+        t.meeting_date,
+        t.reply_due_date
       FROM tasks t
       LEFT JOIN agg_assignees aa ON t.id = aa.task_id
       WHERE t.is_urgent = true
@@ -215,22 +219,33 @@ exports.confirmTasks = async (req, res) => {
           const parsedSignDate = parseThaiDateToIso(memo.sign_date) || null;
           const parsedReceiveDate = parseThaiDateToIso(memo.receive_date) || null;
 
+          const parsedMeetingDate = parseThaiDateToIso(memo.meeting_date) || null;
+          const parsedReplyDueDate = parseThaiDateToIso(memo.reply_due_date) || null;
+
+          let finalDueDate = memo.due_date || null;
+          if (parsedMeetingDate) {
+              finalDueDate = parsedMeetingDate;
+          }
+
           const taskRes = await client.query(
-            `INSERT INTO tasks (document_id, title, memo_no, memo_date, main_text, due_date, is_urgent, created_by, urgency_level, secret_level, sign_date, receive_date)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+            `INSERT INTO tasks (document_id, title, memo_no, memo_date, main_text, task_detail, due_date, is_urgent, created_by, urgency_level, secret_level, sign_date, receive_date, meeting_date, reply_due_date)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`,
             [ 
               documentId, 
               memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', 
               memo.ที่, 
               parsedMemoDate, 
               memo.main_text, 
-              memo.due_date || null,
+              memo.task_detail || null,
+              finalDueDate,
               memo.isUrgent || false,
               validCreatorId,
               memo.urgency_level || null,
               memo.secret_level || null,
               parsedSignDate,
-              parsedReceiveDate
+              parsedReceiveDate,
+              parsedMeetingDate,
+              parsedReplyDueDate
             ]
           );
         const taskId = taskRes.rows[0].id;
@@ -250,15 +265,6 @@ exports.confirmTasks = async (req, res) => {
             const assignmentId = assignRes.rows[0].id;
             
             await logTaskAction(client, taskId, validCreatorId, 'assigned_user', { user_id: userId, role_or_name: personStr });
-
-            if (Array.isArray(assign.topics) && assign.topics.length > 0) {
-              for (const topic of assign.topics) {
-                await client.query(
-                  `INSERT INTO task_topics (assignment_id, detail, is_completed) VALUES ($1, $2, $3)`,
-                  [assignmentId, topic, false]
-                );
-              }
-            }
           }
         }
       }
@@ -285,7 +291,7 @@ exports.updateTaskDetail = async (req, res) => {
     try {
       await client.query('BEGIN');
       const { id } = req.params;
-      const { name, date, notes, assignments, isUrgent, main_text, urgency_level, secret_level, receive_date, sign_date } = req.body;
+      const { name, date, notes, assignments, isUrgent, main_text, task_detail, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date } = req.body;
   
       const validDate = (date === "" || !date) ? null : date;
       const urgentValue = isUrgent !== undefined ? isUrgent : null; 
@@ -297,13 +303,16 @@ exports.updateTaskDetail = async (req, res) => {
              notes = COALESCE($3, notes), 
              is_urgent = COALESCE($4, is_urgent),
              main_text = COALESCE($5, main_text),
-             urgency_level = COALESCE($6, urgency_level),
-             secret_level = COALESCE($7, secret_level),
-             receive_date = COALESCE($8, receive_date),
-             sign_date = COALESCE($9, sign_date),
+             task_detail = COALESCE($6, task_detail),
+             urgency_level = COALESCE($7, urgency_level),
+             secret_level = COALESCE($8, secret_level),
+             receive_date = COALESCE($9, receive_date),
+             sign_date = COALESCE($10, sign_date),
+             meeting_date = COALESCE($11, meeting_date),
+             reply_due_date = COALESCE($12, reply_due_date),
              updated_at = NOW() 
-         WHERE id = $10`,
-        [name, validDate, notes, urgentValue, main_text, urgency_level, secret_level, receive_date, sign_date, id]
+         WHERE id = $13`,
+        [name, validDate, notes, urgentValue, main_text, task_detail, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, id]
       );
 
     if (Array.isArray(assignments)) {
@@ -319,14 +328,12 @@ exports.updateTaskDetail = async (req, res) => {
         const delIds = deletedAssigns.rows.map(r => r.id);
         
         if (delIds.length > 0) {
-          await client.query(`DELETE FROM task_topics WHERE assignment_id = ANY($1::uuid[])`, [delIds]);
+          await client.query(`DELETE FROM task_assignments WHERE task_id = $1 AND NOT (id = ANY($2::uuid[]))`, [id, keepAssignmentIds]);
         }
-        await client.query(`DELETE FROM task_assignments WHERE task_id = $1 AND NOT (id = ANY($2::uuid[]))`, [id, keepAssignmentIds]);
       } else {
         const allAssigns = await client.query(`SELECT id FROM task_assignments WHERE task_id = $1`, [id]);
         const allIds = allAssigns.rows.map(r => r.id);
         if (allIds.length > 0) {
-          await client.query(`DELETE FROM task_topics WHERE assignment_id = ANY($1::uuid[])`, [allIds]);
           await client.query(`DELETE FROM task_assignments WHERE task_id = $1`, [id]);
         }
       }
@@ -347,41 +354,11 @@ exports.updateTaskDetail = async (req, res) => {
             [userId, currentAssignmentId, id]
           );
         }
-
-        if (Array.isArray(assign.topics)) {
-          const keepTopicIds = assign.topics
-                                .filter(t => t.topic_id)
-                                .map(t => t.topic_id)
-                                .filter(id => id != null && id !== ''); 
-          
-          if (keepTopicIds.length > 0) {
-            await client.query(`DELETE FROM task_topics WHERE assignment_id = $1 AND NOT (id = ANY($2::uuid[]))`, [currentAssignmentId, keepTopicIds]);
-          } else {
-            await client.query(`DELETE FROM task_topics WHERE assignment_id = $1`, [currentAssignmentId]);
-          }
-
-          for (const topic of assign.topics) {
-            if (topic.topic_id) {
-              await client.query(
-                `UPDATE task_topics SET detail = $1, is_completed = $2 WHERE id = $3`,
-                [topic.detail, topic.is_completed || false, topic.topic_id]
-              );
-            } else {
-              await client.query(
-                `INSERT INTO task_topics (assignment_id, detail, is_completed) VALUES ($1, $2, $3)`,
-                [currentAssignmentId, topic.detail, topic.is_completed || false]
-              );
-            }
-          }
-        } else {
-           await client.query(`DELETE FROM task_topics WHERE assignment_id = $1`, [currentAssignmentId]);
-        }
       }
     } else {
         const allAssigns = await client.query(`SELECT id FROM task_assignments WHERE task_id = $1`, [id]);
         const allIds = allAssigns.rows.map(r => r.id);
         if (allIds.length > 0) {
-          await client.query(`DELETE FROM task_topics WHERE assignment_id = ANY($1::uuid[])`, [allIds]);
           await client.query(`DELETE FROM task_assignments WHERE task_id = $1`, [id]);
         }
     }
@@ -410,6 +387,7 @@ exports.getTaskById = async (req, res) => {
         t.is_urgent AS "isUrgent", 
         TO_CHAR(t.due_date, 'YYYY-MM-DD"T"HH24:MI') AS date, 
         t.main_text,
+        t.task_detail,
         t.notes,      
         t.memo_no, 
         t.memo_date,
@@ -417,6 +395,8 @@ exports.getTaskById = async (req, res) => {
         t.secret_level,
         t.receive_date,
         t.sign_date,
+        t.meeting_date,
+        t.reply_due_date,
         c.name AS "creatorName",
         d.drive_web_view_link AS document_link,
         COALESCE(
@@ -425,19 +405,7 @@ exports.getTaskById = async (req, res) => {
               'assignment_id', ta.id,
               'user_id', ta.user_id,             
               'role_or_name', ta.role_or_name,   
-              'personInCharge', COALESCE(u.name, ta.role_or_name),
-              'topics', (
-                SELECT COALESCE(
-                  json_agg(
-                    json_build_object(
-                      'topic_id', tt.id,          
-                      'detail', tt.detail,
-                      'is_completed', COALESCE(tt.is_completed, false)
-                    ) ORDER BY tt.id ASC
-                  ), '[]'::json)
-                FROM task_topics tt 
-                WHERE tt.assignment_id = ta.id
-              )
+              'personInCharge', COALESCE(u.name, ta.role_or_name)
             )
           ) FILTER (WHERE ta.id IS NOT NULL), '[]'
         ) AS assignments
@@ -473,9 +441,6 @@ exports.deleteTask = async (req, res) => {
     const assignmentsRes = await client.query('SELECT id FROM task_assignments WHERE task_id = $1', [id]);
     const assignmentIds = assignmentsRes.rows.map(row => row.id);
 
-    if (assignmentIds.length > 0) {
-      await client.query('DELETE FROM task_topics WHERE assignment_id = ANY($1::uuid[])', [assignmentIds]);
-    }
     await client.query('DELETE FROM task_assignments WHERE task_id = $1', [id]);
     const result = await client.query('DELETE FROM tasks WHERE id = $1 RETURNING *', [id]);
 
@@ -502,7 +467,7 @@ exports.createTask = async (req, res) => {
   try {
     await client.query('BEGIN');
     
-    const { title, memo_no, memo_date, due_date, main_text, is_urgent, assignments, createdBy, created_by, urgency_level, secret_level, receive_date, sign_date } = req.body;
+    const { title, memo_no, memo_date, due_date, main_text, is_urgent, assignments, createdBy, created_by, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date } = req.body;
     let validCreatorId = createdBy || created_by || null;
     validCreatorId = isValidUUID(validCreatorId) ? validCreatorId : null;
 
@@ -510,10 +475,18 @@ exports.createTask = async (req, res) => {
     const parsedSignDate = parseThaiDateToIso(sign_date) || null;
     const parsedReceiveDate = parseThaiDateToIso(receive_date) || null;
 
+    const parsedMeetingDate = parseThaiDateToIso(meeting_date) || null;
+    const parsedReplyDueDate = parseThaiDateToIso(reply_due_date) || null;
+
+    let finalDueDate = due_date || null;
+    if (parsedMeetingDate) {
+        finalDueDate = parsedMeetingDate;
+    }
+
     const taskRes = await client.query(
-      `INSERT INTO tasks (title, memo_no, memo_date, main_text, due_date, is_urgent, status, created_by, urgency_level, secret_level, receive_date, sign_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
-      [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, due_date || null, is_urgent || false, 'following', validCreatorId, urgency_level, secret_level, parsedReceiveDate, parsedSignDate]
+      `INSERT INTO tasks (title, memo_no, memo_date, main_text, due_date, is_urgent, status, created_by, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
+      [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent || false, 'following', validCreatorId, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate]
     );
     const taskId = taskRes.rows[0].id;
 
@@ -528,15 +501,6 @@ exports.createTask = async (req, res) => {
           [taskId, userId, roleOrName]
         );
         const assignmentId = assignRes.rows[0].id;
-
-        if (Array.isArray(assign.topics) && assign.topics.length > 0) {
-          for (const topicDetail of assign.topics) {
-            await client.query(
-              `INSERT INTO task_topics (assignment_id, detail, is_completed) VALUES ($1, $2, $3)`,
-              [assignmentId, topicDetail, false]
-            );
-          }
-        }
       }
     }
 

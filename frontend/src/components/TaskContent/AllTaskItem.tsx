@@ -22,6 +22,8 @@ type TaskItemProps = {
   id: string;
   urgency_level?: string;
   secret_level?: string;
+  meeting_date?: string;
+  reply_due_date?: string;
   onStatusChange: (id: string, status: TaskStatus) => void;
 };
 
@@ -32,7 +34,7 @@ type StatusOption = {
   label: string;
 };
 
-export default function AllTaskItem({date, createdAt, name, personInCharge, assigneesData, status, id, urgency_level, secret_level, onStatusChange}:TaskItemProps){
+export default function AllTaskItem({date, createdAt, name, personInCharge, assigneesData, status, id, urgency_level, secret_level, meeting_date, reply_due_date, onStatusChange}:TaskItemProps){
     const router = useRouter();
     
     const parsedDate = new Date(date);
@@ -145,6 +147,24 @@ export default function AllTaskItem({date, createdAt, name, personInCharge, assi
                                 </span>
                             )}
                         </p>
+
+                        {(meeting_date || reply_due_date) && (
+                            <div className="flex flex-col gap-1 mb-2 text-xs sm:text-sm">
+                                {meeting_date && (
+                                    <p style={{ color: 'var(--blueText)' }}>
+                                        <strong>📅 วันนัดประชุม: &nbsp; </strong> 
+                                        {new Date(meeting_date).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}
+                                    </p>
+                                )}
+                                {reply_due_date && (
+                                    <p style={{ color: 'var(--redText)' }}>
+                                        <strong>📩 วันนัดส่งแบบตอบรับ: &nbsp; </strong> 
+                                        {new Date(reply_due_date).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" })}
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
                         <div className={`${styles.DetailContainer} mt-2 w-full pr-4 flex flex-col`}>
                             
                             <div className="flex flex-wrap gap-1.5">

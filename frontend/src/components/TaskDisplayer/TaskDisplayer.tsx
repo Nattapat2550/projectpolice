@@ -17,6 +17,8 @@ type Task = {
     assigneesData?: AssigneeData[]; // 💡 เพิ่มฟิลด์รับข้อมูลสี
     urgency_level?: string;
     secret_level?: string;
+    meeting_date?: string;
+    reply_due_date?: string;
 };
 
 type Props = {
@@ -49,6 +51,8 @@ export default function TaskDisplayer({
                         assigneesData={task.assigneesData} // 💡 ส่งต่อข้อมูลสีให้กล่องรายชื่อ
                         urgency_level={task.urgency_level}
                         secret_level={task.secret_level}
+                        meeting_date={task.meeting_date}
+                        reply_due_date={task.reply_due_date}
                         onStatusChange={onStatusChange}
                     />
                 ))}

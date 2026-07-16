@@ -18,8 +18,12 @@ interface MemoData {
     เรื่อง?: string;
     เรียน?: string;
     main_text?: string;
+    task_detail?: string;
+    meeting_date?: string;
+    reply_due_date?: string;
+    urgency_level?: string;
+    secret_level?: string;
     assignments?: ResponsibilityAssignment[];
-    sharedTopics?: string[]; 
     due_date?: string; 
     isUrgent?: boolean;
 }
@@ -140,12 +144,14 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                             }
                         });
 
-                        const uniqueTopics = Array.from(new Set(allScannedTopics));
-
                         return {
                             ...memo,
                             isUrgent: memo.isUrgent || false,
-                            sharedTopics: uniqueTopics.length > 0 ? uniqueTopics : [""] 
+                            task_detail: memo.task_detail || "",
+                            meeting_date: memo.meeting_date || "",
+                            reply_due_date: memo.reply_due_date || "",
+                            urgency_level: memo.urgency_level || "ปกติ",
+                            secret_level: memo.secret_level || "ปกติ"
                         };
                     });
 
@@ -179,35 +185,7 @@ export default function Uploaded({ extractedData }: UploadedProps) {
         }));
     };
 
-    const handleAddSharedTopic = (fileIndex: number, memoIndex: number) => {
-        setFilesData(prev => prev.map((file, fIdx) => fIdx === fileIndex ? {
-            ...file,
-            memos: file.memos.map((memo, mIdx) => mIdx === memoIndex ? {
-                ...memo,
-                sharedTopics: [...(memo.sharedTopics || []), ""]
-            } : memo)
-        } : file));
-    };
 
-    const handleSharedTopicChange = (fileIndex: number, memoIndex: number, topicIndex: number, value: string) => {
-        setFilesData(prev => prev.map((file, fIdx) => fIdx === fileIndex ? {
-            ...file,
-            memos: file.memos.map((memo, mIdx) => mIdx === memoIndex ? {
-                ...memo,
-                sharedTopics: (memo.sharedTopics || []).map((t, tIdx) => tIdx === topicIndex ? value : t)
-            } : memo)
-        } : file));
-    };
-
-    const handleRemoveSharedTopic = (fileIndex: number, memoIndex: number, topicIndex: number) => {
-        setFilesData(prev => prev.map((file, fIdx) => fIdx === fileIndex ? {
-            ...file,
-            memos: file.memos.map((memo, mIdx) => mIdx === memoIndex ? {
-                ...memo,
-                sharedTopics: (memo.sharedTopics || []).filter((_, tIdx) => tIdx !== topicIndex)
-            } : memo)
-        } : file));
-    };
 
     const handleConfirm = async () => {
         const validFiles = filesData.filter(file => file.memos.length > 0);
@@ -243,22 +221,18 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                     if (!baseDate || isNaN(baseDate.getTime())) baseDate = new Date();
                     baseDate.setDate(baseDate.getDate() + parseInt(file.deadline));
                     
-                    const validTopics = (memo.sharedTopics || []).filter(t => t.trim() !== "");
-
                     let finalAssignments = [];
                     if (file.selectedAssignees.includes("all")) {
                         finalAssignments = users.map(u => ({
                             responsible_person: "ทุกหน่วยงาน (ทุกคน)",
-                            user_id: String(u.id || u._id),
-                            topics: validTopics
+                            user_id: String(u.id || u._id)
                         }));
                     } else {
                         finalAssignments = file.selectedAssignees.map(uid => {
                             const u = users.find(x => String(x.id || x._id) === uid);
                             return {
                                 responsible_person: u?.name || "Unknown",
-                                user_id: uid,
-                                topics: validTopics
+                                user_id: uid
                             };
                         });
                     }
@@ -419,8 +393,38 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                                                     </div>
                                                     
                                                     <div className="flex items-center gap-2 mt-2 pt-2 border-t border-(--shadow)/60">
-                                                        <input type="checkbox" id={`urgent-${fileIdx}-${index}`} checked={memo.isUrgent || false} onChange={(e) => handleMemoChange(fileIdx, index, "isUrgent", e.target.checked)} className="w-4 h-4 cursor-pointer" style={{ accentColor: 'var(--redText)' }} />
-                                                        <label htmlFor={`urgent-${fileIdx}-${index}`} className="cursor-pointer font-bold text-red-600">🔥 กำหนดให้เอกสารนี้เป็นงานเร่งด่วน</label>
+                                                        <strong className="w-24 shrink-0">วันประชุม:</strong>
+                                                        <input type="date" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.meeting_date || ''} onChange={(e) => handleMemoChange(fileIdx, index, "meeting_date", e.target.value)} />
+                                                    </div>
+                                                    
+                                                    <div className="flex items-center gap-2">
+                                                        <strong className="w-24 shrink-0">วันตอบรับ:</strong>
+                                                        <input type="date" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.reply_due_date || ''} onChange={(e) => handleMemoChange(fileIdx, index, "reply_due_date", e.target.value)} />
+                                                    </div>
+                                                    
+                                                    <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-(--shadow)/60">
+                                                        <div className="flex items-center gap-2">
+                                                            <strong className="w-24 shrink-0">ความเร่งด่วน:</strong>
+                                                            <select className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--redText) outline-none bg-(--button)" value={memo.urgency_level || "ปกติ"} onChange={(e) => handleMemoChange(fileIdx, index, "urgency_level", e.target.value)}>
+                                                                <option value="ปกติ">ปกติ</option>
+                                                                <option value="ด่วน">ด่วน</option>
+                                                                <option value="ด่วนมาก">ด่วนมาก</option>
+                                                                <option value="ด่วนที่สุด">ด่วนที่สุด</option>
+                                                            </select>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <strong className="w-24 shrink-0">ความลับ:</strong>
+                                                            <select className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.secret_level || "ปกติ"} onChange={(e) => handleMemoChange(fileIdx, index, "secret_level", e.target.value)}>
+                                                                <option value="ปกติ">ปกติ</option>
+                                                                <option value="ลับ">ลับ</option>
+                                                                <option value="ลับมาก">ลับมาก</option>
+                                                                <option value="ลับที่สุด">ลับที่สุด</option>
+                                                            </select>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <input type="checkbox" id={`urgent-${fileIdx}-${index}`} checked={memo.isUrgent || false} onChange={(e) => handleMemoChange(fileIdx, index, "isUrgent", e.target.checked)} className="w-4 h-4 cursor-pointer" style={{ accentColor: 'var(--redText)' }} />
+                                                            <label htmlFor={`urgent-${fileIdx}-${index}`} className="cursor-pointer font-bold text-red-600">🔥 กำหนดให้เอกสารนี้เป็นงานเร่งด่วน</label>
+                                                        </div>
                                                     </div>
                                                 </div>
 
@@ -455,18 +459,15 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                                                                 </div>
                                                                 <div className="pl-2 sm:pl-4 border-l-2 border-(--shadow)/60">
                                                                     <div className="flex flex-row items-center justify-between mt-2 mb-2">
-                                                                        <strong>สิ่งที่ต้องดำเนินการ / หัวข้อที่รับผิดชอบร่วมกัน:</strong>
-                                                                        <button type="button" onClick={() => handleAddSharedTopic(fileIdx, index)} className="text-xs bg-blue-500 text-white px-2 py-1.5 rounded hover:bg-blue-600 font-medium">+ เพิ่มงานที่ต้องทำ</button>
+                                                                        <strong>สิ่งที่ต้องดำเนินการ (Task Detail):</strong>
                                                                     </div>
-                                                                    <ul className="list-none pl-1 mt-2 text-foreground flex flex-col gap-2">
-                                                                        {memo.sharedTopics && memo.sharedTopics.length > 0 ? memo.sharedTopics.map((topic: string, topicIdx: number) => (
-                                                                            <li key={topicIdx} className="flex gap-2 items-center">
-                                                                                <span className="text-(--foreground)/60 text-lg font-bold w-4">•</span>
-                                                                                <input type="text" className="border border-(--shadow) p-2 rounded flex-1 text-sm outline-none bg-(--button) focus:ring-1 focus:ring-blue-400 w-full" placeholder="ระบุสิ่งที่ต้องดำเนินการ..." value={topic} onChange={(e) => handleSharedTopicChange(fileIdx, index, topicIdx, e.target.value)} />
-                                                                                <button type="button" onClick={() => handleRemoveSharedTopic(fileIdx, index, topicIdx)} className="text-red-500 hover:bg-red-50 p-2 rounded text-lg font-bold shrink-0">✕</button>
-                                                                            </li>
-                                                                        )) : <li className="text-(--foreground)/50 text-sm">- ยังไม่มีสิ่งที่ต้องดำเนินการ -</li>}
-                                                                    </ul>
+                                                                    <textarea 
+                                                                        className="w-full border rounded p-3 text-foreground focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button) border-(--shadow)" 
+                                                                        rows={3} 
+                                                                        value={memo.task_detail || ''} 
+                                                                        onChange={(e) => handleMemoChange(fileIdx, index, "task_detail", e.target.value)} 
+                                                                        placeholder="ระบุสิ่งที่ต้องดำเนินการ..."
+                                                                    />
                                                                 </div>
                                                             </div>
                                                         </div>

@@ -209,22 +209,24 @@ exports.uploadExcelTasks = async (req, res) => {
                     let safeMemoNo = item.memo_no ? String(item.memo_no) : null;
                     let safeSender = item.sender ? String(item.sender) : null;
 
+                    let safeTaskDetail = item.command_text && item.command_text.length > 0 ? item.command_text.join('\n') : null;
+
                     let rowPlaceholders = [];
-                    for(let j = 0; j < 9; j++) {
+                    for(let j = 0; j < 10; j++) {
                         rowPlaceholders.push(`$${counter++}`);
                     }
                     valuesPlaceholders.push(`(${rowPlaceholders.join(', ')})`);
                     
                     flatValues.push(
                         safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, 
-                        safeSender, parsedDueDate, created_by, parsedCreatedAt
+                        safeSender, parsedDueDate, created_by, parsedCreatedAt, safeTaskDetail
                     );
                 });
 
                 // 1. Bulk Insert ลงตาราง tasks
                 const taskQuery = `
                     INSERT INTO tasks 
-                    (title, memo_no, memo_date, main_text, notes, sender, due_date, created_by, created_at) 
+                    (title, memo_no, memo_date, main_text, notes, sender, due_date, created_by, created_at, task_detail) 
                     VALUES ${valuesPlaceholders.join(', ')} 
                     RETURNING id
                 `;
@@ -251,36 +253,6 @@ exports.uploadExcelTasks = async (req, res) => {
                         RETURNING id
                     `;
                     const assignRes = await pool.query(assignQuery, assignFlatValues);
-                    
-                    // 3. เตรียมข้อมูล Bulk Insert ลงตาราง task_topics
-                    let topicPlaceholders = [];
-                    let topicFlatValues = [];
-                    let topicCounter = 1;
-                    
-                    let assignIndex = 0;
-                    taskRes.rows.forEach((row, index) => {
-                        const assignee = chunk[index].assignee_name;
-                        const commandTopics = chunk[index].command_text;
-                        if (assignee) {
-                            const assignmentId = assignRes.rows[assignIndex].id;
-                            assignIndex++;
-                            
-                            if (commandTopics && commandTopics.length > 0) {
-                                commandTopics.forEach((cmd) => {
-                                    topicPlaceholders.push(`($${topicCounter++}, $${topicCounter++}, $${topicCounter++})`);
-                                    topicFlatValues.push(assignmentId, String(cmd), false);
-                                });
-                            }
-                        }
-                    });
-
-                    if (topicPlaceholders.length > 0) {
-                        const topicQuery = `
-                            INSERT INTO task_topics (assignment_id, detail, is_completed)
-                            VALUES ${topicPlaceholders.join(', ')}
-                        `;
-                        await pool.query(topicQuery, topicFlatValues);
-                    }
                 }
 
                 successCount += chunk.length;
@@ -292,8 +264,8 @@ exports.uploadExcelTasks = async (req, res) => {
                     try {
                         const fallbackTaskQuery = `
                             INSERT INTO tasks 
-                            (title, memo_no, memo_date, main_text, notes, sender, receive_date, sign_date, due_date, created_by) 
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id
+                            (title, memo_no, memo_date, main_text, notes, sender, receive_date, sign_date, due_date, created_by, task_detail) 
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id
                         `;
                         const parsedDueDate = item.due_date_str;
                         const parsedMemoDate = item.memo_date;
@@ -304,9 +276,11 @@ exports.uploadExcelTasks = async (req, res) => {
                         const safeMemoNo = item.memo_no ? String(item.memo_no) : null;
                         const safeSender = item.sender ? String(item.sender) : null;
 
+                        const safeTaskDetail = item.command_text && item.command_text.length > 0 ? item.command_text.join('\n') : null;
+
                         const fallbackValues = [
                             safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, 
-                            safeSender, parsedReceivedDate, parsedSignedDate, parsedDueDate, created_by
+                            safeSender, parsedReceivedDate, parsedSignedDate, parsedDueDate, created_by, safeTaskDetail
                         ];
                         
                         const tRes = await pool.query(fallbackTaskQuery, fallbackValues);
