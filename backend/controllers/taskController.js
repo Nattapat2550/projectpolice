@@ -63,6 +63,25 @@ const logTaskAction = async (clientOrPool, taskId, userId, action, details) => {
   }
 };
 
+// Helper function to handle receive_no and receive_year logic
+const handleReceiveNoAndYear = async (client, inputReceiveNo, parsedReceiveDate) => {
+    let receiveNoInput = inputReceiveNo;
+    if (typeof receiveNoInput === 'string') {
+        const thaiNumerals = { '๐':'0', '๑':'1', '๒':'2', '๓':'3', '๔':'4', '๕':'5', '๖':'6', '๗':'7', '๘':'8', '๙':'9' };
+        receiveNoInput = receiveNoInput.replace(/[๐-๙]/g, match => thaiNumerals[match]);
+    }
+    
+    let receiveNo = parseInt(receiveNoInput, 10) || null;
+    let receiveYear = parsedReceiveDate ? new Date(parsedReceiveDate).getFullYear() : new Date().getFullYear();
+
+    if (!receiveNo) {
+        // Generate new sequential number for this year
+        const res = await client.query('SELECT MAX(receive_no) as max_no FROM tasks WHERE receive_year = $1', [receiveYear]);
+        receiveNo = (res.rows[0].max_no || 0) + 1;
+    }
+    return { receiveNo, receiveYear };
+};
+
 exports.getAllTasks = async (req, res) => {
   try {
     const query = `
@@ -227,30 +246,47 @@ exports.confirmTasks = async (req, res) => {
               finalDueDate = parsedMeetingDate;
           }
 
-          const taskRes = await client.query(
-            `INSERT INTO tasks (document_id, title, memo_no, memo_date, main_text, task_detail, due_date, is_urgent, created_by, urgency_level, secret_level, sign_date, receive_date, meeting_date, reply_due_date)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15) RETURNING id`,
-            [ 
-              documentId, 
-              memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', 
-              memo.ที่, 
-              parsedMemoDate, 
-              memo.main_text, 
-              memo.task_detail || null,
-              finalDueDate,
-              memo.isUrgent || false,
-              validCreatorId,
-              memo.urgency_level || null,
-              memo.secret_level || null,
-              parsedSignDate,
-              parsedReceiveDate,
-              parsedMeetingDate,
-              parsedReplyDueDate
-            ]
-          );
-        const taskId = taskRes.rows[0].id;
+          const { receiveNo, receiveYear } = await handleReceiveNoAndYear(client, memo.receive_no, parsedReceiveDate);
+
+          const existingRes = await client.query('SELECT id FROM tasks WHERE receive_no = $1 AND receive_year = $2', [receiveNo, receiveYear]);
+          let taskId;
+          
+          if (existingRes.rows.length > 0) {
+              taskId = existingRes.rows[0].id;
+              await client.query(
+                  `UPDATE tasks SET document_id = COALESCE($1, document_id), title = $2, memo_no = $3, memo_date = $4, main_text = $5, task_detail = $6, due_date = COALESCE($7, due_date), is_urgent = $8, urgency_level = $9, secret_level = $10, sign_date = $11, receive_date = $12, meeting_date = $13, reply_due_date = $14, updated_at = NOW() WHERE id = $15`,
+                  [documentId, memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', memo.ที่, parsedMemoDate, memo.main_text, memo.task_detail || null, finalDueDate, memo.isUrgent || false, memo.urgency_level || null, memo.secret_level || null, parsedSignDate, parsedReceiveDate, parsedMeetingDate, parsedReplyDueDate, taskId]
+              );
+              await logTaskAction(client, taskId, validCreatorId, 'updated_task', { source: 'confirm_tasks_upsert' });
+              await client.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
+          } else {
+              const taskRes = await client.query(
+                `INSERT INTO tasks (document_id, title, memo_no, memo_date, main_text, task_detail, due_date, is_urgent, created_by, urgency_level, secret_level, sign_date, receive_date, meeting_date, reply_due_date, receive_no, receive_year)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17) RETURNING id`,
+                [ 
+                  documentId, 
+                  memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', 
+                  memo.ที่, 
+                  parsedMemoDate, 
+                  memo.main_text, 
+                  memo.task_detail || null,
+                  finalDueDate,
+                  memo.isUrgent || false,
+                  validCreatorId,
+                  memo.urgency_level || null,
+                  memo.secret_level || null,
+                  parsedSignDate,
+                  parsedReceiveDate,
+                  parsedMeetingDate,
+                  parsedReplyDueDate,
+                  receiveNo,
+                  receiveYear
+                ]
+              );
+              taskId = taskRes.rows[0].id;
+              await logTaskAction(client, taskId, validCreatorId, 'created_task', { source: 'confirm_tasks' });
+          }
         
-        await logTaskAction(client, taskId, validCreatorId, 'created_task', { source: 'confirm_tasks' });
 
         if (Array.isArray(memo.assignments) && memo.assignments.length > 0) {
           for (const assign of memo.assignments) {
@@ -291,7 +327,7 @@ exports.updateTaskDetail = async (req, res) => {
     try {
       await client.query('BEGIN');
       const { id } = req.params;
-      const { name, date, notes, assignments, isUrgent, main_text, task_detail, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date } = req.body;
+      const { name, date, notes, assignments, isUrgent, main_text, task_detail, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, receive_no } = req.body;
   
       const validDate = (date === "" || !date) ? null : date;
       const urgentValue = isUrgent !== undefined ? isUrgent : null; 
@@ -310,9 +346,10 @@ exports.updateTaskDetail = async (req, res) => {
              sign_date = COALESCE($10, sign_date),
              meeting_date = COALESCE($11, meeting_date),
              reply_due_date = COALESCE($12, reply_due_date),
+             receive_no = COALESCE($13, receive_no),
              updated_at = NOW() 
-         WHERE id = $13`,
-        [name, validDate, notes, urgentValue, main_text, task_detail, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, id]
+         WHERE id = $14`,
+        [name, validDate, notes, urgentValue, main_text, task_detail, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, receive_no, id]
       );
 
     if (Array.isArray(assignments)) {
@@ -393,10 +430,12 @@ exports.getTaskById = async (req, res) => {
         t.memo_date,
         t.urgency_level,
         t.secret_level,
+        t.receive_no,
         t.receive_date,
         t.sign_date,
         t.meeting_date,
         t.reply_due_date,
+        t.created_by,
         c.name AS "creatorName",
         d.drive_web_view_link AS document_link,
         COALESCE(
@@ -415,7 +454,7 @@ exports.getTaskById = async (req, res) => {
       LEFT JOIN documents d ON t.document_id = d.id
       LEFT JOIN users c ON t.created_by = c.id
       WHERE t.id = $1
-      GROUP BY t.id, d.drive_web_view_link, c.name
+      GROUP BY t.id, d.drive_web_view_link, c.name, t.created_by
     `;
     const { rows } = await pool.query(query, [id]);
     
@@ -449,8 +488,6 @@ exports.deleteTask = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Task not found' });
     }
 
-    await logTaskAction(client, id, req.user?.id, 'deleted_task', { title: result.rows[0].title });
-
     await client.query('COMMIT');
     res.status(200).json({ success: true, message: 'ลบข้อมูลสำเร็จ' });
   } catch (err) {
@@ -483,12 +520,28 @@ exports.createTask = async (req, res) => {
         finalDueDate = parsedMeetingDate;
     }
 
-    const taskRes = await client.query(
-      `INSERT INTO tasks (title, memo_no, memo_date, main_text, due_date, is_urgent, status, created_by, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`,
-      [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent || false, 'following', validCreatorId, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate]
-    );
-    const taskId = taskRes.rows[0].id;
+    const { receiveNo, receiveYear } = await handleReceiveNoAndYear(client, req.body.receive_no, parsedReceiveDate);
+
+    const existingRes = await client.query('SELECT id FROM tasks WHERE receive_no = $1 AND receive_year = $2', [receiveNo, receiveYear]);
+    let taskId;
+
+    if (existingRes.rows.length > 0) {
+        taskId = existingRes.rows[0].id;
+        await client.query(
+          `UPDATE tasks SET title = COALESCE($1, title), memo_no = $2, memo_date = $3, main_text = $4, due_date = COALESCE($5, due_date), is_urgent = COALESCE($6, is_urgent), urgency_level = $7, secret_level = $8, receive_date = $9, sign_date = $10, meeting_date = $11, reply_due_date = $12, updated_at = NOW() WHERE id = $13`,
+          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, taskId]
+        );
+        await logTaskAction(client, taskId, validCreatorId, 'updated_task', { source: 'manual_create_upsert' });
+        await client.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
+    } else {
+        const taskRes = await client.query(
+          `INSERT INTO tasks (title, memo_no, memo_date, main_text, due_date, is_urgent, status, created_by, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, receive_no, receive_year)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
+          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent || false, 'following', validCreatorId, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, receiveNo, receiveYear]
+        );
+        taskId = taskRes.rows[0].id;
+        await logTaskAction(client, taskId, validCreatorId, 'created_task', { source: 'manual_create' });
+    }
 
     // 🔒 ตรวจสอบ Array Type ป้องกัน Crash 
     if (Array.isArray(assignments) && assignments.length > 0) {
@@ -504,7 +557,6 @@ exports.createTask = async (req, res) => {
       }
     }
 
-    await logTaskAction(client, taskId, validCreatorId, 'created_task', { source: 'manual_create' });
 
     await client.query('COMMIT');
     res.status(201).json({ success: true, message: 'สร้างงานสำเร็จ!', taskId: taskId });
@@ -532,5 +584,37 @@ exports.getTaskLogs = async (req, res) => {
   } catch (err) {
     console.error("Get task logs error:", err.message);
     res.status(500).json({ success: false, message: 'Server Error' });
+  }
+};
+
+exports.reserveTask = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    let validCreatorId = req.user?.id || null;
+    
+    // Always generate a new receive_no for the current year
+    const currentYear = new Date().getFullYear();
+    const resCount = await client.query('SELECT MAX(receive_no) as max_no FROM tasks WHERE receive_year = $1', [currentYear]);
+    const nextReceiveNo = (resCount.rows[0].max_no || 0) + 1;
+    
+    const taskRes = await client.query(
+      `INSERT INTO tasks (title, status, created_by, receive_no, receive_year)
+       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+      ['กันเลขลงรับ', 'following', validCreatorId, nextReceiveNo, currentYear]
+    );
+    const taskId = taskRes.rows[0].id;
+    
+    await logTaskAction(client, taskId, validCreatorId, 'created_task', { source: 'reserve_number' });
+    
+    await client.query('COMMIT');
+    res.status(201).json({ success: true, message: 'จองเลขรับสำเร็จ!', taskId: taskId, receive_no: nextReceiveNo, receive_year: currentYear });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error("Reserve task error:", err.message);
+    res.status(500).json({ success: false, message: 'Server Error', error: err.message });
+  } finally {
+    client.release();
   }
 };

@@ -29,43 +29,45 @@ export default function AllTask() {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage, setItemsPerPage] = useState(10);
 
+    const fetchTasks = async () => {
+        try {
+            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
+            const url = `${backendUrl}/api/v1/tasks`;
+
+            // 💡 โหลดข้อมูลจาก Cache ทันทีเพื่อให้แสดงผลไวที่สุด (SWR Pattern)
+            if (allTaskFetchCache.has(url)) {
+                setTasks(allTaskFetchCache.get(url)!);
+                setIsLoading(false);
+            }
+
+            const response = await fetch(url, { cache: "no-store" });
+            
+            if (response.ok) {
+                const data = await response.json();
+                if (data && data.length > 0) {
+                    allTaskFetchCache.set(url, data); // อัปเดต Cache
+                    setTasks(data);
+                } else {
+                    setTasks(initialTaskData);
+                }
+            } else {
+                if (!allTaskFetchCache.has(url)) setTasks(initialTaskData);
+            }
+        } catch (error) {
+            console.error("Failed to fetch tasks", error);
+            if (!allTaskFetchCache.has((process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003") + "/api/v1/tasks")) {
+                setTasks(initialTaskData);
+            }
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     useEffect(() => {
         setCurrentPage(1);
     }, [statusFilter, personFilter, searchText, urgencyFilter, secrecyFilter]);
 
     useEffect(() => {
-        const fetchTasks = async () => {
-            try {
-                const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
-                const url = `${backendUrl}/api/v1/tasks`;
-
-                // 💡 โหลดข้อมูลจาก Cache ทันทีเพื่อให้แสดงผลไวที่สุด (SWR Pattern)
-                if (allTaskFetchCache.has(url)) {
-                    setTasks(allTaskFetchCache.get(url)!);
-                    setIsLoading(false);
-                }
-
-                const response = await fetch(url, { cache: "no-store" });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data && data.length > 0) {
-                        allTaskFetchCache.set(url, data); // อัปเดต Cache
-                        setTasks(data);
-                    } else {
-                        setTasks(initialTaskData);
-                    }
-                } else {
-                    if (!allTaskFetchCache.has(url)) setTasks(initialTaskData);
-                }
-            } catch (error) {
-                if (!allTaskFetchCache.has(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003"}/api/v1/tasks`)) {
-                    setTasks(initialTaskData);
-                }
-            } finally {
-                setIsLoading(false);
-            }
-        };
         fetchTasks();
     }, []);
 
@@ -111,6 +113,29 @@ export default function AllTask() {
         } catch (error) {
             console.error("Failed to update task", error);
             alert("เกิดข้อผิดพลาด ไม่สามารถอัปเดตสถานะได้");
+        }
+    };
+
+    const handleReserveTask = async () => {
+        try {
+            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
+            const token = localStorage.getItem("token");
+            const response = await fetch(`${backendUrl}/api/v1/tasks/reserve`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            if (!response.ok) throw new Error("Failed to reserve task");
+            
+            const data = await response.json();
+            alert(`จองเลขรับสำเร็จ! เลขรับที่ได้คือ: ${data.receive_no}/${data.receive_year}`);
+            fetchTasks(); // Refresh tasks
+        } catch (error) {
+            console.error("Failed to reserve task", error);
+            alert("เกิดข้อผิดพลาด ไม่สามารถจองเลขรับได้");
         }
     };
 
@@ -183,22 +208,41 @@ export default function AllTask() {
                             งานติดตามทั้งหมด
                         </h1>   
 
-                        <Link 
-                            href={'/addFile'} 
-                            aria-label="ไปหน้าเพิ่มงานติดตามใหม่" 
-                            className={styles.Button} 
-                            style={{ 
-                                display: 'inline-flex', 
-                                alignItems: 'center', 
-                                justifyContent: 'center', 
-                                minHeight: '48px', 
-                                padding: '0 24px',
-                                margin: '12px 16px',
-                                textDecoration: 'none'
-                            }}
-                        >
-                            + เพิ่มงานติดตาม
-                        </Link>
+                        <div className="flex flex-row items-center">
+                            <button 
+                                onClick={handleReserveTask}
+                                className={styles.Button} 
+                                style={{ 
+                                    display: 'inline-flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center', 
+                                    minHeight: '48px', 
+                                    padding: '0 24px',
+                                    margin: '12px 0 12px 16px',
+                                    backgroundColor: 'var(--blueBG)',
+                                    color: 'var(--blueText)',
+                                    border: '1px solid var(--blueText)'
+                                }}
+                            >
+                                📝 จองเลขรับ
+                            </button>
+                            <Link 
+                                href={'/addFile'} 
+                                aria-label="ไปหน้าเพิ่มงานติดตามใหม่" 
+                                className={styles.Button} 
+                                style={{ 
+                                    display: 'inline-flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center', 
+                                    minHeight: '48px', 
+                                    padding: '0 24px',
+                                    margin: '12px 16px',
+                                    textDecoration: 'none'
+                                }}
+                            >
+                                + เพิ่มงานติดตาม
+                            </Link>
+                        </div>
                     </div>
 
                     <div className={styles.ContentHeader} style={{ flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>

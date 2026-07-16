@@ -23,6 +23,9 @@ interface MemoData {
     reply_due_date?: string;
     urgency_level?: string;
     secret_level?: string;
+    receive_no?: string;
+    receive_date?: string;
+    sign_date?: string;
     assignments?: ResponsibilityAssignment[];
     due_date?: string; 
     isUrgent?: boolean;
@@ -151,7 +154,10 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                             meeting_date: memo.meeting_date || "",
                             reply_due_date: memo.reply_due_date || "",
                             urgency_level: memo.urgency_level || "ปกติ",
-                            secret_level: memo.secret_level || "ปกติ"
+                            secret_level: memo.secret_level || "ปกติ",
+                            receive_no: memo.receive_no || "",
+                            receive_date: memo.receive_date || "",
+                            sign_date: memo.sign_date || ""
                         };
                     });
 
@@ -390,6 +396,21 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                                                     <div className="flex items-center gap-2">
                                                         <strong className="w-12 shrink-0">เรียน:</strong>
                                                         <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.เรียน || ''} onChange={(e) => handleMemoChange(fileIdx, index, "เรียน", e.target.value)} />
+                                                    </div>
+                                                    
+                                                    <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-(--shadow)/60">
+                                                        <div className="flex items-center gap-2">
+                                                            <strong className="w-24 shrink-0">เลขรับ:</strong>
+                                                            <input type="number" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.receive_no || ''} onChange={(e) => handleMemoChange(fileIdx, index, "receive_no", e.target.value)} />
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <strong className="w-24 shrink-0">วันที่ลงรับ:</strong>
+                                                            <input type="date" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.receive_date || ''} onChange={(e) => handleMemoChange(fileIdx, index, "receive_date", e.target.value)} />
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <strong className="w-24 shrink-0">วันที่ลงนาม:</strong>
+                                                            <input type="date" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.sign_date || ''} onChange={(e) => handleMemoChange(fileIdx, index, "sign_date", e.target.value)} />
+                                                        </div>
                                                     </div>
                                                     
                                                     <div className="flex items-center gap-2 mt-2 pt-2 border-t border-(--shadow)/60">

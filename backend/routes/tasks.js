@@ -17,7 +17,8 @@ const {
     updateTaskDetail,
     deleteTask,
     createTask,
-    getTaskLogs
+    getTaskLogs,
+    reserveTask
 } = require('../controllers/taskController');
 
 const router = express.Router();
@@ -25,6 +26,7 @@ const router = express.Router();
 router.get('/', getAllTasks);
 router.get('/urgent', getUrgentTasks);
 router.post('/', protect, createTask);
+router.post('/reserve', protect, reserveTask);
 router.post('/confirm', protect, confirmTasks); 
 
 // 🚀 เพิ่มเส้นทางสำหรับเช็คหลอด Progress (ต้องอยู่ก่อน /:id)

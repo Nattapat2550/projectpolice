@@ -255,6 +255,36 @@ export default function DetailsPanel({
                                                         onChange={(e) => setTaskData({ ...taskData, reply_due_date: e.target.value })} 
                                                     />
                                                 </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                                                    <strong>เลขรับ: </strong>
+                                                    <input 
+                                                        type="number" 
+                                                        className={styles.CustomSelect}
+                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
+                                                        value={taskData?.receive_no || ""} 
+                                                        onChange={(e) => setTaskData({ ...taskData, receive_no: e.target.value })} 
+                                                    />
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                                                    <strong>วันที่รับ: </strong>
+                                                    <input 
+                                                        type="date" 
+                                                        className={styles.CustomSelect}
+                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
+                                                        value={taskData?.receive_date ? new Date(taskData.receive_date).toISOString().split('T')[0] : ""} 
+                                                        onChange={(e) => setTaskData({ ...taskData, receive_date: e.target.value })} 
+                                                    />
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                                                    <strong>วันที่ลงนาม: </strong>
+                                                    <input 
+                                                        type="date" 
+                                                        className={styles.CustomSelect}
+                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
+                                                        value={taskData?.sign_date ? new Date(taskData.sign_date).toISOString().split('T')[0] : ""} 
+                                                        onChange={(e) => setTaskData({ ...taskData, sign_date: e.target.value })} 
+                                                    />
+                                                </div>
                                             </div>
                                         ) : (
                                             <div className="flex flex-col gap-1 mt-3">
@@ -285,6 +315,24 @@ export default function DetailsPanel({
                                                     <p className="flex flex-row" style={{ color: 'var(--redText)' }}>
                                                         <strong>📩 วันนัดส่งแบบตอบรับ: &nbsp; </strong> 
                                                         {new Date(taskData.reply_due_date).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}
+                                                    </p>
+                                                )}
+                                                {taskData?.receive_no && (
+                                                    <p className="flex flex-row mt-2" style={{ color: 'var(--foreground)' }}>
+                                                        <strong>📝 เลขรับ: &nbsp; </strong> 
+                                                        {taskData.receive_no}
+                                                    </p>
+                                                )}
+                                                {taskData?.receive_date && (
+                                                    <p className="flex flex-row" style={{ color: 'var(--foreground)' }}>
+                                                        <strong>📅 วันที่ลงรับ: &nbsp; </strong> 
+                                                        {new Date(taskData.receive_date).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}
+                                                    </p>
+                                                )}
+                                                {taskData?.sign_date && (
+                                                    <p className="flex flex-row mt-2" style={{ color: 'var(--foreground)' }}>
+                                                        <strong>✒️ วันที่ลงนาม: &nbsp; </strong> 
+                                                        {new Date(taskData.sign_date).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric" })}
                                                     </p>
                                                 )}
 

@@ -134,7 +134,10 @@ export default function TaskPage() {
                     urgency_level: taskData.urgency_level,
                     secret_level: taskData.secret_level,
                     meeting_date: taskData.meeting_date,
-                    reply_due_date: taskData.reply_due_date
+                    reply_due_date: taskData.reply_due_date,
+                    receive_no: taskData.receive_no,
+                    receive_date: taskData.receive_date,
+                    sign_date: taskData.sign_date
                 }),
             });
             const data = await res.json();
@@ -227,7 +230,10 @@ export default function TaskPage() {
                     urgency_level: taskData.urgency_level,
                     secret_level: taskData.secret_level,
                     meeting_date: taskData.meeting_date,
-                    reply_due_date: taskData.reply_due_date
+                    reply_due_date: taskData.reply_due_date,
+                    receive_no: taskData.receive_no,
+                    receive_date: taskData.receive_date,
+                    sign_date: taskData.sign_date
                 }),
             });
             

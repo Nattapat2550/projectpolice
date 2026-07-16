@@ -29,6 +29,8 @@ CREATE TABLE tasks (
   title TEXT,       -- ชื่อเรื่อง
   memo_no TEXT,     -- เลขที่เอกสาร
   memo_date DATE,   -- วันที่บนเอกสาร
+  receive_no INT,   -- เลขรับ
+  receive_year INT, -- ปีของเลขรับ
   sign_date DATE,   -- วันที่ลงนาม
   receive_date DATE,-- วันที่รับ
   urgency_level VARCHAR(50), -- ระดับความด่วน
