@@ -1,6 +1,8 @@
 const pool = require('../config/db');
 
 exports.handleSheetUpdate = async (req, res) => {
+  console.log("\n================ WEBHOOK RECEIVED ================");
+  console.log("Webhook Payload:", req.body);
   const data = req.body;
   const taskId = data.id;
 
