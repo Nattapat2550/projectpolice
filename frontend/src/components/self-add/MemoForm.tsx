@@ -26,6 +26,11 @@ export default function MemoForm() {
     main_text: "รายละเอียดงานที่เพิ่มเข้ามาด้วยตนเอง...",
     task_detail: "สิ่งที่ต้องดำเนินการทั้งหมด...",
     is_urgent: true,
+    receive_no: "",
+    receive_date: "",
+    sign_date: "",
+    urgency_level: "ปกติ",
+    secret_level: "ปกติ"
   });
 
   // ใช้ Checklist แทน Dropdown
@@ -77,7 +82,7 @@ export default function MemoForm() {
     }
   }, []);
 
-  const handleMainChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleMainChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     const isChecked = (e.target as HTMLInputElement).checked;
     setFormData((prev) => ({
@@ -107,32 +112,7 @@ export default function MemoForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (selectedUsers.length === 0) {
-        Swal.fire({
-            icon: 'warning',
-            title: 'ข้อมูลไม่ครบถ้วน',
-            text: 'กรุณาเลือกผู้รับผิดชอบอย่างน้อย 1 คน',
-        });
-        return;
-    }
-
-    let formattedAssignments: any[] = [];
-    if (selectedUsers.includes("all")) {
-        formattedAssignments = users.map(u => ({
-            user_id: u.id || u._id,
-            role_or_name: u.name
-        }));
-    } else {
-        formattedAssignments = selectedUsers.map(uid => {
-            const u = users.find(x => String(x.id || x._id) === uid);
-            return {
-                user_id: Number(uid) || uid,
-                role_or_name: u?.name || null
-            };
-        });
-    }
-
-    const validAssignments = formattedAssignments;
+    const validAssignments: any[] = [];
 
     // 💡 ดึง ID ของคนที่กำลังล็อกอินอยู่
     const currentUserId = typeof window !== 'undefined' ? String(localStorage.getItem("user_id") || localStorage.getItem("userId") || "") : "";
@@ -228,6 +208,42 @@ export default function MemoForm() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>เลขรับ (Receive No)</label>
+                  <input type="number" name="receive_no" value={formData.receive_no} onChange={handleMainChange} placeholder="ถ้าไม่ระบุ ระบบจะรันเลขอัตโนมัติ" className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>วันที่ลงรับ (Receive Date)</label>
+                  <input type="date" name="receive_date" value={formData.receive_date} onChange={handleMainChange} className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>วันที่ลงนาม (Sign Date)</label>
+                  <input type="date" name="sign_date" value={formData.sign_date} onChange={handleMainChange} className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>ระดับความด่วน (Urgency Level)</label>
+                  <select name="urgency_level" value={formData.urgency_level} onChange={handleMainChange} className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}>
+                    <option value="ปกติ">ปกติ</option>
+                    <option value="ด่วน">ด่วน</option>
+                    <option value="ด่วนมาก">ด่วนมาก</option>
+                    <option value="ด่วนที่สุด">ด่วนที่สุด</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>ระดับความลับ (Secret Level)</label>
+                  <select name="secret_level" value={formData.secret_level} onChange={handleMainChange} className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}>
+                    <option value="ปกติ">ปกติ</option>
+                    <option value="ลับ">ลับ</option>
+                    <option value="ลับมาก">ลับมาก</option>
+                    <option value="ลับที่สุด">ลับที่สุด</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>รายละเอียดเอกสาร (Main Text)</label>
                 <textarea name="main_text" value={formData.main_text} onChange={handleMainChange} rows={4} className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
@@ -244,41 +260,6 @@ export default function MemoForm() {
               </div>
             </div>
 
-            <hr className={styles.Line} style={{ borderColor: "var(--wrapper)", margin: "1.5rem 0" }} />
-
-            {/* ส่วนจัดสรรผู้รับผิดชอบ แบบ Checklist */}
-            <div>
-              <h2 className="text-lg font-bold mb-4" style={{ color: "var(--header)" }}>ผู้รับผิดชอบและการมอบหมายงาน</h2>
-              
-              <div className="p-4 rounded-xl mb-4" style={{ border: "1px solid var(--wrapper)", backgroundColor: "rgba(0,0,0,0.02)" }}>
-                 <h3 className="font-bold text-sm mb-3" style={{ color: "var(--header)" }}>เลือกผู้รับผิดชอบ (เลือกได้หลายคน)</h3>
-                 
-                 <div className="flex flex-col gap-2 max-h-48 overflow-y-auto border border-(--shadow) p-3 rounded bg-(--button)">
-                         {(!currentUser || currentUser.role !== 'admin') && (
-                         <>
-                             <label className="flex items-center gap-3 cursor-pointer font-bold text-blue-600">
-                                 <input type="checkbox" checked={selectedUsers.includes("all")} onChange={(e) => handleToggleUser("all", e.target.checked)} className="w-4 h-4 cursor-pointer" />
-                                 ทุกหน่วยงาน (ส่วนกลาง)
-                             </label>
-                             <hr className="my-1 border-(--shadow)/60" />
-                         </>
-                         )}
-                         {users
-                             .filter(u => currentUser?.role !== 'admin' || (u.id || u._id) === currentUser?.id)
-                             .map(u => {
-                         const uid = String(u.id || u._id);
-                         return (
-                             <label key={uid} className="flex items-center gap-3 cursor-pointer text-foreground">
-                                 <input type="checkbox" checked={selectedUsers.includes(uid)} onChange={(e) => handleToggleUser(uid, e.target.checked)} className="w-4 h-4 cursor-pointer" />
-                                 {u.name} {u.role ? `(${u.role})` : ''}
-                             </label>
-                         );
-                     })}
-                 </div>
-              </div>
-
-              </div>
-            </div>
 
             <div className="flex flex-col sm:flex-row gap-4 w-full pt-4" style={{ borderTop: '1px solid var(--wrapper)' }}>
               <Link href={'/'} className="w-full sm:w-1/3">

@@ -78,7 +78,12 @@ export default function TaskExcelUploadPage() {
     // 💡 ตั้ง Interval เพื่อยิงเช็ค Progress ทุกๆ 1 วินาที
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`${backendUrl}/api/v1/tasks/upload-progress/${jobId}`);
+        const token = localStorage.getItem("token");
+        const res = await fetch(`${backendUrl}/api/v1/tasks/upload-progress/${jobId}`, {
+          headers: {
+            ...(token && token !== "null" ? { Authorization: `Bearer ${token}` } : {})
+          }
+        });
         const data = await res.json();
         setProgress({ current: data.current, total: data.total });
         if (data.status === 'completed') clearInterval(interval);
@@ -239,7 +244,7 @@ export default function TaskExcelUploadPage() {
                         <div className="text-[10px] text-zinc-400 mt-2">แถวที่ {row.original_row}</div>
                       </td>
                       <td className="p-4 border-r border-zinc-200 dark:border-zinc-800 bg-blue-50/10 dark:bg-blue-950/5 align-top text-blue-900 dark:text-blue-100">
-                        <div className="mb-2 pb-2 border-b border-zinc-200 dark:border-zinc-800">
+                        <div className="mb-2 pb-2 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
                             <span className="font-bold text-base">{row.title || renderNull()}</span>
                         </div>
                         
@@ -248,6 +253,7 @@ export default function TaskExcelUploadPage() {
                                 <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1">ข้อมูลหนังสือ</span>
                                 <div className="text-sm"><span className="text-zinc-500 mr-2">[เลขที่หนังสือ]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.memo_no || renderNull()}</span></div>
                                 <div className="text-sm"><span className="text-zinc-500 mr-2">[ลงวันที่]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.memo_date || renderNull()}</span></div>
+                                <div className="text-sm"><span className="text-zinc-500 mr-2">[เลขรับ]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.receive_no ? `${row.receive_no}/${row.receive_year}` : renderNull()}</span></div>
                             </div>
                             <div>
                                 <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1">สถานะวันที่</span>

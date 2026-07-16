@@ -206,7 +206,7 @@ export default function Uploaded({ extractedData }: UploadedProps) {
             return;
         }
 
-        const isAllSet = validFiles.every(f => f.deadline && f.selectedAssignees.length > 0);
+        const isAllSet = validFiles.every(f => f.deadline);
         if (!isAllSet) {
             // 💡 ใช้ SweetAlert2 แทน alert
             Swal.fire({
@@ -227,23 +227,7 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                     if (!baseDate || isNaN(baseDate.getTime())) baseDate = new Date();
                     baseDate.setDate(baseDate.getDate() + parseInt(file.deadline));
                     
-                    let finalAssignments = [];
-                    if (file.selectedAssignees.includes("all")) {
-                        finalAssignments = users.map(u => ({
-                            responsible_person: "ทุกหน่วยงาน (ทุกคน)",
-                            user_id: String(u.id || u._id)
-                        }));
-                    } else {
-                        finalAssignments = file.selectedAssignees.map(uid => {
-                            const u = users.find(x => String(x.id || x._id) === uid);
-                            return {
-                                responsible_person: u?.name || "Unknown",
-                                user_id: uid
-                            };
-                        });
-                    }
-
-                    return { ...memo, assignments: finalAssignments, due_date: baseDate.toISOString().split('T')[0] };
+                    return { ...memo, assignments: [], due_date: baseDate.toISOString().split('T')[0] };
                 });
 
                 const token = typeof window !== 'undefined' ? localStorage.getItem("token") || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1] : null;
@@ -318,53 +302,7 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                                                 </select>
                                             </div>
                                             
-                                            <div className="flex items-center gap-3">
-                                                <strong className="shrink-0 whitespace-nowrap">สำหรับ</strong>
-                                                <div className="relative">
-                                                    <div 
-                                                        className={`${styles.Dropdown} min-w-37.5 cursor-pointer flex justify-between items-center bg-(--button) border border-(--shadow) rounded p-2`}
-                                                        onClick={() => setOpenDropdownIdx(openDropdownIdx === fileIdx ? null : fileIdx)}
-                                                    >
-                                                        <span className="truncate max-w-37.5 text-sm text-foreground">
-                                                            {file.selectedAssignees.includes("all") ? "ทุกหน่วยงาน" : file.selectedAssignees.length > 0 ? `เลือกแล้ว ${file.selectedAssignees.length} คน` : "เลือกผู้รับผิดชอบ"}
-                                                        </span>
-                                                        <span className="text-xs ml-2">▼</span>
-                                                    </div>
-                                                    
-                                                    {openDropdownIdx === fileIdx && (
-                                                        <div className="absolute top-full right-0 lg:left-0 mt-1 w-64 bg-(--container) border border-(--shadow) shadow-xl rounded-md z-50 max-h-60 overflow-y-auto flex flex-col p-2">
-                                                            <label className="flex items-center gap-2 p-2 hover:bg-(--wrapper) cursor-pointer rounded font-bold text-blue-600">
-                                                                <input 
-                                                                    type="checkbox" 
-                                                                    checked={file.selectedAssignees.includes("all")}
-                                                                    onChange={(e) => handleFileSettingChange(fileIdx, "selectedAssignees", e.target.checked ? ["all"] : [])}
-                                                                />
-                                                                ทุกหน่วยงาน (ทุกคน)
-                                                            </label>
-                                                            <hr className="my-1 border-(--shadow)/60" />
-                                                            {users.map(u => {
-                                                                const uid = String(u.id || u._id);
-                                                                return (
-                                                                    <label key={uid} className="flex items-center gap-2 p-2 hover:bg-(--wrapper) cursor-pointer rounded text-sm text-foreground">
-                                                                        <input 
-                                                                            type="checkbox" 
-                                                                            checked={file.selectedAssignees.includes(uid)}
-                                                                            onChange={(e) => {
-                                                                                const isChecked = e.target.checked;
-                                                                                let newAssigns = [...file.selectedAssignees].filter(id => id !== "all");
-                                                                                if (isChecked) newAssigns.push(uid);
-                                                                                else newAssigns = newAssigns.filter(id => id !== uid);
-                                                                                handleFileSettingChange(fileIdx, "selectedAssignees", newAssigns);
-                                                                            }}
-                                                                        />
-                                                                        {u.name} {u.role ? `(${u.role})` : ''}
-                                                                    </label>
-                                                                );
-                                                            })}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
+
                                         </div>
                                     )}
                                 </div>

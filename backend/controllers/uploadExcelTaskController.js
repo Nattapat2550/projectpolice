@@ -45,25 +45,39 @@ exports.uploadExcelTasks = async (req, res) => {
                     
                     if (cell.value && cell.value.richText) {
                         isRed = cell.value.richText.some(rt => {
-                            if (!rt.font || !rt.font.color || !rt.font.color.argb) return false;
+                            if (!rt.font || !rt.font.color) return false;
+                            
+                            // เช็ค Indexed Color (10 = Red)
+                            if (rt.font.color.indexed === 10) return true;
+                            
+                            if (!rt.font.color.argb) return false;
+                            
                             const upper = rt.font.color.argb.toUpperCase();
-                            if (upper === 'FFFF0000') return true;
-                            if (upper.length === 8) {
-                                const r = parseInt(upper.substring(2, 4), 16);
-                                const g = parseInt(upper.substring(4, 6), 16);
-                                const b = parseInt(upper.substring(6, 8), 16);
+                            if (upper === 'FFFF0000' || upper === 'FF0000') return true;
+                            
+                            let offset = upper.length === 8 ? 2 : 0;
+                            if (upper.length >= 6) {
+                                const r = parseInt(upper.substring(offset, offset + 2), 16);
+                                const g = parseInt(upper.substring(offset + 2, offset + 4), 16);
+                                const b = parseInt(upper.substring(offset + 4, offset + 6), 16);
                                 if (r > 150 && g < 100 && b < 100) return true;
                             }
                             return false;
                         });
-                    } else if (cell.font && cell.font.color && cell.font.color.argb) {
-                        const upper = cell.font.color.argb.toUpperCase();
-                        if (upper === 'FFFF0000') isRed = true;
-                        else if (upper.length === 8) {
-                            const r = parseInt(upper.substring(2, 4), 16);
-                            const g = parseInt(upper.substring(4, 6), 16);
-                            const b = parseInt(upper.substring(6, 8), 16);
-                            if (r > 150 && g < 100 && b < 100) isRed = true;
+                    } else if (cell.font && cell.font.color) {
+                        if (cell.font.color.indexed === 10) isRed = true;
+                        else if (cell.font.color.argb) {
+                            const upper = cell.font.color.argb.toUpperCase();
+                            if (upper === 'FFFF0000' || upper === 'FF0000') isRed = true;
+                            else {
+                                let offset = upper.length === 8 ? 2 : 0;
+                                if (upper.length >= 6) {
+                                    const r = parseInt(upper.substring(offset, offset + 2), 16);
+                                    const g = parseInt(upper.substring(offset + 2, offset + 4), 16);
+                                    const b = parseInt(upper.substring(offset + 4, offset + 6), 16);
+                                    if (r > 150 && g < 100 && b < 100) isRed = true;
+                                }
+                            }
                         }
                     }
                     
@@ -132,8 +146,8 @@ exports.uploadExcelTasks = async (req, res) => {
                 // ถ้าไม่มีเรื่อง (subject ว่างหรือเป็น null) ให้คัดออกเลย
                 if (!subject) return;
 
-                // คัดออกถ้าเรื่องใช้ตัวอักษรแดง
-                if (redSubjects.has(subject)) return;
+                // นำเข้าข้อมูลปกติ ไม่ผูกมัดสีแดงกับงานด่วน
+                const isUrgent = false;
 
                 const command = row["ข้อสั่งการ"] ? String(row["ข้อสั่งการ"]).trim() : "";
                 
@@ -145,6 +159,32 @@ exports.uploadExcelTasks = async (req, res) => {
                 let receivedDate = parseDateSafe(row["วันที่รับ"]);
                 let dueDate = parseDateSafe(row["วันที่"]);
                 
+                // ค้นหาเลขรับ (Registration Number) จากคอลัมน์ที่เป็นไปได้
+                let receiveNoInput = null;
+                for (const key of Object.keys(row)) {
+                    const cleanKey = key.replace(/\s+/g, '');
+                    if (cleanKey === "เลขทะเบียน" || cleanKey === "ทะเบียนรับ" || cleanKey === "ทะเบียน" || cleanKey === "เลขรับ" || cleanKey === "ที่") {
+                        receiveNoInput = row[key];
+                        break;
+                    }
+                }
+                
+                let receiveNo = null;
+                let receiveYear = null;
+                if (receiveNoInput) {
+                    if (typeof receiveNoInput === 'string') {
+                        const thaiNumerals = { '๐':'0', '๑':'1', '๒':'2', '๓':'3', '๔':'4', '๕':'5', '๖':'6', '๗':'7', '๘':'8', '๙':'9' };
+                        receiveNoInput = receiveNoInput.replace(/[๐-๙]/g, match => thaiNumerals[match]);
+                    }
+                    // ค้นหาตัวเลขแรกที่พบในข้อความ เผื่อมีตัวอักษรนำหน้า
+                    const matchNum = String(receiveNoInput).match(/\d+/);
+                    const parsedNum = matchNum ? parseInt(matchNum[0], 10) : NaN;
+                    receiveNo = isNaN(parsedNum) ? null : parsedNum;
+                }
+                if (receiveNo) {
+                    receiveYear = receivedDate ? new Date(receivedDate).getFullYear() : new Date().getFullYear();
+                }
+
                 // ถ้าไม่มีข้อมูลช่อง วันที่ (due date) ให้บวกเพิ่ม 14 วันจาก วันที่รับ (received date)
                 if (!dueDate && receivedDate) {
                     const rDate = new Date(receivedDate);
@@ -155,6 +195,8 @@ exports.uploadExcelTasks = async (req, res) => {
                 allData.push({
                     original_row: index + 1,
                     received_date: receivedDate,
+                    receive_no: receiveNo,
+                    receive_year: receiveYear,
                     memo_no: row["ที่หนังสือ"] ? String(row["ที่หนังสือ"]).trim() : null,
                     memo_date: parseDateSafe(row["ลงวันที่"]),
                     sender: row["จาก"] ? String(row["จาก"]).trim() : null,
@@ -165,6 +207,7 @@ exports.uploadExcelTasks = async (req, res) => {
                     command_text: commandTopics, // Send array of topics
                     signed_date: parseDateSafe(row["วันที่ลงนาม"]),
                     notes: row["หมายเหตุ"] ? String(row["หมายเหตุ"]).trim() : null,
+                    is_urgent: isUrgent,
                     raw_data: row
                 });
             });
@@ -212,21 +255,22 @@ exports.uploadExcelTasks = async (req, res) => {
                     let safeTaskDetail = item.command_text && item.command_text.length > 0 ? item.command_text.join('\n') : null;
 
                     let rowPlaceholders = [];
-                    for(let j = 0; j < 10; j++) {
+                    for(let j = 0; j < 13; j++) {
                         rowPlaceholders.push(`$${counter++}`);
                     }
                     valuesPlaceholders.push(`(${rowPlaceholders.join(', ')})`);
                     
                     flatValues.push(
                         safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, 
-                        safeSender, parsedDueDate, created_by, parsedCreatedAt, safeTaskDetail
+                        safeSender, parsedDueDate, created_by, parsedCreatedAt, safeTaskDetail, item.is_urgent,
+                        item.receive_no, item.receive_year
                     );
                 });
 
                 // 1. Bulk Insert ลงตาราง tasks
                 const taskQuery = `
                     INSERT INTO tasks 
-                    (title, memo_no, memo_date, main_text, notes, sender, due_date, created_by, created_at, task_detail) 
+                    (title, memo_no, memo_date, main_text, notes, sender, due_date, created_by, created_at, task_detail, is_urgent, receive_no, receive_year) 
                     VALUES ${valuesPlaceholders.join(', ')} 
                     RETURNING id
                 `;
@@ -264,8 +308,8 @@ exports.uploadExcelTasks = async (req, res) => {
                     try {
                         const fallbackTaskQuery = `
                             INSERT INTO tasks 
-                            (title, memo_no, memo_date, main_text, notes, sender, receive_date, sign_date, due_date, created_by, task_detail) 
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING id
+                            (title, memo_no, memo_date, main_text, notes, sender, receive_date, sign_date, due_date, created_by, task_detail, receive_no, receive_year) 
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id
                         `;
                         const parsedDueDate = item.due_date_str;
                         const parsedMemoDate = item.memo_date;
@@ -280,7 +324,8 @@ exports.uploadExcelTasks = async (req, res) => {
 
                         const fallbackValues = [
                             safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, 
-                            safeSender, parsedReceivedDate, parsedSignedDate, parsedDueDate, created_by, safeTaskDetail
+                            safeSender, parsedReceivedDate, parsedSignedDate, parsedDueDate, created_by, safeTaskDetail,
+                            item.receive_no, item.receive_year
                         ];
                         
                         const tRes = await pool.query(fallbackTaskQuery, fallbackValues);

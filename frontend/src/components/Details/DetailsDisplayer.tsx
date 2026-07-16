@@ -70,39 +70,53 @@ export default function DetailsDisplayer({
         fetchMe();
     }, []);
 
-    const handleAddAssignment = () => {
-        setTaskData((prev: any) => {
-            const newAssignments = [...(prev.assignments || [])];
-            newAssignments.push({
-                user_id: "",
-                personInCharge: "ไม่ระบุ",
-                role_or_name: "เพิ่มด้วยตนเอง"
+    const handleToggleCheckbox = async () => {
+        if (!currentUser) return;
+        const isSuperAdmin = currentUser.role === 'admin' || currentUser.role === 'superadmin';
+        const isOwner = String(taskData?.created_by) === String(currentUser.id) || String(taskData?.created_by) === String(currentUser._id);
+        
+        if (!isSuperAdmin && !isOwner) {
+            Swal.fire({ icon: 'error', title: 'ไม่ได้รับอนุญาต', text: 'เฉพาะผู้ดูแลระบบหรือคนรับผิดชอบงานนี้เท่านั้นที่สามารถติ๊กงานได้' });
+            return;
+        }
+
+        let currentDetail = taskData?.task_detail || "";
+        let newDetail = currentDetail;
+        
+        let isCurrentlyChecked = false;
+        if (currentDetail.startsWith('[x] ') || currentDetail.startsWith('[X] ')) {
+            isCurrentlyChecked = true;
+            currentDetail = currentDetail.substring(4);
+        } else if (currentDetail.startsWith('[ ] ')) {
+            currentDetail = currentDetail.substring(4);
+        }
+
+        if (isCurrentlyChecked) {
+            newDetail = '[ ] ' + currentDetail;
+        } else {
+            newDetail = '[x] ' + currentDetail;
+        }
+        
+        setTaskData((prev: any) => ({ ...prev, task_detail: newDetail }));
+
+        try {
+            const token = localStorage.getItem("token") || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1];
+            const res = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003"}/api/v1/tasks/${taskData.id}`, {
+                method: "PUT",
+                headers: { 
+                    "Content-Type": "application/json",
+                    ...(token ? { "Authorization": `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ ...taskData, task_detail: newDetail })
             });
-            return { ...prev, assignments: newAssignments };
-        });
+            if (!res.ok) throw new Error("Failed to update");
+        } catch (err) {
+            console.error(err);
+            Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: 'ไม่สามารถบันทึกการเปลี่ยนแปลงได้' });
+        }
     };
 
-    const handleDeleteAssignment = (assignIndex: number) => {
-        setTaskData((prev: any) => {
-            const newAssignments = [...(prev.assignments || [])];
-            newAssignments.splice(assignIndex, 1);
-            return { ...prev, assignments: newAssignments };
-        });
-    };
 
-    const handleUserSelect = (assignIndex: number, userId: string) => {
-        setTaskData((prev: any) => {
-            const newAssignments = [...(prev.assignments || [])];
-            const assign = { ...newAssignments[assignIndex] };
-            
-            assign.user_id = userId;
-            const selectedUser = users.find(u => String(u.id || u._id) === String(userId));
-            assign.personInCharge = selectedUser ? selectedUser.name : "ไม่ระบุ";
-            
-            newAssignments[assignIndex] = assign;
-            return { ...prev, assignments: newAssignments };
-        });
-    };
 
     return (
         <div className="flex flex-col w-full h-full gap-6 min-h-120">
@@ -197,89 +211,32 @@ export default function DetailsDisplayer({
                                         placeholder="เพิ่มหรือแก้ไขรายละเอียดสิ่งที่ต้องดำเนินการ..."
                                     />
                                 ) : (
-                                    taskData?.task_detail ? formatText(taskData.task_detail) : "ไม่มีรายละเอียดเฉพาะที่ถูกสรุปไว้"
+                                    taskData?.task_detail ? (
+                                        <div className="flex items-start gap-3">
+                                            <input 
+                                                type="checkbox" 
+                                                className="mt-1.5 w-5 h-5 cursor-pointer shrink-0"
+                                                checked={taskData.task_detail.startsWith('[x] ') || taskData.task_detail.startsWith('[X] ')}
+                                                onChange={handleToggleCheckbox}
+                                                style={{ accentColor: "var(--greenBG)" }}
+                                            />
+                                            <div 
+                                                className={(taskData.task_detail.startsWith('[x] ') || taskData.task_detail.startsWith('[X] ')) ? "line-through opacity-70" : ""} 
+                                                style={{ wordBreak: 'break-word', width: '100%' }}
+                                            >
+                                                {formatText(
+                                                    taskData.task_detail.startsWith('[x] ') || taskData.task_detail.startsWith('[X] ') || taskData.task_detail.startsWith('[ ] ') 
+                                                    ? taskData.task_detail.substring(4) 
+                                                    : taskData.task_detail
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : "ไม่มีรายละเอียดเฉพาะที่ถูกสรุปไว้"
                                 )}
                             </div>
                         </div>
 
                         <hr className={styles.Line} style={{ marginBottom: '1.5rem', opacity: 0.3 }} />
-
-                        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-                            <h2 className={styles.Header} style={{ fontSize: '1.5rem' }}>งานติดตามที่ตรวจอ่านได้</h2>
-                            
-                            {isEditing && (
-                                <button 
-                                    onClick={handleAddAssignment}
-                                    className={styles.Button}
-                                    style={{ fontSize: '1rem', padding: '0.4rem 0.8rem', margin: 0 }}
-                                >
-                                    + เพิ่มการมอบหมายงาน
-                                </button>
-                            )}
-                        </div>
-                        
-                        <div className="flex flex-col gap-6">
-                            {taskData?.assignments?.length > 0 ? taskData.assignments.map((assign: any, index: number) => {
-                                const assignedUser = users.find(u => String(u.id || u._id) === String(assign.user_id));
-                                const userColor = assignedUser?.color || '#e5e7eb';
-                                const userTextColor = getTextColor(userColor);
-
-                                return (
-                                    <div key={index} className={styles.TaskWrapper} style={{ 
-                                        padding: '1.25rem', 
-                                        display: 'flex', 
-                                        flexDirection: 'column', 
-                                        gap: '1rem',
-                                        backgroundColor: 'var(--button)',
-                                        borderColor: 'var(--wrapper)'
-                                    }}>
-                                        
-                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3">
-                                            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                                                <label className="font-bold text-lg" style={{ color: 'var(--header)' }}>สำหรับ (ผู้รับผิดชอบ):</label>
-                                                {isEditing ? (
-                                                    <select 
-                                                        className={styles.CustomSelect}
-                                                        style={{ padding: '0.4rem 0.8rem', width: 'auto' }}
-                                                        value={assign.user_id || ""}
-                                                        onChange={(e) => handleUserSelect(index, e.target.value)}
-                                                    >
-                                                        <option value="">-- เลือกระบุบุคคล --</option>
-                                                        {users
-                                                            .filter(u => currentUser?.role !== 'admin' || (u.id || u._id) === currentUser?.id)
-                                                            .map(u => (
-                                                            <option key={u.id || u._id} value={u.id || u._id}>
-                                                                {u.name} {u.role ? `(${u.role})` : ''}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                ) : (
-                                                    <span 
-                                                        className="px-3 py-1 rounded-md text-sm sm:text-base font-bold shadow-sm border border-black/10" 
-                                                        style={{ backgroundColor: userColor, color: userTextColor }}
-                                                    >
-                                                        {assign.personInCharge || "ไม่ระบุ"}
-                                                    </span>
-                                                )}
-                                            </div>
-                                            
-                                            {isEditing && (
-                                                <button 
-                                                    onClick={() => handleDeleteAssignment(index)}
-                                                    className={`${styles.Clickable} ${styles.Red}`}
-                                                    style={{ minHeight: '2rem', padding: '0.4rem 0.8rem', width: 'auto', fontSize: '0.9rem' }}
-                                                >
-                                                    ลบมอบหมายงานนี้
-                                                </button>
-                                            )}
-                                        </div>
-                                    </div>
-                                );
-                            }) : (
-                                <p style={{ color: "var(--header)" }}>ไม่มีข้อมูลการมอบหมายงาน</p>
-                            )}
-                        </div>
-                        
                     </div>
                 </div>
             </div>

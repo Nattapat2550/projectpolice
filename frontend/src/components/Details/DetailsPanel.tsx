@@ -87,13 +87,12 @@ export default function DetailsPanel({
         }
 
         if (currentUser?.role === 'admin') {
-            const isCreator = taskData?.created_by === currentUser?.id;
-            const isAssigned = taskData?.assignments?.some((a: any) => a.user_id === currentUser?.id);
-            if (!isCreator && !isAssigned) {
+            const isCreator = String(taskData?.created_by) === String(currentUser?.id);
+            if (!isCreator) {
                 Swal.fire({
                     icon: 'error',
                     title: 'ไม่มีสิทธิ์เข้าถึง',
-                    text: 'คุณสามารถแก้ไขได้เฉพาะงานที่คุณสร้างหรือได้รับมอบหมายเท่านั้น'
+                    text: 'คุณสามารถแก้ไขได้เฉพาะงานที่คุณสร้างเท่านั้น'
                 });
                 return;
             }
