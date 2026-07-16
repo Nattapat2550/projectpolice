@@ -6,6 +6,8 @@ import styles from "./TaskDisplayer.module.css";
 import PersonMultiSelect from "./PersonMultiSelect";
 import StatusMultiSelect from "./StatusMultiSelect"; // 👈 Imported the multi-select component
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import Link from "next/link";
+import Swal from "sweetalert2";
 
 type TaskStatus = "following" | "problem" | "completed";
 
@@ -112,6 +114,82 @@ export default function UrgentTask() {
         }
     };
 
+    const handleReserveTask = async () => {
+        const token = typeof window !== 'undefined' ? localStorage.getItem("token") || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1] : null;
+        if (!token) {
+            Swal.fire({ icon: 'warning', title: 'ไม่อนุญาต', text: 'กรุณาเข้าสู่ระบบก่อนจองเลขรับ' });
+            return;
+        }
+
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
+        
+        try {
+            // Fetch next receive number
+            let nextNo = "";
+            try {
+                const resNo = await fetch(`${backendUrl}/api/v1/tasks/next-reserve-no`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (resNo.ok) {
+                    const dataNo = await resNo.json();
+                    nextNo = dataNo.nextReceiveNo?.toString() || "";
+                }
+            } catch (err) {
+                console.error("Failed to fetch next reserve no", err);
+            }
+
+            const { value: rangeInput } = await Swal.fire({
+                title: 'จองเลขรับ',
+                html: 'ระบุเลขรับ หรือ ระบุเป็นช่วง (เช่น <b>100</b> หรือ <b>100-105</b>)',
+                input: 'text',
+                inputValue: nextNo,
+                showCancelButton: true,
+                confirmButtonText: 'ยืนยันการจอง',
+                cancelButtonText: 'ยกเลิก',
+                inputValidator: (value) => {
+                    if (!value) return 'กรุณาระบุเลขรับที่ต้องการจอง';
+                    if (!/^\d+(-\d+)?$/.test(value.trim())) return 'รูปแบบไม่ถูกต้อง (เช่น 100 หรือ 100-105)';
+                    if (value.includes('-')) {
+                        const parts = value.split('-');
+                        if (parseInt(parts[0], 10) > parseInt(parts[1], 10)) {
+                            return 'เลขเริ่มต้นต้องน้อยกว่าหรือเท่ากับเลขสิ้นสุด';
+                        }
+                    }
+                }
+            });
+
+            if (rangeInput) {
+                const response = await fetch(`${backendUrl}/api/v1/tasks/reserve`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ range: rangeInput.trim() })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.message || "Failed to reserve task");
+                }
+                
+                const data = await response.json();
+                if (data.startNo === data.endNo) {
+                    Swal.fire('สำเร็จ', `จองเลขรับสำเร็จ! เลขรับที่ได้คือ: ${data.startNo}/${data.receive_year}`, 'success');
+                } else {
+                    Swal.fire('สำเร็จ', `จองเลขรับจำนวน ${data.count} รายการ สำเร็จ! ตั้งแต่เลขที่: ${data.startNo}/${data.receive_year} ถึง ${data.endNo}/${data.receive_year}`, 'success');
+                }
+                
+                // รีเฟรชข้อมูลหน้าเว็บหลังจองสำเร็จ (ใช้ window.location.reload แทนเพื่อให้ UI รีเฟรชเต็มรูปแบบ)
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            }
+        } catch (error: any) {
+            Swal.fire('เกิดข้อผิดพลาด', error.message || 'ไม่สามารถจองเลขรับได้', 'error');
+        }
+    };
+
     const allPersons = tasks.flatMap(t => {
         if (!t.personInCharge) return [];
         return t.personInCharge.split(',').map((s: string) => s.trim()).filter(Boolean);
@@ -195,9 +273,48 @@ export default function UrgentTask() {
             <div className={styles.ContentWrapper}>
                 <div className={styles.ContentContainer}>
 
-                    <h1 className={styles.Header} style={{ fontSize: "3rem", fontWeight: "bold", margin: "0.75rem" }}>
-                        งานติดตามเร่งด่วน
-                    </h1>
+                    <div className="flex flex-col sm:flex-row justify-between gap-4">
+
+                        <h1 className={styles.Header} style={{ fontSize: "3rem", fontWeight: "bold", margin: "0.75rem" }}>
+                            งานติดตามเร่งด่วน
+                        </h1>
+
+                        <div className="flex flex-row items-center">
+                            <button 
+                                onClick={handleReserveTask}
+                                className={styles.Button} 
+                                style={{ 
+                                    display: 'inline-flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center', 
+                                    minHeight: '48px', 
+                                    padding: '0 24px',
+                                    margin: '12px 0 12px 16px',
+                                    backgroundColor: 'var(--blueBG)',
+                                    color: 'var(--blueText)',
+                                    border: '1px solid var(--blueText)'
+                                }}
+                            >
+                                📝 จองเลขรับ
+                            </button>
+                            <Link 
+                                href={'/addFile'} 
+                                aria-label="ไปหน้าเพิ่มงานติดตามใหม่" 
+                                className={styles.Button} 
+                                style={{ 
+                                    display: 'inline-flex', 
+                                    alignItems: 'center', 
+                                    justifyContent: 'center', 
+                                    minHeight: '48px', 
+                                    padding: '0 24px',
+                                    margin: '12px 16px',
+                                    textDecoration: 'none'
+                                }}
+                            >
+                                + เพิ่มงานติดตาม
+                            </Link>
+                        </div>
+                    </div>
 
                     <div className={styles.ContentHeader} style={{ flexDirection: 'column', alignItems: 'stretch', gap: '1rem', marginBottom: '1rem' }} >
                         

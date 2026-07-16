@@ -2,6 +2,7 @@ const pool = require('../config/db');
 const fs = require('fs').promises;
 const path = require('path'); // เพิ่ม module path สำหรับป้องกัน Path Traversal
 const { uploadToDrive } = require('../services/googleDriveService');
+const { appendTaskToSheet, appendMultipleTasksToSheet, updateTaskInSheet } = require('../services/googleSheetsService');
 const { generateHash } = require('../utils/duplicateChecker');
 
 const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID; 
@@ -407,6 +408,32 @@ exports.updateTaskDetail = async (req, res) => {
     await logTaskAction(client, id, req.user?.id, 'updated_details', { name, date, main_text, urgency_level, secret_level });
 
     await client.query('COMMIT');
+
+    // Sync Update to Google Sheets
+    try {
+      const getFresh = await pool.query('SELECT * FROM tasks WHERE id = $1', [id]);
+      if (getFresh.rows.length > 0) {
+        const t = getFresh.rows[0];
+        const personInCharge = Array.isArray(assignments) ? assignments.map(a => a.role_or_name || 'เพิ่มด้วยตนเอง').join(', ') : '';
+        updateTaskInSheet({
+          id: t.id,
+          receive_no: t.receive_no,
+          receive_year: t.receive_year,
+          created_at: t.created_at,
+          memo_no: t.memo_no,
+          memo_date: t.memo_date,
+          sender: t.sender,
+          title: t.title,
+          personInCharge,
+          due_date: t.due_date,
+          task_detail: t.task_detail,
+          sign_date: t.sign_date
+        }).catch(e => console.error("Sheet update error:", e.message));
+      }
+    } catch (e) {
+      console.error("Failed to prepare sheet update", e);
+    }
+
     res.status(200).json({ success: true, message: 'บันทึกความเปลี่ยนแปลงเรียบร้อย' });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -508,7 +535,7 @@ exports.createTask = async (req, res) => {
   try {
     await client.query('BEGIN');
     
-    const { title, memo_no, memo_date, due_date, main_text, is_urgent, assignments, createdBy, created_by, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date } = req.body;
+    const { title, memo_no, memo_date, due_date, main_text, is_urgent, assignments, createdBy, created_by, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, sender } = req.body;
     let validCreatorId = createdBy || created_by || null;
     validCreatorId = isValidUUID(validCreatorId) ? validCreatorId : null;
 
@@ -532,16 +559,16 @@ exports.createTask = async (req, res) => {
     if (existingRes.rows.length > 0) {
         taskId = existingRes.rows[0].id;
         await client.query(
-          `UPDATE tasks SET title = COALESCE($1, title), memo_no = $2, memo_date = $3, main_text = $4, due_date = COALESCE($5, due_date), is_urgent = COALESCE($6, is_urgent), urgency_level = $7, secret_level = $8, sign_date = $10, meeting_date = $11, reply_due_date = $12, created_at = COALESCE(CAST($9 AS timestamp), created_at), updated_at = NOW() WHERE id = $13`,
-          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, taskId]
+          `UPDATE tasks SET title = COALESCE($1, title), memo_no = $2, memo_date = $3, main_text = $4, due_date = COALESCE($5, due_date), is_urgent = COALESCE($6, is_urgent), urgency_level = $7, secret_level = $8, sign_date = $10, meeting_date = $11, reply_due_date = $12, sender = $14, created_at = COALESCE(CAST($9 AS timestamp), created_at), updated_at = NOW() WHERE id = $13`,
+          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, taskId, sender]
         );
         await logTaskAction(client, taskId, validCreatorId, 'updated_task', { source: 'manual_create_upsert' });
         await client.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
     } else {
         const taskRes = await client.query(
-          `INSERT INTO tasks (title, memo_no, memo_date, main_text, due_date, is_urgent, status, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $12, $13, $14, $15, $16, COALESCE(CAST($11 AS timestamp), NOW())) RETURNING id`,
-          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent || false, 'following', validCreatorId, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, receiveNo, receiveYear]
+          `INSERT INTO tasks (title, memo_no, memo_date, main_text, due_date, is_urgent, status, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, sender, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $12, $13, $14, $15, $16, $17, COALESCE(CAST($11 AS timestamp), NOW())) RETURNING id`,
+          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent || false, 'following', validCreatorId, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, receiveNo, receiveYear, sender]
         );
         taskId = taskRes.rows[0].id;
         await logTaskAction(client, taskId, validCreatorId, 'created_task', { source: 'manual_create' });
@@ -563,6 +590,28 @@ exports.createTask = async (req, res) => {
 
 
     await client.query('COMMIT');
+
+    // 🚀 ยิงข้อมูลขึ้น Google Sheets แบบไม่ต้องรอให้เสร็จ (Background task)
+    try {
+        const fullTaskData = {
+            id: taskId,
+            receive_no: receiveNo,
+            receive_year: receiveYear,
+            created_at: parsedReceiveDate || new Date(),
+            memo_no: memo_no,
+            memo_date: parsedMemoDate,
+            sender: sender || '',
+            title: title || 'ไม่ระบุชื่อเรื่อง',
+            personInCharge: assignments ? assignments.map(a => a.role_or_name).join(', ') : '',
+            due_date: finalDueDate,
+            task_detail: main_text,
+            sign_date: parsedSignDate
+        };
+        appendTaskToSheet(fullTaskData).catch(err => console.error("[Google Sheets Sync error]", err.message));
+    } catch (e) {
+        console.error("Failed to prepare sheet sync", e);
+    }
+
     res.status(201).json({ success: true, message: 'สร้างงานสำเร็จ!', taskId: taskId });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -649,11 +698,26 @@ exports.reserveTask = async (req, res) => {
         ['กันเลขลงรับ', 'following', validCreatorId, i, currentYear, dueDate]
       );
       const taskId = taskRes.rows[0].id;
-      createdIds.push(taskId);
+      createdIds.push({
+        id: taskId,
+        receive_no: i,
+        receive_year: currentYear,
+        created_at: new Date(),
+        title: 'กันเลขลงรับ',
+        due_date: dueDate
+      });
       await logTaskAction(client, taskId, validCreatorId, 'created_task', { source: 'reserve_number', no: i });
     }
     
     await client.query('COMMIT');
+
+    // Sync to Google Sheets
+    try {
+        appendMultipleTasksToSheet(createdIds).catch(e => console.error("Batch Sheet Sync Error:", e.message));
+    } catch (e) {
+        console.error("Failed to prepare batch sheet sync", e);
+    }
+
     res.status(201).json({ 
       success: true, 
       message: 'จองเลขรับสำเร็จ!', 

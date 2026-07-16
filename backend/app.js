@@ -13,6 +13,7 @@ const auth = require("./routes/auth");
 const users = require("./routes/users");
 const documents = require("./routes/documents");
 const tasks = require("./routes/tasks"); 
+const webhooks = require("./routes/webhooks");
 
 const app = express();
 
@@ -80,6 +81,7 @@ app.use("/api/v1/users", users);
 // 🔒 ใช้งาน limiter กับ route documents
 app.use("/api/v1/documents", documentLimiter, documents); 
 app.use("/api/v1/tasks", tasks); 
+app.use("/api/v1/webhooks", webhooks); // Mount webhook endpoints
 app.set("query parser", "extended");
 
 app.get("/", (req, res) => {

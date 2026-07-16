@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Header, SearchFilters, emptyFilters, UserOption } from '@/components/firstpage/Header';
 import { StatCard } from '@/components/firstpage/StatCard';
 import { TaskTable, Task, SortKey, SortConfig } from '@/components/firstpage/TaskTable';
+import Link from 'next/link';
+import Swal from 'sweetalert2';
 
 const PAGE_SIZE = 20;
 
@@ -113,6 +115,81 @@ export default function HomePage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  const handleReserveTask = async () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem("token") || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1] : null;
+    if (!token) {
+        Swal.fire({ icon: 'warning', title: 'ไม่อนุญาต', text: 'กรุณาเข้าสู่ระบบก่อนจองเลขรับ' });
+        return;
+    }
+
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
+    
+    try {
+        // Fetch next receive number
+        let nextNo = "";
+        try {
+            const resNo = await fetch(`${backendUrl}/api/v1/tasks/next-reserve-no`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+            if (resNo.ok) {
+                const dataNo = await resNo.json();
+                nextNo = dataNo.nextReceiveNo?.toString() || "";
+            }
+        } catch (err) {
+            console.error("Failed to fetch next reserve no", err);
+        }
+
+        const { value: rangeInput } = await Swal.fire({
+            title: 'จองเลขรับ',
+            html: 'ระบุเลขรับ หรือ ระบุเป็นช่วง (เช่น <b>100</b> หรือ <b>100-105</b>)',
+            input: 'text',
+            inputValue: nextNo,
+            showCancelButton: true,
+            confirmButtonText: 'ยืนยันการจอง',
+            cancelButtonText: 'ยกเลิก',
+            inputValidator: (value) => {
+                if (!value) return 'กรุณาระบุเลขรับที่ต้องการจอง';
+                if (!/^\d+(-\d+)?$/.test(value.trim())) return 'รูปแบบไม่ถูกต้อง (เช่น 100 หรือ 100-105)';
+                if (value.includes('-')) {
+                    const parts = value.split('-');
+                    if (parseInt(parts[0], 10) > parseInt(parts[1], 10)) {
+                        return 'เลขเริ่มต้นต้องน้อยกว่าหรือเท่ากับเลขสิ้นสุด';
+                    }
+                }
+            }
+        });
+
+        if (rangeInput) {
+            const response = await fetch(`${backendUrl}/api/v1/tasks/reserve`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({ range: rangeInput.trim() })
+            });
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.message || "Failed to reserve task");
+            }
+            
+            const data = await response.json();
+            if (data.startNo === data.endNo) {
+                Swal.fire('สำเร็จ', `จองเลขรับสำเร็จ! เลขรับที่ได้คือ: ${data.startNo}/${data.receive_year}`, 'success');
+            } else {
+                Swal.fire('สำเร็จ', `จองเลขรับจำนวน ${data.count} รายการ สำเร็จ! ตั้งแต่เลขที่: ${data.startNo}/${data.receive_year} ถึง ${data.endNo}/${data.receive_year}`, 'success');
+            }
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        }
+    } catch (error: any) {
+        Swal.fire('เกิดข้อผิดพลาด', error.message || 'ไม่สามารถจองเลขรับได้', 'error');
+    }
+  };
 
   const [filters, setFilters] = useState<SearchFilters>({ ...emptyFilters });
   const [usersList, setUsersList] = useState<UserOption[]>([]);
@@ -336,6 +413,47 @@ export default function HomePage() {
       <Header filters={filters} setFilters={setFilters} users={usersList} />
 
       <main className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 md:p-8 space-y-6">
+
+        <div className="flex flex-row justify-end items-center mb-4">
+            <button 
+                onClick={handleReserveTask}
+                style={{ 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    minHeight: '48px', 
+                    padding: '0 24px',
+                    marginRight: '16px',
+                    backgroundColor: 'var(--blueBG)',
+                    color: 'var(--blueText)',
+                    border: '1px solid var(--blueText)',
+                    borderRadius: '0.4rem',
+                    fontWeight: 'bold',
+                    cursor: 'pointer'
+                }}
+            >
+                📝 จองเลขรับ
+            </button>
+            <Link 
+                href={'/addFile'} 
+                aria-label="ไปหน้าเพิ่มงานติดตามใหม่" 
+                style={{ 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    minHeight: '48px', 
+                    padding: '0 24px',
+                    backgroundColor: 'var(--blueText)',
+                    color: 'white',
+                    border: '1px solid var(--blueText)',
+                    borderRadius: '0.4rem',
+                    textDecoration: 'none',
+                    fontWeight: 'bold'
+                }}
+            >
+                + เพิ่มงานติดตาม
+            </Link>
+        </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard
