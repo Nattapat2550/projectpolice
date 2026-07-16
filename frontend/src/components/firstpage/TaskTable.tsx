@@ -61,6 +61,9 @@ interface TaskTableProps {
   pageSize: number;
 }
 
+// 🔴 เช็คว่าชื่อเรื่องมีคำว่า "กันเลขลงรับ" หรือไม่ -> ใช้ไฮไลต์ทั้งแถวเป็นสีแดง
+const isKanLekLongRub = (title?: string | null) => !!title && title.includes('กันเลขลงรับ');
+
 const COLUMNS: { key: SortKey; label: string; className?: string }[] = [
   { key: 'receive_no', label: 'เลขรับ / ปี', className: 'w-24' },
   { key: 'memo_no', label: 'เลขที่หนังสือ', className: 'w-32' },
@@ -225,81 +228,97 @@ export const TaskTable: React.FC<TaskTableProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--shadow)]/20 text-sm">
-              {tasks.map((task) => (
-                <tr key={task.id} className="hover:bg-[var(--wrapper)]/20 transition-colors group">
-                  <td className="px-3 py-4.5 font-medium whitespace-nowrap">
-                    {task.receive_no ?? '-'}
-                    <span className="text-[var(--foreground)]/40 font-normal">/{task.receive_year || '-'}</span>
-                  </td>
-                  <td className="px-3 py-4.5 whitespace-nowrap font-mono text-xs text-[var(--foreground)]/80">
-                    {task.memo_no || '-'}
-                  </td>
-                  <td className="px-3 py-4.5 align-top">
-                    <div className="font-medium text-[var(--foreground)] whitespace-normal break-words leading-snug group-hover:text-[var(--blueText)] transition-colors">
-                      {task.title || 'ไม่มีชื่อเรื่อง'}
-                    </div>
-                    {task.is_urgent && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--redBG)] text-[var(--redText)] mt-0.5 animate-pulse">
-                        งานเร่งด่วนระบบ
-                      </span>
-                    )}
-                  </td>
-
-                  {/* 👤 ผู้รับผิดชอบ */}
-                  <td className="px-3 py-4.5">
-                    <div className="flex flex-wrap gap-1 max-h-12 overflow-y-auto">
-                      {task.assignments && task.assignments.length > 0 ? (
-                        task.assignments.map((assign, idx) => (
-                          <span key={assign.assignment_id || idx} className="assignee-badge inline-flex items-center px-2 py-0.5 rounded text-xs border border-[var(--shadow)] text-[var(--foreground)]/90 bg-[var(--wrapper)]/40">
-                            <span className="w-1.5 h-1.5 rounded-full mr-1.5 bg-[var(--blueText)] opacity-70"></span>
-                            {assign.personInCharge || assign.role_or_name}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-xs text-[var(--foreground)]/40 italic">ยังไม่ได้มอบหมาย</span>
+              {tasks.map((task) => {
+                const flagged = isKanLekLongRub(task.title);
+                return (
+                  <tr
+                    key={task.id}
+                    className={`transition-colors group ${
+                      flagged
+                        ? 'bg-[var(--redBG)]/25 hover:bg-[var(--redBG)]/35'
+                        : 'hover:bg-[var(--wrapper)]/20'
+                    }`}
+                  >
+                    <td className={`px-3 py-4.5 font-medium whitespace-nowrap ${flagged ? 'text-[var(--redText)]' : ''}`}>
+                      {task.receive_no ?? '-'}
+                      <span className={flagged ? 'font-normal opacity-70' : 'text-[var(--foreground)]/40 font-normal'}>/{task.receive_year || '-'}</span>
+                    </td>
+                    <td className={`px-3 py-4.5 whitespace-nowrap font-mono text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>
+                      {task.memo_no || '-'}
+                    </td>
+                    <td className="px-3 py-4.5 align-top">
+                      <div
+                        className={`font-medium whitespace-normal break-words leading-snug transition-colors ${
+                          flagged
+                            ? 'text-[var(--redText)] font-semibold'
+                            : 'text-[var(--foreground)] group-hover:text-[var(--blueText)]'
+                        }`}
+                      >
+                        {task.title || 'ไม่มีชื่อเรื่อง'}
+                      </div>
+                      {task.is_urgent && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-[var(--redBG)] text-[var(--redText)] mt-0.5 animate-pulse">
+                          งานเร่งด่วนระบบ
+                        </span>
                       )}
-                    </div>
-                  </td>
+                    </td>
 
-                  <td className="px-3 py-4.5 text-[var(--foreground)]/80 truncate">{task.sender || '-'}</td>
-                  <td className="px-3 py-4.5 text-center">
-                    <span className={`inline-block px-2.5 py-1 text-xs font-semibold rounded-full border ${getUrgencyBadgeStyle(task.urgency_level)}`}>
-                      {task.urgency_level || 'ปกติ'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-4.5 text-center">
-                    <span className={`inline-block px-2.5 py-0.5 text-xs rounded-md ${
-                      task.status === 'success' || task.status === 'completed'
-                        ? 'bg-[var(--greenBG)]/30 text-[var(--greenText)] border border-[var(--greenBorder)]/30'
-                        : 'bg-[var(--wrapper)] text-[var(--foreground)]/70 border border-[var(--shadow)]/40'
-                    }`}>
-                      {task.status === 'following' ? 'กำลังติดตาม' : task.status === 'success' ? 'เสร็จสิ้น' : task.status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-4.5 text-center">
-                    <span className="inline-block px-2 py-1 text-xs rounded-full border border-[var(--shadow)]/40 text-[var(--foreground)]/80">
-                      {task.secret_level || 'ปกติ'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-4.5 whitespace-nowrap text-xs text-[var(--foreground)]/70">
-                    {formatDate(task.memo_date)}
-                  </td>
-                  <td className="px-3 py-4.5 whitespace-nowrap text-xs text-[var(--foreground)]/70">
-                    {task.meeting_date ? formatDate(task.meeting_date) : '-'}
-                  </td>
-                  <td className="px-3 py-4.5 whitespace-nowrap text-xs text-[var(--foreground)]/70">
-                    {task.reply_due_date ? formatDate(task.reply_due_date) : '-'}
-                  </td>
+                    {/* 👤 ผู้รับผิดชอบ */}
+                    <td className="px-3 py-4.5">
+                      <div className="flex flex-wrap gap-1 max-h-12 overflow-y-auto">
+                        {task.assignments && task.assignments.length > 0 ? (
+                          task.assignments.map((assign, idx) => (
+                            <span key={assign.assignment_id || idx} className="assignee-badge inline-flex items-center px-2 py-0.5 rounded text-xs border border-[var(--shadow)] text-[var(--foreground)]/90 bg-[var(--wrapper)]/40">
+                              <span className="w-1.5 h-1.5 rounded-full mr-1.5 bg-[var(--blueText)] opacity-70"></span>
+                              {assign.personInCharge || assign.role_or_name}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-xs text-[var(--foreground)]/40 italic">ยังไม่ได้มอบหมาย</span>
+                        )}
+                      </div>
+                    </td>
 
-                  <td className="px-4 py-4.5 text-center">
-                    {task.document_link || task.drive_web_view_link ? (
-                      <a href={task.document_link || task.drive_web_view_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center w-8 h-8 rounded-full text-[var(--blueText)] hover:bg-[var(--wrapper)] transition-colors">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                      </a>
-                    ) : ( <span className="text-[var(--foreground)]/20">-</span> )}
-                  </td>
-                </tr>
-              ))}
+                    <td className={`px-3 py-4.5 truncate ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>{task.sender || '-'}</td>
+                    <td className="px-3 py-4.5 text-center">
+                      <span className={`inline-block px-2.5 py-1 text-xs font-semibold rounded-full border ${getUrgencyBadgeStyle(task.urgency_level)}`}>
+                        {task.urgency_level || 'ปกติ'}
+                      </span>
+                    </td>
+                    <td className="px-3 py-4.5 text-center">
+                      <span className={`inline-block px-2.5 py-0.5 text-xs rounded-md ${
+                        task.status === 'success' || task.status === 'completed'
+                          ? 'bg-[var(--greenBG)]/30 text-[var(--greenText)] border border-[var(--greenBorder)]/30'
+                          : 'bg-[var(--wrapper)] text-[var(--foreground)]/70 border border-[var(--shadow)]/40'
+                      }`}>
+                        {task.status === 'following' ? 'กำลังติดตาม' : task.status === 'success' ? 'เสร็จสิ้น' : task.status}
+                      </span>
+                    </td>
+                    <td className="px-3 py-4.5 text-center">
+                      <span className="inline-block px-2 py-1 text-xs rounded-full border border-[var(--shadow)]/40 text-[var(--foreground)]/80">
+                        {task.secret_level || 'ปกติ'}
+                      </span>
+                    </td>
+                    <td className={`px-3 py-4.5 whitespace-nowrap text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
+                      {formatDate(task.memo_date)}
+                    </td>
+                    <td className={`px-3 py-4.5 whitespace-nowrap text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
+                      {task.meeting_date ? formatDate(task.meeting_date) : '-'}
+                    </td>
+                    <td className={`px-3 py-4.5 whitespace-nowrap text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
+                      {task.reply_due_date ? formatDate(task.reply_due_date) : '-'}
+                    </td>
+
+                    <td className="px-4 py-4.5 text-center">
+                      {task.document_link || task.drive_web_view_link ? (
+                        <a href={task.document_link || task.drive_web_view_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center w-8 h-8 rounded-full text-[var(--blueText)] hover:bg-[var(--wrapper)] transition-colors">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                        </a>
+                      ) : ( <span className="text-[var(--foreground)]/20">-</span> )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -315,67 +334,77 @@ export const TaskTable: React.FC<TaskTableProps> = ({
 
       {/* 📱 [2] Mobile & iPad แนวตั้ง (UI แบบ Apple Card List) */}
       <div className="block lg:hidden space-y-3">
-        {tasks.map((task) => (
-          <div key={task.id} className="bg-[var(--container)] border border-[var(--shadow)]/30 rounded-2xl p-4 shadow-sm space-y-3.5 hover:border-[var(--blueText)]/50 transition-all">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center space-x-2">
-                <span className="text-xs font-semibold bg-[var(--wrapper)] px-2.5 py-0.5 rounded-md text-[var(--foreground)]/80">
-                  เลขรับ {task.receive_no ?? '-'}
-                  <span className="text-[var(--foreground)]/40 font-normal">/{task.receive_year || '-'}</span>
+        {tasks.map((task) => {
+          const flagged = isKanLekLongRub(task.title);
+          return (
+            <div
+              key={task.id}
+              className={`rounded-2xl p-4 shadow-sm space-y-3.5 transition-all border ${
+                flagged
+                  ? 'bg-[var(--redBG)]/20 border-[var(--shadow)]/30'
+                  : 'bg-[var(--container)] border-[var(--shadow)]/30 hover:border-[var(--blueText)]/50'
+              }`}
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[var(--wrapper)] ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>
+                    เลขรับ {task.receive_no ?? '-'}
+                    <span className={flagged ? 'font-normal opacity-70' : 'text-[var(--foreground)]/40 font-normal'}>/{task.receive_year || '-'}</span>
+                  </span>
+                  <span className={`font-mono text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/50'}`}>
+                    {task.memo_no || '-'}
+                  </span>
+                </div>
+                <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${getUrgencyBadgeStyle(task.urgency_level)}`}>
+                  {task.urgency_level || 'ปกติ'}
                 </span>
-                <span className="font-mono text-xs text-[var(--foreground)]/50">
-                  {task.memo_no || '-'}
-                </span>
-              </div>
-              <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${getUrgencyBadgeStyle(task.urgency_level)}`}>
-                {task.urgency_level || 'ปกติ'}
-              </span>
-            </div>
-
-            <div className="space-y-1">
-              <h4 className="font-semibold text-[var(--foreground)] text-base line-clamp-2 leading-snug">
-                {task.title || 'ไม่มีชื่อเรื่อง'}
-              </h4>
-              <div className="text-xs text-[var(--foreground)]/60 flex flex-col space-y-0.5 pt-1">
-                <p><span className="font-medium">จาก:</span> {task.sender || '-'}</p>
-                <p><span className="font-medium">วันที่หนังสือ:</span> {formatDate(task.memo_date)}</p>
-                <p><span className="font-medium">ชั้นความลับ:</span> {task.secret_level || 'ปกติ'}</p>
-                {task.meeting_date && <p><span className="font-medium">วันประชุม:</span> {formatDate(task.meeting_date)}</p>}
-                {task.reply_due_date && <p><span className="font-medium">กำหนดตอบกลับ:</span> {formatDate(task.reply_due_date)}</p>}
-              </div>
-            </div>
-
-            <div className="pt-2.5 border-t border-[var(--shadow)]/20 flex items-center justify-between gap-2">
-              <div className="flex flex-wrap gap-1 max-w-[65%]">
-                {task.assignments && task.assignments.length > 0 ? (
-                  task.assignments.map((assign, idx) => (
-                    <span key={assign.assignment_id || idx} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-[var(--wrapper)]/60 text-[var(--foreground)]/90 border border-[var(--shadow)]/30">
-                      {assign.personInCharge || assign.role_or_name}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-[10px] text-[var(--foreground)]/40 italic">ยังไม่มอบหมาย</span>
-                )}
               </div>
 
-              <div className="flex items-center space-x-1.5 shrink-0">
-                <span className={`px-2 py-0.5 text-[11px] rounded ${
-                  task.status === 'success' || task.status === 'completed'
-                    ? 'bg-[var(--greenBG)]/20 text-[var(--greenText)]'
-                    : 'bg-[var(--wrapper)] text-[var(--foreground)]/70'
-                }`}>
-                  {task.status === 'following' ? 'ติดตามอยู่' : task.status === 'success' ? 'เสร็จสิ้น' : task.status}
-                </span>
+              <div className="space-y-1">
+                <h4 className={`font-semibold text-base line-clamp-2 leading-snug ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]'}`}>
+                  {task.title || 'ไม่มีชื่อเรื่อง'}
+                </h4>
+                <div className={`text-xs flex flex-col space-y-0.5 pt-1 ${flagged ? 'text-[var(--redText)]/80' : 'text-[var(--foreground)]/60'}`}>
+                  <p><span className="font-medium">จาก:</span> {task.sender || '-'}</p>
+                  <p><span className="font-medium">วันที่หนังสือ:</span> {formatDate(task.memo_date)}</p>
+                  <p><span className="font-medium">ชั้นความลับ:</span> {task.secret_level || 'ปกติ'}</p>
+                  {task.meeting_date && <p><span className="font-medium">วันประชุม:</span> {formatDate(task.meeting_date)}</p>}
+                  {task.reply_due_date && <p><span className="font-medium">กำหนดตอบกลับ:</span> {formatDate(task.reply_due_date)}</p>}
+                </div>
+              </div>
 
-                {(task.document_link || task.drive_web_view_link) && (
-                  <a href={task.document_link || task.drive_web_view_link} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-full bg-[var(--wrapper)] text-[var(--blueText)] active:bg-[var(--shadow)]">
-                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                  </a>
-                )}
+              <div className="pt-2.5 border-t border-[var(--shadow)]/20 flex items-center justify-between gap-2">
+                <div className="flex flex-wrap gap-1 max-w-[65%]">
+                  {task.assignments && task.assignments.length > 0 ? (
+                    task.assignments.map((assign, idx) => (
+                      <span key={assign.assignment_id || idx} className="inline-flex items-center px-2 py-0.5 rounded text-[10px] bg-[var(--wrapper)]/60 text-[var(--foreground)]/90 border border-[var(--shadow)]/30">
+                        {assign.personInCharge || assign.role_or_name}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[10px] text-[var(--foreground)]/40 italic">ยังไม่มอบหมาย</span>
+                  )}
+                </div>
+
+                <div className="flex items-center space-x-1.5 shrink-0">
+                  <span className={`px-2 py-0.5 text-[11px] rounded ${
+                    task.status === 'success' || task.status === 'completed'
+                      ? 'bg-[var(--greenBG)]/20 text-[var(--greenText)]'
+                      : 'bg-[var(--wrapper)] text-[var(--foreground)]/70'
+                  }`}>
+                    {task.status === 'following' ? 'ติดตามอยู่' : task.status === 'success' ? 'เสร็จสิ้น' : task.status}
+                  </span>
+
+                  {(task.document_link || task.drive_web_view_link) && (
+                    <a href={task.document_link || task.drive_web_view_link} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-full bg-[var(--wrapper)] text-[var(--blueText)] active:bg-[var(--shadow)]">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+                    </a>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
         <div className="bg-[var(--container)] border border-[var(--shadow)]/30 rounded-2xl overflow-hidden">
           <PaginationBar
