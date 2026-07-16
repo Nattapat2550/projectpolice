@@ -19,6 +19,8 @@ type Task = {
     secret_level?: string;
     meeting_date?: string;
     reply_due_date?: string;
+    receive_no?: number;
+    receive_year?: number;
 };
 
 type Props = {
@@ -47,12 +49,14 @@ export default function TaskDisplayer({
                         personInCharge={task.personInCharge}
                         date={task.date}
                         status={task.status}
-                        createdAt={task.createdAt} // 💡 ส่งต่อวันที่สร้างงานให้หลอด Progress
-                        assigneesData={task.assigneesData} // 💡 ส่งต่อข้อมูลสีให้กล่องรายชื่อ
+                        createdAt={task.createdAt}
+                        assigneesData={task.assigneesData}
                         urgency_level={task.urgency_level}
                         secret_level={task.secret_level}
                         meeting_date={task.meeting_date}
                         reply_due_date={task.reply_due_date}
+                        receive_no={task.receive_no}
+                        receive_year={task.receive_year}
                         onStatusChange={onStatusChange}
                     />
                 ))}

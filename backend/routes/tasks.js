@@ -18,7 +18,8 @@ const {
     deleteTask,
     createTask,
     getTaskLogs,
-    reserveTask
+    reserveTask,
+    getNextReserveNo
 } = require('../controllers/taskController');
 
 const router = express.Router();
@@ -26,6 +27,7 @@ const router = express.Router();
 router.get('/', getAllTasks);
 router.get('/urgent', getUrgentTasks);
 router.post('/', protect, createTask);
+router.get('/next-reserve-no', protect, getNextReserveNo);
 router.post('/reserve', protect, reserveTask);
 router.post('/confirm', protect, confirmTasks); 
 

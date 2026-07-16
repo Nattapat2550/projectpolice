@@ -6,6 +6,7 @@ import styles from "./TaskDisplayer.module.css";
 import Link from "next/link";
 import PersonMultiSelect from "./PersonMultiSelect";
 import StatusMultiSelect from "./StatusMultiSelect"; // 👈 Import new component
+import Swal from "sweetalert2";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 
 type TaskStatus = "following" | "problem" | "completed";
@@ -117,25 +118,76 @@ export default function AllTask() {
     };
 
     const handleReserveTask = async () => {
+        const token = typeof window !== 'undefined' ? localStorage.getItem("token") || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1] : null;
+        if (!token) {
+            Swal.fire({ icon: 'warning', title: 'ไม่อนุญาต', text: 'กรุณาเข้าสู่ระบบก่อนจองเลขรับ' });
+            return;
+        }
+
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
+        
         try {
-            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
-            const token = localStorage.getItem("token");
-            const response = await fetch(`${backendUrl}/api/v1/tasks/reserve`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                },
+            // Fetch next receive number
+            let nextNo = "";
+            try {
+                const resNo = await fetch(`${backendUrl}/api/v1/tasks/next-reserve-no`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                if (resNo.ok) {
+                    const dataNo = await resNo.json();
+                    nextNo = dataNo.nextReceiveNo?.toString() || "";
+                }
+            } catch (err) {
+                console.error("Failed to fetch next reserve no", err);
+            }
+
+            const { value: rangeInput } = await Swal.fire({
+                title: 'จองเลขรับ',
+                html: 'ระบุเลขรับ หรือ ระบุเป็นช่วง (เช่น <b>100</b> หรือ <b>100-105</b>)',
+                input: 'text',
+                inputValue: nextNo,
+                showCancelButton: true,
+                confirmButtonText: 'ยืนยันการจอง',
+                cancelButtonText: 'ยกเลิก',
+                inputValidator: (value) => {
+                    if (!value) return 'กรุณาระบุเลขรับที่ต้องการจอง';
+                    if (!/^\d+(-\d+)?$/.test(value.trim())) return 'รูปแบบไม่ถูกต้อง (เช่น 100 หรือ 100-105)';
+                    if (value.includes('-')) {
+                        const parts = value.split('-');
+                        if (parseInt(parts[0], 10) > parseInt(parts[1], 10)) {
+                            return 'เลขเริ่มต้นต้องน้อยกว่าหรือเท่ากับเลขสิ้นสุด';
+                        }
+                    }
+                }
             });
 
-            if (!response.ok) throw new Error("Failed to reserve task");
-            
-            const data = await response.json();
-            alert(`จองเลขรับสำเร็จ! เลขรับที่ได้คือ: ${data.receive_no}/${data.receive_year}`);
-            fetchTasks(); // Refresh tasks
-        } catch (error) {
+            if (rangeInput) {
+                const response = await fetch(`${backendUrl}/api/v1/tasks/reserve`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ range: rangeInput.trim() })
+                });
+
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.message || "Failed to reserve task");
+                }
+                
+                const data = await response.json();
+                if (data.startNo === data.endNo) {
+                    Swal.fire('สำเร็จ', `จองเลขรับสำเร็จ! เลขรับที่ได้คือ: ${data.startNo}/${data.receive_year}`, 'success');
+                } else {
+                    Swal.fire('สำเร็จ', `จองเลขรับสำเร็จจำนวน ${data.createdCount} รายการ!\nตั้งแต่ ${data.startNo}/${data.receive_year} ถึง ${data.endNo}/${data.receive_year}`, 'success');
+                }
+                
+                fetchTasks(); // Refresh tasks
+            }
+        } catch (error: any) {
             console.error("Failed to reserve task", error);
-            alert("เกิดข้อผิดพลาด ไม่สามารถจองเลขรับได้");
+            Swal.fire('เกิดข้อผิดพลาด', error.message || 'ไม่สามารถจองเลขรับได้ โปรดลองอีกครั้ง', 'error');
         }
     };
 
@@ -159,7 +211,19 @@ export default function AllTask() {
             taskPersons.includes("ทุกหน่วยงาน") ||
             taskPersons.some((p:string) => personFilter.includes(p)); 
 
-        const matchSearch = searchText === "" || task.name?.toLowerCase().includes(searchText.toLowerCase()) || task.personInCharge?.toLowerCase().includes(searchText.toLowerCase());
+        const searchTokens = searchText.toLowerCase().split(/\s+/).filter(Boolean);
+        const matchSearch = searchTokens.length === 0 || searchTokens.every(token => 
+            task.name?.toLowerCase().includes(token) || 
+            task.personInCharge?.toLowerCase().includes(token) ||
+            task.urgency_level?.toLowerCase().includes(token) ||
+            task.secret_level?.toLowerCase().includes(token) ||
+            task.id?.toString().toLowerCase().includes(token) ||
+            task.receive_no?.toString().toLowerCase().includes(token) ||
+            task.receive_year?.toString().toLowerCase().includes(token) ||
+            task.date?.toString().toLowerCase().includes(token) ||
+            task.createdAt?.toString().toLowerCase().includes(token)
+        );
+
         const matchUrgency = urgencyFilter === "" || task.urgency_level === urgencyFilter;
         const matchSecrecy = secrecyFilter === "" || task.secret_level === secrecyFilter;
 
@@ -184,9 +248,23 @@ export default function AllTask() {
             return isNaN(time) ? 0 : time;
         };
 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayTime = today.getTime();
+
         const dateA = parseTaskDate(a.date);
         const dateB = parseTaskDate(b.date);
         
+        const diffDaysA = dateA ? Math.ceil((dateA - todayTime) / (1000 * 60 * 60 * 24)) : 9999;
+        const diffDaysB = dateB ? Math.ceil((dateB - todayTime) / (1000 * 60 * 60 * 24)) : 9999;
+
+        const isAOverdue = diffDaysA < 0;
+        const isBOverdue = diffDaysB < 0;
+
+        if (isAOverdue !== isBOverdue) {
+            return isAOverdue ? 1 : -1;
+        }
+
         return dateA - dateB;
     });
 
@@ -245,49 +323,54 @@ export default function AllTask() {
                         </div>
                     </div>
 
-                    <div className={styles.ContentHeader} style={{ flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+                    <div className={styles.ContentHeader} style={{ flexDirection: 'column', alignItems: 'stretch', gap: '1rem', marginBottom: '1rem' }} >
                         
-                        <input 
-                            type="text" 
-                            placeholder="🔍 ค้นหางาน หรือ ผู้รับผิดชอบ..." 
-                            value={searchText}
-                            onChange={(e) => setSearchText(e.target.value)}
-                            style={{ padding: '0.5rem 1rem', borderRadius: '0.7rem', border: '2px solid var(--wrapper)', minWidth: '250px', outline: 'none' }}
-                        />
+                        {/* 🔍 ช่องค้นหาแบบแยกบรรทัด */}
+                        <div style={{ width: '100%' }}>
+                            <input 
+                                type="text" 
+                                placeholder="🔍 ค้นหางาน หรือ ผู้รับผิดชอบ..." 
+                                value={searchText}
+                                onChange={(e) => setSearchText(e.target.value)}
+                                style={{ padding: '0.5rem 1rem', borderRadius: '0.4rem', border: '2px solid var(--wrapper)', width: '100%', outline: 'none', backgroundColor: 'var(--button)' }}
+                            />
+                        </div>
 
-                        {/* 💡 Replaced raw HTML select with our Custom Status Component */}
-                        <StatusMultiSelect 
-                            statusFilter={statusFilter}
-                            setStatusFilter={setStatusFilter}
-                        />
+                        {/* 🛠 กล่องตัวกรองต่างๆ เรียงกันในบรรทัดเดียวถ้าพื้นที่พอ */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', width: '100%', alignItems: 'center' }}>
+                            <StatusMultiSelect 
+                                statusFilter={statusFilter}
+                                setStatusFilter={setStatusFilter}
+                            />
 
-                        <PersonMultiSelect 
-                            uniquePersons={uniquePersons}
-                            personFilter={personFilter}
-                            setPersonFilter={setPersonFilter}
-                        />
+                            <PersonMultiSelect 
+                                uniquePersons={uniquePersons}
+                                personFilter={personFilter}
+                                setPersonFilter={setPersonFilter}
+                            />
 
-                        <select 
-                            value={urgencyFilter} 
-                            onChange={(e) => setUrgencyFilter(e.target.value)}
-                            style={{ padding: '0.5rem 1rem', borderRadius: '0.7rem', border: '2px solid var(--wrapper)', outline: 'none', backgroundColor: 'var(--button)', fontWeight: 'bold' }}
-                        >
-                            <option value="">ทั้งหมด (ความเร่งด่วน)</option>
-                            <option value="ด่วน">ด่วน</option>
-                            <option value="ด่วนมาก">ด่วนมาก</option>
-                            <option value="ด่วนที่สุด">ด่วนที่สุด</option>
-                        </select>
+                            <select 
+                                value={urgencyFilter} 
+                                onChange={(e) => setUrgencyFilter(e.target.value)}
+                                className={styles.Dropdown}
+                            >
+                                <option value="">ทั้งหมด (ความเร่งด่วน)</option>
+                                <option value="ด่วน">ด่วน</option>
+                                <option value="ด่วนมาก">ด่วนมาก</option>
+                                <option value="ด่วนที่สุด">ด่วนที่สุด</option>
+                            </select>
 
-                        <select 
-                            value={secrecyFilter} 
-                            onChange={(e) => setSecrecyFilter(e.target.value)}
-                            style={{ padding: '0.5rem 1rem', borderRadius: '0.7rem', border: '2px solid var(--wrapper)', outline: 'none', backgroundColor: 'var(--button)', fontWeight: 'bold' }}
-                        >
-                            <option value="">ทั้งหมด (ชั้นความลับ)</option>
-                            <option value="ลับ">ลับ</option>
-                            <option value="ลับมาก">ลับมาก</option>
-                            <option value="ลับที่สุด">ลับที่สุด</option>
-                        </select>
+                            <select 
+                                value={secrecyFilter} 
+                                onChange={(e) => setSecrecyFilter(e.target.value)}
+                                className={styles.Dropdown}
+                            >
+                                <option value="">ทั้งหมด (ชั้นความลับ)</option>
+                                <option value="ลับ">ลับ</option>
+                                <option value="ลับมาก">ลับมาก</option>
+                                <option value="ลับที่สุด">ลับที่สุด</option>
+                            </select>
+                        </div>
                     </div>
                     <hr className={styles.Line} />
                     

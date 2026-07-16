@@ -114,7 +114,9 @@ exports.getAllTasks = async (req, res) => {
         t.urgency_level,
         t.secret_level,
         t.meeting_date,
-        t.reply_due_date
+        t.reply_due_date,
+        t.receive_no,
+        t.receive_year
       FROM tasks t
       LEFT JOIN agg_assignees aa ON t.id = aa.task_id
       ORDER BY t.due_date ASC NULLS LAST
@@ -159,7 +161,9 @@ exports.getUrgentTasks = async (req, res) => {
         t.urgency_level,
         t.secret_level,
         t.meeting_date,
-        t.reply_due_date
+        t.reply_due_date,
+        t.receive_no,
+        t.receive_year
       FROM tasks t
       LEFT JOIN agg_assignees aa ON t.id = aa.task_id
       WHERE t.is_urgent = true
@@ -587,29 +591,77 @@ exports.getTaskLogs = async (req, res) => {
   }
 };
 
+exports.getNextReserveNo = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const currentYear = new Date().getFullYear();
+    const resCount = await client.query('SELECT MAX(receive_no) as max_no FROM tasks WHERE receive_year = $1', [currentYear]);
+    const nextReceiveNo = (resCount.rows[0].max_no || 0) + 1;
+    res.status(200).json({ success: true, nextReceiveNo, currentYear });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Server Error', error: err.message });
+  } finally {
+    client.release();
+  }
+};
+
 exports.reserveTask = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     
     let validCreatorId = req.user?.id || null;
-    
-    // Always generate a new receive_no for the current year
     const currentYear = new Date().getFullYear();
-    const resCount = await client.query('SELECT MAX(receive_no) as max_no FROM tasks WHERE receive_year = $1', [currentYear]);
-    const nextReceiveNo = (resCount.rows[0].max_no || 0) + 1;
     
-    const taskRes = await client.query(
-      `INSERT INTO tasks (title, status, created_by, receive_no, receive_year)
-       VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-      ['กันเลขลงรับ', 'following', validCreatorId, nextReceiveNo, currentYear]
-    );
-    const taskId = taskRes.rows[0].id;
+    let { range } = req.body; 
     
-    await logTaskAction(client, taskId, validCreatorId, 'created_task', { source: 'reserve_number' });
+    let startNo = 0;
+    let endNo = 0;
+    
+    if (range) {
+      const rangeStr = String(range).trim();
+      if (rangeStr.includes('-')) {
+        const parts = rangeStr.split('-');
+        startNo = parseInt(parts[0], 10);
+        endNo = parseInt(parts[1], 10);
+      } else {
+        startNo = parseInt(rangeStr, 10);
+        endNo = startNo;
+      }
+    } else {
+      const resCount = await client.query('SELECT MAX(receive_no) as max_no FROM tasks WHERE receive_year = $1', [currentYear]);
+      startNo = (resCount.rows[0].max_no || 0) + 1;
+      endNo = startNo;
+    }
+    
+    if (isNaN(startNo) || isNaN(endNo) || startNo > endNo) {
+      throw new Error("รูปแบบช่วงเลขรับไม่ถูกต้อง (เช่น 100 หรือ 100-105)");
+    }
+
+    const createdIds = [];
+    const dueDate = new Date();
+    dueDate.setDate(dueDate.getDate() + 14); // กำหนดส่ง +14 วัน
+
+    for (let i = startNo; i <= endNo; i++) {
+      const taskRes = await client.query(
+        `INSERT INTO tasks (title, status, created_by, receive_no, receive_year, due_date)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        ['กันเลขลงรับ', 'following', validCreatorId, i, currentYear, dueDate]
+      );
+      const taskId = taskRes.rows[0].id;
+      createdIds.push(taskId);
+      await logTaskAction(client, taskId, validCreatorId, 'created_task', { source: 'reserve_number', no: i });
+    }
     
     await client.query('COMMIT');
-    res.status(201).json({ success: true, message: 'จองเลขรับสำเร็จ!', taskId: taskId, receive_no: nextReceiveNo, receive_year: currentYear });
+    res.status(201).json({ 
+      success: true, 
+      message: 'จองเลขรับสำเร็จ!', 
+      createdCount: createdIds.length,
+      startNo, 
+      endNo, 
+      receive_year: currentYear 
+    });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error("Reserve task error:", err.message);

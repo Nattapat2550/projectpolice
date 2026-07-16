@@ -24,6 +24,8 @@ type TaskItemProps = {
   secret_level?: string;
   meeting_date?: string;
   reply_due_date?: string;
+  receive_no?: number;
+  receive_year?: number;
   onStatusChange: (id: string, status: TaskStatus) => void;
 };
 
@@ -34,7 +36,7 @@ type StatusOption = {
   label: string;
 };
 
-export default function AllTaskItem({date, createdAt, name, personInCharge, assigneesData, status, id, urgency_level, secret_level, meeting_date, reply_due_date, onStatusChange}:TaskItemProps){
+export default function AllTaskItem({date, createdAt, name, personInCharge, assigneesData, status, id, urgency_level, secret_level, meeting_date, reply_due_date, receive_no, receive_year, onStatusChange}:TaskItemProps){
     const router = useRouter();
     
     const parsedDate = new Date(date);
@@ -123,6 +125,44 @@ export default function AllTaskItem({date, createdAt, name, personInCharge, assi
         return (yiq >= 128) ? '#1f2937' : '#ffffff';
     };
     
+    const getBadgeStyle = (level: string | undefined, type: 'urgency' | 'secret') => {
+        const val = level?.trim() || "";
+        if (val === "" || val === "ไม่มี" || val === "ปกติ") {
+            return {
+                color: 'var(--greenText)',
+                bg: 'var(--greenBG)',
+                icon: type === 'urgency' ? '✅' : '🟢',
+                label: val || 'ปกติ'
+            };
+        }
+        if (val === "ด่วนที่สุด" || val === "ลับที่สุด") {
+            return {
+                color: 'var(--redText)',
+                bg: 'var(--redBG)',
+                icon: type === 'urgency' ? '🚨' : '🔴',
+                label: val
+            };
+        }
+        if (val === "ด่วนมาก" || val === "ลับมาก") {
+            return {
+                color: '#c2410c', // Orange 700
+                bg: '#ffedd5',    // Orange 100
+                icon: type === 'urgency' ? '⏳' : '🟠',
+                label: val
+            };
+        }
+        return {
+            color: 'var(--yellowText)',
+            bg: 'var(--yellowBG)',
+            icon: type === 'urgency' ? '⚡' : '🟡',
+            label: val
+        };
+    };
+
+    const urgencyStyle = getBadgeStyle(urgency_level, 'urgency');
+    const secretStyle = getBadgeStyle(secret_level, 'secret');
+
+    
     return(
         <div className={styles.TaskWrapper}>
             <div className={styles.InnerWrapper}>
@@ -134,18 +174,19 @@ export default function AllTaskItem({date, createdAt, name, personInCharge, assi
                     </div>
 
                     <div className={`${styles.Content} w-full min-w-0`}>
-                        <h1 className={styles.Header} title={name}>{name}</h1>
+                        <h1 className={styles.Header} title={name}>
+                            {receive_no && receive_year ? (
+                                <span className="text-gray-500 mr-2 text-sm sm:text-base font-normal">[{receive_no}/{receive_year + 543}]</span>
+                            ) : null}
+                            {name}
+                        </h1>
                         <p className="flex flex-row flex-wrap gap-2 mt-1 mb-1">
-                            {urgency_level && (
-                                <span style={{ fontWeight: 'bold', color: 'var(--redText)', backgroundColor: 'var(--redBG)', padding: '0.1rem 0.6rem', borderRadius: '1rem', fontSize: '0.75rem' }}>
-                                    🔥 {urgency_level}
-                                </span>
-                            )}
-                            {secret_level && (
-                                <span style={{ fontWeight: 'bold', color: 'var(--blueText)', backgroundColor: '#DBEAFE', padding: '0.1rem 0.6rem', borderRadius: '1rem', fontSize: '0.75rem' }}>
-                                    🔒 {secret_level}
-                                </span>
-                            )}
+                            <span style={{ fontWeight: 'bold', color: urgencyStyle.color, backgroundColor: urgencyStyle.bg, padding: '0.1rem 0.6rem', borderRadius: '1rem', fontSize: '0.75rem', border: `1px solid ${urgencyStyle.color}` }}>
+                                {urgencyStyle.icon} ความเร่งด่วน: {urgencyStyle.label}
+                            </span>
+                            <span style={{ fontWeight: 'bold', color: secretStyle.color, backgroundColor: secretStyle.bg, padding: '0.1rem 0.6rem', borderRadius: '1rem', fontSize: '0.75rem', border: `1px solid ${secretStyle.color}` }}>
+                                {secretStyle.icon} ชั้นความลับ: {secretStyle.label}
+                            </span>
                         </p>
 
                         {(meeting_date || reply_due_date) && (

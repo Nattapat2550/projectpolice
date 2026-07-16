@@ -131,7 +131,19 @@ export default function UrgentTask() {
             taskPersons.includes("ทุกหน่วยงาน") ||
             taskPersons.some((p: string) => personFilter.includes(p)); 
 
-        const matchSearch = searchText === "" || task.name?.toLowerCase().includes(searchText.toLowerCase()) || task.personInCharge?.toLowerCase().includes(searchText.toLowerCase());
+        const searchTokens = searchText.toLowerCase().split(/\s+/).filter(Boolean);
+        const matchSearch = searchTokens.length === 0 || searchTokens.every(token => 
+            task.name?.toLowerCase().includes(token) || 
+            task.personInCharge?.toLowerCase().includes(token) ||
+            task.urgency_level?.toLowerCase().includes(token) ||
+            task.secret_level?.toLowerCase().includes(token) ||
+            task.id?.toString().toLowerCase().includes(token) ||
+            task.receive_no?.toString().toLowerCase().includes(token) ||
+            task.receive_year?.toString().toLowerCase().includes(token) ||
+            task.date?.toString().toLowerCase().includes(token) ||
+            task.createdAt?.toString().toLowerCase().includes(token)
+        );
+
         const matchUrgency = urgencyFilter === "" || task.urgency_level === urgencyFilter;
         const matchSecrecy = secrecyFilter === "" || task.secret_level === secrecyFilter;
 
@@ -154,8 +166,23 @@ export default function UrgentTask() {
             return isNaN(time) ? 0 : time;
         };
 
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const todayTime = today.getTime();
+
         const dateA = parseTaskDate(a.date);
         const dateB = parseTaskDate(b.date);
+        
+        const diffDaysA = dateA ? Math.ceil((dateA - todayTime) / (1000 * 60 * 60 * 24)) : 9999;
+        const diffDaysB = dateB ? Math.ceil((dateB - todayTime) / (1000 * 60 * 60 * 24)) : 9999;
+
+        const isAOverdue = diffDaysA < 0;
+        const isBOverdue = diffDaysB < 0;
+
+        if (isAOverdue !== isBOverdue) {
+            return isAOverdue ? 1 : -1;
+        }
+
         return dateA - dateB;
     });
 
@@ -172,49 +199,54 @@ export default function UrgentTask() {
                         งานติดตามเร่งด่วน
                     </h1>
 
-                    <div className={styles.ContentHeader} style={{ flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }} >
+                    <div className={styles.ContentHeader} style={{ flexDirection: 'column', alignItems: 'stretch', gap: '1rem', marginBottom: '1rem' }} >
                         
-                        <input 
-                            type="text" 
-                            placeholder="🔍 ค้นหางาน หรือ ผู้รับผิดชอบ..." 
-                            value={searchText}
-                            onChange={(e) => setSearchText(e.target.value)}
-                            style={{ padding: '0.5rem 1rem', borderRadius: '0.7rem', border: '2px solid var(--wrapper)', minWidth: '250px', outline: 'none' }}
-                        />
+                        {/* 🔍 ช่องค้นหาแบบแยกบรรทัด */}
+                        <div style={{ width: '100%' }}>
+                            <input 
+                                type="text" 
+                                placeholder="🔍 ค้นหางาน หรือ ผู้รับผิดชอบ..." 
+                                value={searchText}
+                                onChange={(e) => setSearchText(e.target.value)}
+                                style={{ padding: '0.5rem 1rem', borderRadius: '0.4rem', border: '2px solid var(--wrapper)', width: '100%', outline: 'none', backgroundColor: 'var(--button)' }}
+                            />
+                        </div>
 
-                        {/* 💡 Replaced legacy dropdown with custom multi-select selector */}
-                        <StatusMultiSelect 
-                            statusFilter={statusFilter}
-                            setStatusFilter={setStatusFilter}
-                        />
+                        {/* 🛠 กล่องตัวกรองต่างๆ เรียงกันในบรรทัดเดียวถ้าพื้นที่พอ */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', width: '100%', alignItems: 'center' }}>
+                            <StatusMultiSelect 
+                                statusFilter={statusFilter}
+                                setStatusFilter={setStatusFilter}
+                            />
 
-                        <PersonMultiSelect 
-                            uniquePersons={uniquePersons}
-                            personFilter={personFilter}
-                            setPersonFilter={setPersonFilter}
-                        />
+                            <PersonMultiSelect 
+                                uniquePersons={uniquePersons}
+                                personFilter={personFilter}
+                                setPersonFilter={setPersonFilter}
+                            />
 
-                        <select 
-                            value={urgencyFilter} 
-                            onChange={(e) => setUrgencyFilter(e.target.value)}
-                            style={{ padding: '0.5rem 1rem', borderRadius: '0.7rem', border: '2px solid var(--wrapper)', outline: 'none', backgroundColor: 'var(--button)', fontWeight: 'bold' }}
-                        >
-                            <option value="">ทั้งหมด (ความเร่งด่วน)</option>
-                            <option value="ด่วน">ด่วน</option>
-                            <option value="ด่วนมาก">ด่วนมาก</option>
-                            <option value="ด่วนที่สุด">ด่วนที่สุด</option>
-                        </select>
+                            <select 
+                                value={urgencyFilter} 
+                                onChange={(e) => setUrgencyFilter(e.target.value)}
+                                className={styles.Dropdown}
+                            >
+                                <option value="">ทั้งหมด (ความเร่งด่วน)</option>
+                                <option value="ด่วน">ด่วน</option>
+                                <option value="ด่วนมาก">ด่วนมาก</option>
+                                <option value="ด่วนที่สุด">ด่วนที่สุด</option>
+                            </select>
 
-                        <select 
-                            value={secrecyFilter} 
-                            onChange={(e) => setSecrecyFilter(e.target.value)}
-                            style={{ padding: '0.5rem 1rem', borderRadius: '0.7rem', border: '2px solid var(--wrapper)', outline: 'none', backgroundColor: 'var(--button)', fontWeight: 'bold' }}
-                        >
-                            <option value="">ทั้งหมด (ชั้นความลับ)</option>
-                            <option value="ลับ">ลับ</option>
-                            <option value="ลับมาก">ลับมาก</option>
-                            <option value="ลับที่สุด">ลับที่สุด</option>
-                        </select>
+                            <select 
+                                value={secrecyFilter} 
+                                onChange={(e) => setSecrecyFilter(e.target.value)}
+                                className={styles.Dropdown}
+                            >
+                                <option value="">ทั้งหมด (ชั้นความลับ)</option>
+                                <option value="ลับ">ลับ</option>
+                                <option value="ลับมาก">ลับมาก</option>
+                                <option value="ลับที่สุด">ลับที่สุด</option>
+                            </select>
+                        </div>
                     </div>
                     <hr className={styles.Line}></hr>
                     
