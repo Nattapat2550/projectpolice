@@ -60,6 +60,15 @@ exports.handleSheetUpdate = async (req, res) => {
         taskId
       ]);
 
+      const editorEmail = data.editorEmail || null;
+      const logDetails = { source: 'google_sheets' };
+      if (editorEmail) logDetails.editor = editorEmail;
+
+      await client.query(
+        `INSERT INTO task_logs (task_id, user_id, action, details) VALUES ($1, null, 'updated_from_sheet', $2)`,
+        [taskId, JSON.stringify(logDetails)]
+      );
+
       await client.query('COMMIT');
       console.log(`[Webhook] Successfully updated task ID ${taskId} from Google Sheets`);
       res.status(200).json({ success: true, message: 'Updated from Sheet' });

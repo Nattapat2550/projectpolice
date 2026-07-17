@@ -17,6 +17,54 @@ if (GOOGLE_REFRESH_TOKEN) {
   });
 }
 
+const formatDateTH = (dateStr) => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const yearAD = date.getFullYear();
+  const yearBE = yearAD < 2500 ? yearAD + 543 : yearAD; // Prevent double conversion
+  return `${day}/${month}/${yearBE}`;
+};
+
+const getSheetName = (yearAD) => {
+  if (!yearAD) {
+      return `${new Date().getFullYear() + 543}`;
+  }
+  const year = parseInt(yearAD, 10);
+  return year > 2500 ? `${year}` : `${year + 543}`;
+};
+
+async function ensureSheetExists(sheets, spreadsheetId, sheetName) {
+  try {
+      const response = await sheets.spreadsheets.get({ spreadsheetId });
+      const exists = response.data.sheets.some(s => s.properties.title === sheetName);
+      if (!exists) {
+          // 1. Create the sheet
+          await sheets.spreadsheets.batchUpdate({
+              spreadsheetId,
+              resource: {
+                  requests: [{ addSheet: { properties: { title: sheetName } } }]
+              }
+          });
+          console.log(`[Google Sheets] Created new sheet: ${sheetName}`);
+          
+          // 2. Add headers to the newly created sheet
+          const headers = ['ID', 'เลขทะเบียน', 'ปีทะเบียน', 'วันที่รับ', 'ที่หนังสือ', 'ลงวันที่', 'จาก', 'เรื่อง', 'ผู้ปฏิบัติ', 'วันที่', 'ข้อสั่งการ', 'วันที่ลงนาม'];
+          await sheets.spreadsheets.values.append({
+              spreadsheetId,
+              range: `${sheetName}!A1:L1`,
+              valueInputOption: 'USER_ENTERED',
+              resource: { values: [headers] }
+          });
+          console.log(`[Google Sheets] Added headers to new sheet: ${sheetName}`);
+      }
+  } catch (e) {
+      console.error("[Google Sheets] Error checking/creating sheet:", e.message);
+  }
+}
+
 // Function to append a single task to Google Sheets
 exports.appendTaskToSheet = async (taskData) => {
   if (!SPREADSHEET_ID) {
@@ -27,31 +75,27 @@ exports.appendTaskToSheet = async (taskData) => {
   try {
     const sheets = google.sheets({ version: 'v4', auth: oAuth2Client });
     
-    // Format date properly if it exists
-    const formatDate = (dateStr) => {
-        if (!dateStr) return '';
-        const date = new Date(dateStr);
-        return isNaN(date.getTime()) ? dateStr : date.toISOString().split('T')[0];
-    };
+    const sheetName = getSheetName(taskData.receive_year);
+    await ensureSheetExists(sheets, SPREADSHEET_ID, sheetName);
 
     const rowData = [
       taskData.id || '',
       taskData.receive_no || '',
       taskData.receive_year || '',
-      formatDate(taskData.created_at) || '',
+      formatDateTH(taskData.created_at) || '',
       taskData.memo_no || '',
-      formatDate(taskData.memo_date) || '',
+      formatDateTH(taskData.memo_date) || '',
       taskData.sender || '',
       taskData.title || '',
       taskData.personInCharge || '',
-      formatDate(taskData.due_date) || '',
+      formatDateTH(taskData.due_date) || '',
       taskData.task_detail || '',
-      formatDate(taskData.sign_date) || ''
+      formatDateTH(taskData.sign_date) || ''
     ];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: 'A:L', // Omit sheet name to automatically use the first sheet
+      range: `${sheetName}!A:L`,
       valueInputOption: 'USER_ENTERED',
       resource: {
         values: [rowData],
@@ -70,33 +114,38 @@ exports.appendMultipleTasksToSheet = async (tasksArray) => {
 
   try {
     const sheets = google.sheets({ version: 'v4', auth: oAuth2Client });
-    const formatDate = (dateStr) => {
-        if (!dateStr) return '';
-        const date = new Date(dateStr);
-        return isNaN(date.getTime()) ? dateStr : date.toISOString().split('T')[0];
-    };
+    const groupedTasks = {};
+    for (const task of tasksArray) {
+        const sheetName = getSheetName(task.receive_year);
+        if (!groupedTasks[sheetName]) groupedTasks[sheetName] = [];
+        groupedTasks[sheetName].push(task);
+    }
 
-    const values = tasksArray.map(taskData => [
-      taskData.id || '',
-      taskData.receive_no || '',
-      taskData.receive_year || '',
-      formatDate(taskData.created_at) || '',
-      taskData.memo_no || '',
-      formatDate(taskData.memo_date) || '',
-      taskData.sender || '',
-      taskData.title || '',
-      taskData.personInCharge || '',
-      formatDate(taskData.due_date) || '',
-      taskData.task_detail || '',
-      formatDate(taskData.sign_date) || ''
-    ]);
+    for (const [sheetName, tasks] of Object.entries(groupedTasks)) {
+        await ensureSheetExists(sheets, SPREADSHEET_ID, sheetName);
 
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: SPREADSHEET_ID,
-      range: 'A:L',
-      valueInputOption: 'USER_ENTERED',
-      resource: { values },
-    });
+        const values = tasks.map(taskData => [
+          taskData.id || '',
+          taskData.receive_no || '',
+          taskData.receive_year || '',
+          formatDateTH(taskData.created_at) || '',
+          taskData.memo_no || '',
+          formatDateTH(taskData.memo_date) || '',
+          taskData.sender || '',
+          taskData.title || '',
+          taskData.personInCharge || '',
+          formatDateTH(taskData.due_date) || '',
+          taskData.task_detail || '',
+          formatDateTH(taskData.sign_date) || ''
+        ]);
+
+        await sheets.spreadsheets.values.append({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheetName}!A:L`,
+          valueInputOption: 'USER_ENTERED',
+          resource: { values },
+        });
+    }
     console.log(`[Google Sheets] Successfully appended ${tasksArray.length} tasks`);
   } catch (error) {
     console.error("[Google Sheets] Batch Sync Error:", error.message);
@@ -110,11 +159,19 @@ exports.updateTaskInSheet = async (taskData) => {
   try {
     const sheets = google.sheets({ version: 'v4', auth: oAuth2Client });
     
+    const sheetName = getSheetName(taskData.receive_year);
+    
     // 1. Fetch all data to find the row index based on ID (Column A)
-    const getRes = await sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
-      range: 'A:A', // Only fetch column A to find the ID
-    });
+    let getRes;
+    try {
+        getRes = await sheets.spreadsheets.values.get({
+          spreadsheetId: SPREADSHEET_ID,
+          range: `${sheetName}!A:A`, 
+        });
+    } catch (err) {
+        console.warn(`[Google Sheets] Could not read sheet ${sheetName}. It might not exist.`);
+        return;
+    }
     
     const rows = getRes.data.values;
     if (!rows || rows.length === 0) return;
@@ -123,37 +180,31 @@ exports.updateTaskInSheet = async (taskData) => {
     const rowIndex = rows.findIndex(row => row[0] === taskData.id);
     
     if (rowIndex === -1) {
-      console.warn(`[Google Sheets] Task ID ${taskData.id} not found in sheet. Cannot update.`);
+      console.warn(`[Google Sheets] Task ID ${taskData.id} not found in sheet ${sheetName}. Cannot update.`);
       return;
     }
 
     const sheetRowNumber = rowIndex + 1; // Google Sheets is 1-indexed
 
-    const formatDate = (dateStr) => {
-        if (!dateStr) return '';
-        const date = new Date(dateStr);
-        return isNaN(date.getTime()) ? dateStr : date.toISOString().split('T')[0];
-    };
-
     const rowData = [
       taskData.id || '',
       taskData.receive_no || '',
       taskData.receive_year || '',
-      formatDate(taskData.created_at) || '',
+      formatDateTH(taskData.created_at) || '',
       taskData.memo_no || '',
-      formatDate(taskData.memo_date) || '',
+      formatDateTH(taskData.memo_date) || '',
       taskData.sender || '',
       taskData.title || '',
       taskData.personInCharge || '',
-      formatDate(taskData.due_date) || '',
+      formatDateTH(taskData.due_date) || '',
       taskData.task_detail || '',
-      formatDate(taskData.sign_date) || ''
+      formatDateTH(taskData.sign_date) || ''
     ];
 
     // 2. Update the specific row
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `A${sheetRowNumber}:L${sheetRowNumber}`,
+      range: `${sheetName}!A${sheetRowNumber}:L${sheetRowNumber}`,
       valueInputOption: 'USER_ENTERED',
       resource: {
         values: [rowData],

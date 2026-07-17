@@ -242,158 +242,166 @@ exports.uploadExcelTasks = async (req, res) => {
         }
 
         let processedCount = 0;
-        const CHUNK_SIZE = 1000; // สร้างชุดคำสั่ง Bulk Insert ทีละ 1,000 แถว
+        const createdTaskIds = [];
+        const updatedTaskIds = [];
         
+        const CHUNK_SIZE = 500; // Process 500 items at a time for performance
+
         for (let i = 0; i < allData.length; i += CHUNK_SIZE) {
             const chunk = allData.slice(i, i + CHUNK_SIZE);
+            
             try {
-                let valuesPlaceholders = [];
-                let flatValues = [];
-                let counter = 1;
+                // Step 1: Pre-fetch existing tasks for this chunk
+                const conditions = [];
+                const params = [];
+                let paramIdx = 1;
+                
+                chunk.forEach(item => {
+                    if (item.receive_no && item.receive_year) {
+                        conditions.push(`(receive_no = $${paramIdx++} AND receive_year = $${paramIdx++})`);
+                        params.push(item.receive_no, item.receive_year);
+                    }
+                });
+                
+                let existingMap = {};
+                if (conditions.length > 0) {
+                    const query = `SELECT id, receive_no, receive_year FROM tasks WHERE ${conditions.join(' OR ')}`;
+                    const { rows } = await pool.query(query, params);
+                    rows.forEach(r => {
+                        existingMap[`${r.receive_no}_${r.receive_year}`] = r.id;
+                    });
+                }
+
+                // Step 2: Separate into inserts and updates
+                const toInsert = [];
+                const toUpdate = [];
 
                 chunk.forEach(item => {
-                    let parsedDueDate = item.due_date_str;
-                    let parsedMemoDate = item.signed_date || item.memo_date;
-                    let parsedCreatedAt = item.received_date || new Date().toISOString();
-
-                    let safeTitle = item.title ? String(item.title) : 'ไม่มีชื่อเรื่อง';
-                    let safeMemoNo = item.memo_no ? String(item.memo_no) : null;
-                    let safeSender = item.sender ? String(item.sender) : null;
-
-                    let safeTaskDetail = item.command_text && item.command_text.length > 0 ? item.command_text.join('\n') : null;
-
-                    let rowPlaceholders = [];
-                    for(let j = 0; j < 18; j++) {
-                        rowPlaceholders.push(`$${counter++}`);
-                    }
-                    valuesPlaceholders.push(`(${rowPlaceholders.join(', ')})`);
-                    
-                    flatValues.push(
-                        safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, 
-                        safeSender, parsedDueDate, created_by, parsedCreatedAt, safeTaskDetail, item.is_urgent,
-                        item.receive_no, item.receive_year, item.signed_date, 
-                        item.meeting_date || null, item.reply_due_date || null, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ'
-                    );
-                });
-
-                // 1. Bulk Insert ลงตาราง tasks
-                const taskQuery = `
-                    INSERT INTO tasks 
-                    (title, memo_no, memo_date, main_text, notes, sender, due_date, created_by, created_at, task_detail, is_urgent, receive_no, receive_year, sign_date, meeting_date, reply_due_date, urgency_level, secret_level) 
-                    VALUES ${valuesPlaceholders.join(', ')} 
-                    RETURNING id
-                `;
-
-                const taskRes = await pool.query(taskQuery, flatValues);
-                
-                // 2. เตรียมข้อมูล Bulk Insert ลงตาราง task_assignments
-                let assignPlaceholders = [];
-                let assignFlatValues = [];
-                let assignCounter = 1;
-
-                taskRes.rows.forEach((row, index) => {
-                    const assignee = chunk[index].assignee_name;
-                    if (assignee) {
-                        assignPlaceholders.push(`($${assignCounter++}, $${assignCounter++})`);
-                        assignFlatValues.push(row.id, String(assignee));
+                    const key = `${item.receive_no}_${item.receive_year}`;
+                    if (existingMap[key]) {
+                        toUpdate.push({ ...item, id: existingMap[key] });
+                    } else {
+                        toInsert.push(item);
                     }
                 });
 
-                if (assignPlaceholders.length > 0) {
-                    const assignQuery = `
-                        INSERT INTO task_assignments (task_id, role_or_name)
-                        VALUES ${assignPlaceholders.join(', ')}
+                // Step 3: Bulk Insert for new items
+                if (toInsert.length > 0) {
+                    let valuesPlaceholders = [];
+                    let flatValues = [];
+                    let counter = 1;
+
+                    toInsert.forEach(item => {
+                        let parsedDueDate = item.due_date_str;
+                        let parsedMemoDate = item.signed_date || item.memo_date;
+                        let parsedCreatedAt = item.received_date || new Date().toISOString();
+                        let safeTitle = item.title ? String(item.title) : 'ไม่มีชื่อเรื่อง';
+                        let safeMemoNo = item.memo_no ? String(item.memo_no) : null;
+                        let safeSender = item.sender ? String(item.sender) : null;
+                        let safeTaskDetail = item.command_text && item.command_text.length > 0 ? item.command_text.join('\n') : null;
+
+                        let rowPlaceholders = [];
+                        for(let j = 0; j < 18; j++) rowPlaceholders.push(`$${counter++}`);
+                        valuesPlaceholders.push(`(${rowPlaceholders.join(', ')})`);
+                        
+                        flatValues.push(
+                            safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, 
+                            safeSender, parsedDueDate, created_by, parsedCreatedAt, safeTaskDetail, item.is_urgent,
+                            item.receive_no, item.receive_year, item.signed_date, 
+                            item.meeting_date || null, item.reply_due_date || null, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ'
+                        );
+                    });
+
+                    const taskQuery = `
+                        INSERT INTO tasks 
+                        (title, memo_no, memo_date, main_text, notes, sender, due_date, created_by, created_at, task_detail, is_urgent, receive_no, receive_year, sign_date, meeting_date, reply_due_date, urgency_level, secret_level) 
+                        VALUES ${valuesPlaceholders.join(', ')} 
                         RETURNING id
                     `;
-                    const assignRes = await pool.query(assignQuery, assignFlatValues);
-                }
 
-                // Sync to Google Sheets
-                try {
-                    const sheetsPayload = chunk.map((item, index) => ({
-                        id: taskRes.rows[index].id,
-                        receive_no: item.receive_no,
-                        receive_year: item.receive_year,
-                        created_at: item.received_date,
-                        memo_no: item.memo_no,
-                        memo_date: item.memo_date || item.signed_date,
-                        sender: item.sender,
-                        title: item.title,
-                        personInCharge: item.assignee_name,
-                        due_date: item.due_date_str,
-                        task_detail: item.command_text && item.command_text.length > 0 ? item.command_text.join('\n') : '',
-                        sign_date: item.signed_date
-                    }));
-                    appendMultipleTasksToSheet(sheetsPayload).catch(e => console.error("Sheet Batch Error:", e));
-                } catch(e) { console.error("Failed to prepare sheet batch", e); }
+                    const taskRes = await pool.query(taskQuery, flatValues);
+                    
+                    let assignPlaceholders = [];
+                    let assignFlatValues = [];
+                    let assignCounter = 1;
 
-                successCount += chunk.length;
-
-            } catch (err) {
-                // Fallback: ถ้า Bulk Insert รหัสไหนมีปัญหา ให้ทำการ Insert ทีละแถวแบบเดิม (เพื่อไม่ให้เสียแถวอื่นที่ปกติ)
-                for (let k = 0; k < chunk.length; k++) {
-                    const item = chunk[k];
-                    try {
-                        const fallbackTaskQuery = `
-                            INSERT INTO tasks 
-                            (title, memo_no, memo_date, main_text, notes, sender, due_date, created_by, created_at, task_detail, is_urgent, receive_no, receive_year) 
-                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CAST($9 AS timestamp), $10, $11, $12, $13) RETURNING id
-                        `;
-                        const parsedDueDate = item.due_date_str;
-                        const parsedMemoDate = item.memo_date;
-                        const parsedReceivedDate = item.received_date;
-                        const parsedSignedDate = item.signed_date;
-                        
-                        const safeTitle = item.title ? String(item.title) : 'ไม่มีชื่อเรื่อง';
-                        const safeMemoNo = item.memo_no ? String(item.memo_no) : null;
-                        const safeSender = item.sender ? String(item.sender) : null;
-
-                        const safeTaskDetail = item.command_text && item.command_text.length > 0 ? item.command_text.join('\n') : null;
-
-                        const fallbackValues = [
-                            safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, 
-                            safeSender, parsedDueDate, created_by, parsedReceivedDate || new Date().toISOString(), safeTaskDetail, item.is_urgent,
-                            item.receive_no, item.receive_year
-                        ];
-                        
-                        const tRes = await pool.query(fallbackTaskQuery, fallbackValues);
-                        
-                        if (item.assignee_name) {
-                            const assignQuery = `
-                                INSERT INTO task_assignments (task_id, role_or_name)
-                                VALUES ($1, $2)
-                            `;
-                            await pool.query(assignQuery, [tRes.rows[0].id, String(item.assignee_name)]);
+                    taskRes.rows.forEach((row, idx) => {
+                        createdTaskIds.push(row.id);
+                        const assignee = toInsert[idx].assignee_name;
+                        if (assignee) {
+                            assignPlaceholders.push(`($${assignCounter++}, $${assignCounter++})`);
+                            assignFlatValues.push(row.id, String(assignee));
                         }
+                    });
 
-                        try {
-                            appendTaskToSheet({
-                                id: tRes.rows[0].id,
-                                receive_no: item.receive_no,
-                                receive_year: item.receive_year,
-                                created_at: item.received_date,
-                                memo_no: item.memo_no,
-                                memo_date: item.memo_date || item.signed_date,
-                                sender: item.sender,
-                                title: item.title,
-                                personInCharge: item.assignee_name,
-                                due_date: item.due_date_str,
-                                task_detail: item.command_text && item.command_text.length > 0 ? item.command_text.join('\n') : '',
-                                sign_date: item.signed_date
-                            }).catch(e => console.error("Sheet fallback Error:", e));
-                        } catch(e) {}
-
-                        successCount++;
-                    } catch (fallbackErr) {
-                        errors.push(`ข้อผิดพลาดแถวที่ ${item.original_row}: ${fallbackErr.message}`);
+                    if (assignPlaceholders.length > 0) {
+                        await pool.query(`INSERT INTO task_assignments (task_id, role_or_name) VALUES ${assignPlaceholders.join(', ')}`, assignFlatValues);
                     }
                 }
+
+                // Step 4: Process Updates concurrently
+                if (toUpdate.length > 0) {
+                    await Promise.all(toUpdate.map(async (item) => {
+                        try {
+                            const taskId = item.id;
+                            let parsedDueDate = item.due_date_str;
+                            let parsedMemoDate = item.signed_date || item.memo_date;
+                            let safeTitle = item.title ? String(item.title) : 'ไม่มีชื่อเรื่อง';
+                            let safeMemoNo = item.memo_no ? String(item.memo_no) : null;
+                            let safeSender = item.sender ? String(item.sender) : null;
+                            let safeTaskDetail = item.command_text && item.command_text.length > 0 ? item.command_text.join('\n') : null;
+
+                            await pool.query(
+                                `UPDATE tasks SET title = COALESCE($1, title), memo_no = COALESCE($2, memo_no), memo_date = COALESCE($3, memo_date), main_text = COALESCE($4, main_text), notes = COALESCE($5, notes), sender = COALESCE($6, sender), due_date = COALESCE($7, due_date), task_detail = COALESCE($8, task_detail), is_urgent = $9, sign_date = COALESCE($10, sign_date), meeting_date = COALESCE($11, meeting_date), reply_due_date = COALESCE($12, reply_due_date), urgency_level = COALESCE($13, urgency_level), secret_level = COALESCE($14, secret_level), updated_at = NOW() WHERE id = $15`,
+                                [safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, safeSender, parsedDueDate, safeTaskDetail, item.is_urgent, item.signed_date, item.meeting_date || null, item.reply_due_date || null, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ', taskId]
+                            );
+                            updatedTaskIds.push(taskId);
+                            await pool.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
+                            if (item.assignee_name) {
+                                await pool.query(`INSERT INTO task_assignments (task_id, role_or_name) VALUES ($1, $2)`, [taskId, String(item.assignee_name)]);
+                            }
+                        } catch (err) {
+                            errors.push(`ข้อผิดพลาดแถวที่ ${item.original_row} (Update): ${err.message}`);
+                        }
+                    }));
+                }
+
+                successCount += chunk.length;
+            } catch (err) {
+                errors.push(`เกิดข้อผิดพลาดในการประมวลผล Chunk: ${err.message}`);
             }
 
             processedCount += chunk.length;
             if (jobId && global.uploadProgress[jobId]) {
                 global.uploadProgress[jobId].current = Math.min(processedCount, allData.length);
             }
+        }
+
+        // Sync to Google Sheets
+        try {
+            const getFullData = async (ids) => {
+                if (ids.length === 0) return [];
+                const query = `
+                    SELECT t.*, 
+                    (SELECT string_agg(role_or_name, ', ') FROM task_assignments ta WHERE ta.task_id = t.id) as "personInCharge"
+                    FROM tasks t WHERE t.id = ANY($1)
+                `;
+                const { rows } = await pool.query(query, [ids]);
+                return rows;
+            };
+
+            if (createdTaskIds.length > 0) {
+                const createdData = await getFullData(createdTaskIds);
+                appendMultipleTasksToSheet(createdData).catch(e => console.error(e));
+            }
+            if (updatedTaskIds.length > 0) {
+                const updatedData = await getFullData(updatedTaskIds);
+                for (const row of updatedData) {
+                    updateTaskInSheet(row).catch(e => console.error(e));
+                }
+            }
+        } catch (e) {
+            console.error("Sheet sync error in uploadExcelTasks", e.message);
         }
 
         // เมื่อทำงานเสร็จ เปลี่ยนสถานะเป็น completed
