@@ -4,12 +4,7 @@ const nextConfig: NextConfig = {
   // 💡 เปิดระบบบีบอัด Gzip/Brotli อัตโนมัติ (ช่วยลดเวลาตอบสนองเครือข่าย)
   compress: true, 
 
-  // 👉 เพิ่มส่วนนี้เพื่อแก้ปัญหา Turbopack สับสนโฟลเดอร์ (Root Directory)
-  experimental: {
-    turbopack: {
-      root: __dirname,
-    },
-  },
+
 
   // 💡 ปรับแต่งการโหลด Image ให้รองรับฟอร์แมตใหม่ๆ
   images: {
