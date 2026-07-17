@@ -73,7 +73,7 @@ function normalizeTask(raw: any, usersMap: Map<string, string>): Task {
     receive_year: Number(raw.receive_year ?? 0),
     meeting_date: raw.meeting_date ?? null,
     reply_due_date: raw.reply_due_date ?? null,
-    due_date: raw.due_date ?? null,
+    due_date: raw.due_date ?? raw.date ?? null,
     notes: raw.notes ?? null,
     document_link: raw.document_link,
     drive_web_view_link: raw.drive_web_view_link,
@@ -101,7 +101,8 @@ function getSortValue(task: Task, key: SortKey): number | string {
       return SECRET_RANK[task.secret_level] ?? 0;
     case 'memo_date':
     case 'meeting_date':
-    case 'reply_due_date': {
+    case 'reply_due_date':
+    case 'due_date': {
       const v = task[key];
       return v ? new Date(v).getTime() : 0;
     }
@@ -115,6 +116,29 @@ export default function HomePage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  const handleStatusChange = async (taskId: string, newStatus: string) => {
+      try {
+          const token = localStorage.getItem('token');
+          const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5003';
+          const response = await fetch(`${backendUrl}/api/v1/tasks/${taskId}/status`, {
+              method: 'PUT',
+              headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ status: newStatus })
+          });
+
+          if (!response.ok) {
+              throw new Error('ไม่สามารถอัปเดตสถานะได้');
+          }
+
+          setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+      } catch (error: any) {
+          Swal.fire('ข้อผิดพลาด', error.message, 'error');
+      }
+  };
 
   const handleReserveTask = async () => {
     const token = typeof window !== 'undefined' ? localStorage.getItem("token") || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1] : null;
@@ -289,6 +313,20 @@ export default function HomePage() {
       case 'ด่วนมาก':
         return 'bg-[var(--orangeBG)] text-[var(--orangeText)] border-[var(--orangeBorder)]';
       case 'ด่วน':
+        return 'bg-[var(--yellowBG)] text-[var(--yellowText)] border-[var(--yellowBorder)]';
+      case 'ปกติ':
+      default:
+        return 'bg-[var(--greenBG)] text-[var(--greenText)] border-[var(--greenBorder)]';
+    }
+  };
+
+  const getSecretBadgeStyle = (level: string) => {
+    switch (level) {
+      case 'ลับที่สุด':
+        return 'bg-[var(--redBG)] text-[var(--redText)] border-[var(--redBorder)]';
+      case 'ลับมาก':
+        return 'bg-[var(--orangeBG)] text-[var(--orangeText)] border-[var(--orangeBorder)]';
+      case 'ลับ':
         return 'bg-[var(--yellowBG)] text-[var(--yellowText)] border-[var(--yellowBorder)]';
       case 'ปกติ':
       default:
@@ -492,6 +530,7 @@ export default function HomePage() {
           <TaskTable
             tasks={paginatedTasks}
             getUrgencyBadgeStyle={getUrgencyBadgeStyle}
+            getSecretBadgeStyle={getSecretBadgeStyle}
             formatDate={formatDate}
             sortConfig={sortConfig}
             onSort={handleSort}
@@ -500,6 +539,7 @@ export default function HomePage() {
             totalItems={sortedTasks.length}
             onPageChange={setCurrentPage}
             pageSize={PAGE_SIZE}
+            onStatusChange={handleStatusChange}
           />
         )}
       </main>

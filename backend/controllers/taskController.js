@@ -117,7 +117,10 @@ exports.getAllTasks = async (req, res) => {
         t.meeting_date,
         t.reply_due_date,
         t.receive_no,
-        t.receive_year
+        t.receive_year,
+        t.memo_no,
+        t.memo_date,
+        t.sender
       FROM tasks t
       LEFT JOIN agg_assignees aa ON t.id = aa.task_id
       ORDER BY t.due_date ASC NULLS LAST
@@ -164,7 +167,10 @@ exports.getUrgentTasks = async (req, res) => {
         t.meeting_date,
         t.reply_due_date,
         t.receive_no,
-        t.receive_year
+        t.receive_year,
+        t.memo_no,
+        t.memo_date,
+        t.sender
       FROM tasks t
       LEFT JOIN agg_assignees aa ON t.id = aa.task_id
       WHERE t.is_urgent = true
@@ -368,7 +374,11 @@ exports.updateTaskDetail = async (req, res) => {
   
       const validDate = (date === "" || !date) ? null : date;
       const urgentValue = isUrgent !== undefined ? isUrgent : null; 
-  
+      
+      const mDate = (meeting_date === "" || !meeting_date) ? null : meeting_date;
+      const rDate = (reply_due_date === "" || !reply_due_date) ? null : reply_due_date;
+      const sDate = (sign_date === "" || !sign_date) ? null : sign_date;
+
       await client.query(
         `UPDATE tasks 
          SET title = COALESCE($1, title), 
@@ -380,13 +390,17 @@ exports.updateTaskDetail = async (req, res) => {
              urgency_level = COALESCE($7, urgency_level),
              secret_level = COALESCE($8, secret_level),
              created_at = COALESCE(CAST($9 AS timestamp), created_at),
-             sign_date = COALESCE($10, sign_date),
-             meeting_date = COALESCE($11, meeting_date),
-             reply_due_date = COALESCE($12, reply_due_date),
+             sign_date = CASE WHEN $15::boolean THEN $10 ELSE sign_date END,
+             meeting_date = CASE WHEN $16::boolean THEN $11 ELSE meeting_date END,
+             reply_due_date = CASE WHEN $17::boolean THEN $12 ELSE reply_due_date END,
              receive_no = COALESCE($13, receive_no),
              updated_at = NOW() 
          WHERE id = $14`,
-        [name, validDate, notes, urgentValue, main_text, task_detail, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, receive_no, id]
+        [
+          name, validDate, notes, urgentValue, main_text, task_detail, urgency_level, secret_level, 
+          receive_date, sDate, mDate, rDate, receive_no, id,
+          req.body.hasOwnProperty('sign_date'), req.body.hasOwnProperty('meeting_date'), req.body.hasOwnProperty('reply_due_date')
+        ]
       );
 
     if (Array.isArray(assignments)) {
@@ -490,14 +504,16 @@ exports.getTaskById = async (req, res) => {
         t.task_detail,
         t.notes,      
         t.memo_no, 
-        t.memo_date,
+        TO_CHAR(t.memo_date, 'YYYY-MM-DD') AS memo_date,
         t.urgency_level,
         t.secret_level,
         t.receive_no,
+        t.receive_year,
+        t.sender,
         t.created_at AS "createdAt",
-        t.sign_date,
-        t.meeting_date,
-        t.reply_due_date,
+        TO_CHAR(t.sign_date, 'YYYY-MM-DD') AS sign_date,
+        TO_CHAR(t.meeting_date, 'YYYY-MM-DD') AS meeting_date,
+        TO_CHAR(t.reply_due_date, 'YYYY-MM-DD') AS reply_due_date,
         t.created_by,
         c.name AS "creatorName",
         d.drive_web_view_link AS document_link,

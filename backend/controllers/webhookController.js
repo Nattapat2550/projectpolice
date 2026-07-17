@@ -19,6 +19,7 @@ exports.handleSheetUpdate = async (req, res) => {
   const due_date = data.due_date;
   const task_detail = data.task_detail;
   const sign_date = data.sign_date;
+  const notes = data.notes;
 
   const parseDate = (d) => {
     if (!d) return null;
@@ -43,8 +44,9 @@ exports.handleSheetUpdate = async (req, res) => {
           due_date = COALESCE($7, due_date),
           task_detail = COALESCE($8, task_detail),
           sign_date = COALESCE($9, sign_date),
+          notes = COALESCE($10, notes),
           updated_at = NOW()
-        WHERE id = $10
+        WHERE id = $11
       `;
 
       await client.query(updateQuery, [
@@ -57,6 +59,7 @@ exports.handleSheetUpdate = async (req, res) => {
         parseDate(due_date),
         task_detail,
         parseDate(sign_date),
+        notes,
         taskId
       ]);
 

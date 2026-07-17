@@ -1,4 +1,5 @@
 import React from 'react';
+import { useRouter } from 'next/navigation';
 
 export interface Assignee {
   assignment_id: string;
@@ -41,7 +42,8 @@ export type SortKey =
   | 'secret_level'
   | 'status'
   | 'meeting_date'
-  | 'reply_due_date';
+  | 'reply_due_date'
+  | 'due_date';
 
 export interface SortConfig {
   key: SortKey;
@@ -51,6 +53,7 @@ export interface SortConfig {
 interface TaskTableProps {
   tasks: Task[];
   getUrgencyBadgeStyle: (level: string) => string;
+  getSecretBadgeStyle: (level: string) => string;
   formatDate: (dateStr: string | null | undefined) => string;
   sortConfig: SortConfig;
   onSort: (key: SortKey) => void;
@@ -59,25 +62,27 @@ interface TaskTableProps {
   totalItems: number;
   onPageChange: (page: number) => void;
   pageSize: number;
+  onStatusChange?: (taskId: string, newStatus: string) => void;
 }
 
 // 🔴 เช็คว่าชื่อเรื่องมีคำว่า "กันเลขลงรับ" หรือไม่ -> ใช้ไฮไลต์ทั้งแถวเป็นสีแดง
 const isKanLekLongRub = (title?: string | null) => !!title && title.includes('กันเลขลงรับ');
 
 const COLUMNS: { key: SortKey; label: string; className?: string }[] = [
-  { key: 'receive_no', label: 'เลขรับ / ปี', className: 'w-24' },
-  { key: 'memo_no', label: 'เลขที่หนังสือ', className: 'w-32' },
-  { key: 'title', label: 'ชื่อเรื่อง / รายละเอียด', className: 'w-[420px] min-w-[420px]' },
+  { key: 'receive_no', label: 'เลขรับ / ปี', className: 'w-20' },
+  { key: 'memo_no', label: 'เลขที่หนังสือ', className: 'w-24' },
+  { key: 'title', label: 'ชื่อเรื่อง / รายละเอียด', className: 'w-auto min-w-[250px] max-w-[400px]' },
 ];
 
 const COLUMNS_AFTER_ASSIGNEE: { key: SortKey; label: string; className?: string }[] = [
-  { key: 'sender', label: 'จาก (หน่วยงาน)', className: 'w-36' },
-  { key: 'urgency_level', label: 'ความเร่งด่วน', className: 'w-24' },
-  { key: 'status', label: 'สถานะ', className: 'w-28' },
-  { key: 'secret_level', label: 'ชั้นความลับ', className: 'w-24' },
-  { key: 'memo_date', label: 'วันที่หนังสือ', className: 'w-28' },
-  { key: 'meeting_date', label: 'วันประชุม', className: 'w-28' },
-  { key: 'reply_due_date', label: 'กำหนดตอบกลับ', className: 'w-28' },
+  { key: 'sender', label: 'จาก (หน่วยงาน)', className: 'w-auto' },
+  { key: 'urgency_level', label: 'ความเร่งด่วน', className: 'w-auto' },
+  { key: 'status', label: 'สถานะ', className: 'w-auto' },
+  { key: 'secret_level', label: 'ชั้นความลับ', className: 'w-auto' },
+  { key: 'memo_date', label: 'วันที่หนังสือ', className: 'w-auto' },
+  { key: 'meeting_date', label: 'วันประชุม', className: 'w-auto' },
+  { key: 'reply_due_date', label: 'กำหนดตอบกลับ', className: 'w-auto' },
+  { key: 'due_date', label: 'วันกำหนดส่ง', className: 'w-auto' },
 ];
 
 const SortIcon: React.FC<{ active: boolean; direction: 'asc' | 'desc' }> = ({ active, direction }) => (
@@ -163,6 +168,7 @@ const PaginationBar: React.FC<{
 export const TaskTable: React.FC<TaskTableProps> = ({
   tasks,
   getUrgencyBadgeStyle,
+  getSecretBadgeStyle,
   formatDate,
   sortConfig,
   onSort,
@@ -171,7 +177,10 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   totalItems,
   onPageChange,
   pageSize,
+  onStatusChange,
 }) => {
+  const router = useRouter();
+
   if (tasks.length === 0) {
     return (
       <div className="bg-[var(--container)] border border-[var(--shadow)]/30 rounded-2xl p-12 text-center text-[var(--foreground)]/50 text-sm">
@@ -183,15 +192,15 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   return (
     <div className="space-y-4">
       {/* 🖥️ [1] Desktop & iPad แนวนอน (ตารางเต็มรูปแบบ พร้อม sort) */}
-      <div className="hidden lg:block bg-[var(--container)] border border-[var(--shadow)]/30 rounded-2xl shadow-sm overflow-hidden transition-all">
+      <div className="hidden xl:block bg-[var(--container)] border border-[var(--shadow)]/30 rounded-2xl shadow-sm overflow-hidden transition-all">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1500px]">
+          <table className="w-full text-left border-collapse xl:min-w-0">
             <thead>
               <tr className="border-b border-[var(--shadow)]/30 bg-[var(--wrapper)]/30 text-xs font-semibold uppercase tracking-wider text-[var(--foreground)]/70">
                 {COLUMNS.map((col) => {
                   const isActive = sortConfig.key === col.key;
                   return (
-                    <th key={col.key} className={`${col.className || ''} px-3 py-4 select-none`}>
+                    <th key={col.key} className={`${col.className || ''} px-1.5 py-3 select-none`}>
                       <button
                         onClick={() => onSort(col.key)}
                         className={`flex items-center gap-1 hover:text-[var(--blueText)] transition-colors ${
@@ -206,7 +215,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                   );
                 })}
                 {/* 👤 ผู้รับผิดชอบ วางไว้ใกล้ชื่อเรื่อง ให้เห็นได้เลยโดยไม่ต้อง scroll ขวา */}
-                <th className="w-40 px-3 py-4">ผู้รับผิดชอบ</th>
+                <th className="w-auto px-1.5 py-3">ผู้รับผิดชอบ</th>
                 {COLUMNS_AFTER_ASSIGNEE.map((col) => {
                   const isActive = sortConfig.key === col.key;
                   return (
@@ -224,7 +233,6 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                     </th>
                   );
                 })}
-                <th className="w-14 px-4 py-4 text-center">ลิงก์</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--shadow)]/20 text-sm">
@@ -233,20 +241,21 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                 return (
                   <tr
                     key={task.id}
-                    className={`transition-colors group ${
+                    onClick={() => router.push(`/tasks/${task.id}`)}
+                    className={`transition-colors group cursor-pointer ${
                       flagged
                         ? 'bg-[var(--redBG)]/25 hover:bg-[var(--redBG)]/35'
                         : 'hover:bg-[var(--wrapper)]/20'
                     }`}
                   >
-                    <td className={`px-3 py-4.5 font-medium whitespace-nowrap ${flagged ? 'text-[var(--redText)]' : ''}`}>
+                    <td className={`px-1.5 py-3 font-medium ${flagged ? 'text-[var(--redText)]' : ''}`}>
                       {task.receive_no ?? '-'}
                       <span className={flagged ? 'font-normal opacity-70' : 'text-[var(--foreground)]/40 font-normal'}>/{task.receive_year || '-'}</span>
                     </td>
-                    <td className={`px-3 py-4.5 whitespace-nowrap font-mono text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>
+                    <td className={`px-1.5 py-3 font-mono text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>
                       {task.memo_no || '-'}
                     </td>
-                    <td className="px-3 py-4.5 align-top">
+                    <td className="px-1.5 py-3 align-top">
                       <div
                         className={`font-medium whitespace-normal break-words leading-snug transition-colors ${
                           flagged
@@ -264,7 +273,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                     </td>
 
                     {/* 👤 ผู้รับผิดชอบ */}
-                    <td className="px-3 py-4.5">
+                    <td className="px-1.5 py-3">
                       <div className="flex flex-wrap gap-1 max-h-12 overflow-y-auto">
                         {task.assignments && task.assignments.length > 0 ? (
                           task.assignments.map((assign, idx) => (
@@ -279,42 +288,43 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                       </div>
                     </td>
 
-                    <td className={`px-3 py-4.5 truncate ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>{task.sender || '-'}</td>
-                    <td className="px-3 py-4.5 text-center">
+                    <td className={`px-1.5 py-3 truncate ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>{task.sender || '-'}</td>
+                    <td className="px-1.5 py-3 text-center">
                       <span className={`inline-block px-2.5 py-1 text-xs font-semibold rounded-full border ${getUrgencyBadgeStyle(task.urgency_level)}`}>
                         {task.urgency_level || 'ปกติ'}
                       </span>
                     </td>
-                    <td className="px-3 py-4.5 text-center">
-                      <span className={`inline-block px-2.5 py-0.5 text-xs rounded-md ${
-                        task.status === 'success' || task.status === 'completed'
-                          ? 'bg-[var(--greenBG)]/30 text-[var(--greenText)] border border-[var(--greenBorder)]/30'
-                          : 'bg-[var(--wrapper)] text-[var(--foreground)]/70 border border-[var(--shadow)]/40'
-                      }`}>
-                        {task.status === 'following' ? 'กำลังติดตาม' : task.status === 'success' ? 'เสร็จสิ้น' : task.status}
-                      </span>
+                    <td className="px-1.5 py-3 text-center">
+                      <select
+                        value={task.status === 'completed' || task.status === 'success' ? 'completed' : 'following'}
+                        onChange={(e) => onStatusChange?.(task.id, e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        className={`appearance-none cursor-pointer inline-block px-2.5 py-0.5 text-xs rounded-md text-center focus:outline-none focus:ring-1 focus:ring-[var(--blueText)] ${
+                          task.status === 'completed' || task.status === 'success'
+                            ? 'bg-[var(--greenBG)]/30 text-[var(--greenText)] border border-[var(--greenBorder)]/30'
+                            : 'bg-[var(--wrapper)] text-[var(--foreground)]/70 border border-[var(--shadow)]/40'
+                        }`}
+                      >
+                        <option value="following">กำลังติดตาม</option>
+                        <option value="completed">เสร็จสิ้น</option>
+                      </select>
                     </td>
-                    <td className="px-3 py-4.5 text-center">
-                      <span className="inline-block px-2 py-1 text-xs rounded-full border border-[var(--shadow)]/40 text-[var(--foreground)]/80">
+                    <td className="px-1.5 py-3 text-center">
+                      <span className={`inline-block px-2 py-1 text-xs rounded-full border ${getSecretBadgeStyle(task.secret_level)}`}>
                         {task.secret_level || 'ปกติ'}
                       </span>
                     </td>
-                    <td className={`px-3 py-4.5 whitespace-nowrap text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
+                    <td className={`px-1.5 py-3 text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
                       {formatDate(task.memo_date)}
                     </td>
-                    <td className={`px-3 py-4.5 whitespace-nowrap text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
+                    <td className={`px-1.5 py-3 text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
                       {task.meeting_date ? formatDate(task.meeting_date) : '-'}
                     </td>
-                    <td className={`px-3 py-4.5 whitespace-nowrap text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
+                    <td className={`px-1.5 py-3 text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
                       {task.reply_due_date ? formatDate(task.reply_due_date) : '-'}
                     </td>
-
-                    <td className="px-4 py-4.5 text-center">
-                      {task.document_link || task.drive_web_view_link ? (
-                        <a href={task.document_link || task.drive_web_view_link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center w-8 h-8 rounded-full text-[var(--blueText)] hover:bg-[var(--wrapper)] transition-colors">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                        </a>
-                      ) : ( <span className="text-[var(--foreground)]/20">-</span> )}
+                    <td className={`px-1.5 py-3 text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
+                      {task.due_date ? formatDate(task.due_date) : '-'}
                     </td>
                   </tr>
                 );
@@ -333,13 +343,14 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       </div>
 
       {/* 📱 [2] Mobile & iPad แนวตั้ง (UI แบบ Apple Card List) */}
-      <div className="block lg:hidden space-y-3">
+      <div className="block xl:hidden space-y-3">
         {tasks.map((task) => {
           const flagged = isKanLekLongRub(task.title);
           return (
             <div
               key={task.id}
-              className={`rounded-2xl p-4 shadow-sm space-y-3.5 transition-all border ${
+              onClick={() => router.push(`/tasks/${task.id}`)}
+              className={`rounded-2xl p-4 shadow-sm space-y-3.5 transition-all border cursor-pointer ${
                 flagged
                   ? 'bg-[var(--redBG)]/20 border-[var(--shadow)]/30'
                   : 'bg-[var(--container)] border-[var(--shadow)]/30 hover:border-[var(--blueText)]/50'
@@ -367,9 +378,15 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                 <div className={`text-xs flex flex-col space-y-0.5 pt-1 ${flagged ? 'text-[var(--redText)]/80' : 'text-[var(--foreground)]/60'}`}>
                   <p><span className="font-medium">จาก:</span> {task.sender || '-'}</p>
                   <p><span className="font-medium">วันที่หนังสือ:</span> {formatDate(task.memo_date)}</p>
-                  <p><span className="font-medium">ชั้นความลับ:</span> {task.secret_level || 'ปกติ'}</p>
+                  <p>
+                    <span className="font-medium">ชั้นความลับ:</span>{' '}
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium border ${getSecretBadgeStyle(task.secret_level)}`}>
+                      {task.secret_level || 'ปกติ'}
+                    </span>
+                  </p>
                   {task.meeting_date && <p><span className="font-medium">วันประชุม:</span> {formatDate(task.meeting_date)}</p>}
                   {task.reply_due_date && <p><span className="font-medium">กำหนดตอบกลับ:</span> {formatDate(task.reply_due_date)}</p>}
+                  {task.due_date && <p><span className="font-medium">วันกำหนดส่ง:</span> {formatDate(task.due_date)}</p>}
                 </div>
               </div>
 
@@ -387,19 +404,20 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                 </div>
 
                 <div className="flex items-center space-x-1.5 shrink-0">
-                  <span className={`px-2 py-0.5 text-[11px] rounded ${
-                    task.status === 'success' || task.status === 'completed'
-                      ? 'bg-[var(--greenBG)]/20 text-[var(--greenText)]'
-                      : 'bg-[var(--wrapper)] text-[var(--foreground)]/70'
-                  }`}>
-                    {task.status === 'following' ? 'ติดตามอยู่' : task.status === 'success' ? 'เสร็จสิ้น' : task.status}
-                  </span>
+                  <select
+                    value={task.status === 'completed' || task.status === 'success' ? 'completed' : 'following'}
+                    onChange={(e) => onStatusChange?.(task.id, e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    className={`appearance-none cursor-pointer px-2 py-0.5 text-[11px] rounded focus:outline-none focus:ring-1 focus:ring-[var(--blueText)] text-center ${
+                      task.status === 'completed' || task.status === 'success'
+                        ? 'bg-[var(--greenBG)]/20 text-[var(--greenText)]'
+                        : 'bg-[var(--wrapper)] text-[var(--foreground)]/70'
+                    }`}
+                  >
+                    <option value="following">ติดตามอยู่</option>
+                    <option value="completed">เสร็จสิ้น</option>
+                  </select>
 
-                  {(task.document_link || task.drive_web_view_link) && (
-                    <a href={task.document_link || task.drive_web_view_link} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-full bg-[var(--wrapper)] text-[var(--blueText)] active:bg-[var(--shadow)]">
-                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-                    </a>
-                  )}
                 </div>
               </div>
             </div>
