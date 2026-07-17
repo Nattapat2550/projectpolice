@@ -481,9 +481,9 @@ export default function HomePage() {
                     justifyContent: 'center', 
                     minHeight: '48px', 
                     padding: '0 24px',
-                    backgroundColor: 'var(--blueText)',
-                    color: 'white',
-                    border: '1px solid var(--blueText)',
+                    backgroundColor: 'var(--greenBG)',
+                    color: 'var(--greenText)',
+                    border: '1px solid var(--greenText)',
                     borderRadius: '0.4rem',
                     textDecoration: 'none',
                     fontWeight: 'bold'
