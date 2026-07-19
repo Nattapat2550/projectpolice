@@ -17,6 +17,7 @@ export default function FileUploader({ setExtractedData, progress, setProgress }
     const [isUploading, setIsUploading] = useState(false);
     const [elapsedTime, setElapsedTime] = useState(0);
     const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+    const [ocrEngine, setOcrEngine] = useState<"gemini" | "ocr">("gemini");
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Timer effect
@@ -68,6 +69,7 @@ export default function FileUploader({ setExtractedData, progress, setProgress }
         files.forEach((file) => {
             formData.append("files", file); 
         });
+        formData.append("engine", ocrEngine);
 
         try {
             const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
@@ -183,6 +185,31 @@ export default function FileUploader({ setExtractedData, progress, setProgress }
             )}
 
             <div className="flex flex-col gap-4">
+                <div className="flex flex-row gap-2 justify-center mt-2">
+                    <label className="flex items-center gap-2 cursor-pointer text-sm">
+                        <input 
+                            type="radio" 
+                            name="ocrEngine" 
+                            value="gemini" 
+                            checked={ocrEngine === "gemini"} 
+                            onChange={() => setOcrEngine("gemini")} 
+                            className="cursor-pointer w-4 h-4 text-blue-600"
+                        />
+                        ใช้ Gemini (Google Cloud) - แนะนำ
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer text-sm ml-4">
+                        <input 
+                            type="radio" 
+                            name="ocrEngine" 
+                            value="ocr" 
+                            checked={ocrEngine === "ocr"} 
+                            onChange={() => setOcrEngine("ocr")} 
+                            className="cursor-pointer w-4 h-4 text-blue-600"
+                        />
+                        ใช้ Local OCR (EasyOCR)
+                    </label>
+                </div>
+
                 <button 
                     className={styles.Button} 
                     onClick={handleUpload}

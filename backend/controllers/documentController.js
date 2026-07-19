@@ -18,7 +18,8 @@ exports.processDocuments = async (req, res) => {
       // รวมกับ Default Directory ของโปรเจค (แก้ path ไปที่โฟลเดอร์เก็บไฟล์ของคุณ เช่น uploads)
       safePath = path.join(process.cwd(), 'uploads', safeFileName);
 
-      const geminiResult = await extractDataWithGemini(safePath, file.mimetype);
+      const engine = req.body.engine || 'gemini'; // Default to gemini if not provided
+      const geminiResult = await extractDataWithGemini(safePath, file.mimetype, engine);
       const { text, extractedData } = geminiResult;
 
       let dataWithDefaultUser = extractedData || {};
