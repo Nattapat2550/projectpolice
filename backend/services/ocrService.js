@@ -126,10 +126,16 @@ function parseThaiDateToCE(dateStr) {
     let yearPart = tokens[2].replace(/\./g, '');
     
     // แปลงอักษรลายมือเขียนเพี้ยนในตำแหน่งวัน
+    dayPart = dayPart.replace(/^(?:วันที่\.?|วัน\.?|ที่\.?|ว\.ด\.ป\.|ันที่\.?|นที่\.?|ที่)/i, '');
     dayPart = dayPart.replace(/\./g, '');
     dayPart = dayPart.replace(/ขา/g, '17');
     dayPart = dayPart.replace(/ขๅ/g, '17');
-    dayPart = dayPart.replace(/า/g, '29');
+    if (dayPart === 'า') {
+      dayPart = '29';
+    } else {
+      dayPart = dayPart.replace(/([๒2])า/g, '$19');
+      dayPart = dayPart.replace(/า/g, '30');
+    }
     dayPart = dayPart.replace(/ข/g, '2');
     dayPart = dayPart.replace(/ไ๗/g, '30');
     dayPart = dayPart.replace(/ใ!/g, '20');
@@ -387,10 +393,9 @@ exports.parseOcrTextToMemos = function(text) {
     let val = recNoMatch[1].trim();
     val = val.replace(/ผนุตร/g, '804');
     val = val.replace(/ผนตร/g, '804');
-    val = val.replace(/ย/g, '2'); // ลายมือเลข 2 เหมือน ย
+    val = val.replace(/ย/g, '5'); // ลายมือเลข 5 เหมือน ย
     val = val.replace(/บ/g, '5'); // ลายมือเลข 5 เหมือน บ
     val = val.replace(/ซ/g, '6'); // ลายมือเลข 6 เหมือน ซ
-    val = val.replace(/ร/g, '');  // หั่น ร ทิ้งกรณีสะกดติดขยะ ยบซร -> 256
     val = val.replace(/7s/gi, '759');
     val = val.replace(/s/gi, '5');
     val = val.replace(/ท/g, '2');
@@ -408,48 +413,64 @@ exports.parseOcrTextToMemos = function(text) {
   let receive_date = null;
   const cleanText = text.replace(/[\`"'\-_\/\\~]/g, '');
   const monthRegexPart = '(?:มี\\.?ค\\.?|มี่\\.?ค\\.?|ม\\.?ค\\.?|ก\\.?พ\\.?|เม\\.?ย\\.?|ม\\.?ย\\.?|มย\\.?|พ\\.?ค\\.?|มิ\\.?ย\\.?|ก\\.?ค\\.?|ส\\.?ค\\.?|ก\\.?ย\\.?|ต\\.?ค\\.?|พ\\.?ย\\.?|ธ\\.?ค\\.?|มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม|&)';
-  const recDateRegex = new RegExp(`(?:เลขรับ|เลชรับ|เลซรับ|เลขรบ|เลขรป|เลชรบ|เลซรบ|เลขรับ|เลข รับ)[\\s\\S]{0,150}?([^\\s]{1,4})\\s*${monthRegexPart}\\s*([^\\s]{2,5})`, 'i');
+  const recDateRegex = new RegExp(`(?:เลขรับ|เลชรับ|เลซรับ|เลขรบ|เลขรป|เลชรบ|เลซรบ|เลขรับ|เลข รับ)[\\s\\S]{0,150}?([^\\s]{1,8})\\s*${monthRegexPart}\\s*([^\\s]{2,8})`, 'i');
   
   const recDateMatch = cleanText.match(recDateRegex);
   if (recDateMatch) {
     const startIdx = recDateMatch.index;
     const matchedFullText = cleanText.substring(startIdx, startIdx + recDateMatch[0].length);
-    const dateTokensMatch = matchedFullText.match(new RegExp(`([^\\s]{1,4})\\s*(${monthRegexPart})\\s*([^\\s]{2,5})`, 'i'));
+    const dateTokensMatch = matchedFullText.match(new RegExp(`([^\\s]{1,8})\\s*(${monthRegexPart})\\s*([^\\s]{2,8})`, 'i'));
     if (dateTokensMatch) {
       receive_date = parseThaiDateToCE(dateTokensMatch[1] + " " + dateTokensMatch[2] + " " + dateTokensMatch[3]);
     }
   }
   
   // 8. วันที่ลงนาม (กรองไม่เอาวันนัดหมายหรือวันส่งรายงานรอบข้าง)
+  // 8. วันที่ลงนาม
   let sign_date = null;
-  const dateRegex = /([^\s]{1,5})\s*([ก-์.&]{2,12})\s*([^\s]{2,5})/g;
-  
-  const validDates = [];
-  let matchDate;
-  while ((matchDate = dateRegex.exec(cleanText)) !== null) {
-    const ceDate = parseThaiDateToCE(matchDate[0]);
-    if (ceDate) {
-      // ตรวจสอบบริบทรอบข้างกว้างขึ้น (150 ตัวอักษร) ป้องกันการสับสนกับวันจัดประชุมหรือวันครบกำหนดส่ง
-      const startIdx = Math.max(0, matchDate.index - 150);
-      const endIdx = Math.min(cleanText.length, matchDate.index + matchDate[0].length + 150);
-      const context = cleanText.substring(startIdx, endIdx);
-      
-      if (context.includes("ประชุม") || context.includes("ส่ง") || context.includes("ภายในวัน") || context.includes("กำหนด") || context.includes("ก่อนวันที่") || context.includes("เสนอรายชื่อ") || context.includes("เข้าร่วม")) {
-        continue;
-      }
-      
-      const corrected = correctChronologicalDate(ceDate, doc_date);
-      if (doc_date && new Date(corrected) >= new Date(doc_date)) {
-        validDates.push(corrected);
-      } else if (!doc_date) {
-        validDates.push(corrected);
-      }
-    }
+  const pageBreakSignIdx = cleanText.indexOf('Page Break');
+  const signatureBlock = pageBreakSignIdx !== -1 
+    ? cleanText.substring(pageBreakSignIdx)
+    : cleanText.substring(Math.floor(cleanText.length * 0.5));
+    
+  let parenNameIdx = -1;
+  const parenNameRegex = /\(\s*[ก-์\s]+\s*\)/g;
+  let pMatch;
+  while ((pMatch = parenNameRegex.exec(signatureBlock)) !== null) {
+    parenNameIdx = pMatch.index;
   }
   
-  if (validDates.length > 0) {
-    validDates.sort((a, b) => new Date(a) - new Date(b));
-    sign_date = validDates[validDates.length - 1];
+  let rankIdx = -1;
+  const rankRegex = /(?:พล\.ต\.อ\.|พล\.ต\.ท\.|พล\.ต\.ต\.|พ\.ต\.อ\.|พ\.ต\.ท\.|พ\.ต\.ต\.|ร\.ต\.อ\.|ร\.ต\.ท\.|น\.ส\.|นาย|นาง|รอง\s*ผบ|รอง\s*ผอ|ผกก)/g;
+  let rMatch;
+  while ((rMatch = rankRegex.exec(signatureBlock)) !== null) {
+    rankIdx = rMatch.index;
+  }
+  
+  const signAnchor = Math.max(parenNameIdx, rankIdx);
+  
+  if (signAnchor !== -1) {
+    const searchStart = Math.max(0, signAnchor - 300);
+    const searchEnd = Math.min(signatureBlock.length, signAnchor + 400);
+    const signArea = signatureBlock.substring(searchStart, searchEnd);
+    
+    const signDateRegex = new RegExp(`([^\\s]{1,8})\\s*(${monthRegexPart})\\s*([^\\s]{2,8})`, 'g');
+    let signMatch;
+    let lastValidSignDate = null;
+    
+    while ((signMatch = signDateRegex.exec(signArea)) !== null) {
+      const ceDate = parseThaiDateToCE(signMatch[0]);
+      if (ceDate) {
+        const year = parseInt(ceDate.split('-')[0], 10);
+        if (year >= 2024 && year <= 2030) {
+          lastValidSignDate = ceDate;
+        }
+      }
+    }
+    
+    if (lastValidSignDate) {
+      sign_date = lastValidSignDate;
+    }
   }
   
   // 9. วันที่ประชุม ( anchored to "ประชุม" )
