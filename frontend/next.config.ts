@@ -31,7 +31,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Content-Security-Policy",
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://projectpolice-1.onrender.com https://projectpolice.onrender.com http://localhost:5003;"
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://projectpolice-1.onrender.com https://projectpolice.onrender.com http://localhost:5003 https://projectpolice-iota.vercel.app https://projectpolice-um54.vercel.app ;"
           },
         ],
       },
