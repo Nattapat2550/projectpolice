@@ -125,51 +125,14 @@ function parseThaiDateToCE(dateStr) {
     let monthPart = tokens[1];
     let yearPart = tokens[2].replace(/\./g, '');
     
-    // แปลงอักษรลายมือเขียนเพี้ยนในตำแหน่งวัน
+    // แปลงอักษรในตำแหน่งวัน
     dayPart = dayPart.replace(/^(?:วันที่\.?|วัน\.?|ที่\.?|ว\.ด\.ป\.|ันที่\.?|นที่\.?|ที่)/i, '');
     dayPart = dayPart.replace(/\./g, '');
-    dayPart = dayPart.replace(/ขา/g, '17');
-    dayPart = dayPart.replace(/ขๅ/g, '17');
-    if (dayPart === 'า') {
-      dayPart = '29';
-    } else {
-      dayPart = dayPart.replace(/([๒2])า/g, '$19');
-      dayPart = dayPart.replace(/า/g, '30');
-    }
-    dayPart = dayPart.replace(/ข/g, '2');
-    dayPart = dayPart.replace(/ไ๗/g, '30');
-    dayPart = dayPart.replace(/ใ!/g, '20');
-    dayPart = dayPart.replace(/โ/g, '2');
-    dayPart = dayPart.replace(/ม/g, '3');
-    dayPart = dayPart.replace(/ใ/g, '2');
-    dayPart = dayPart.replace(/ร/g, '5');
-    dayPart = dayPart.replace(/=/g, '4');
-    dayPart = dayPart.replace(/d/g, '2');
-    dayPart = dayPart.replace(/ไ/g, '2');
-    dayPart = dayPart.replace(/[ดnl|]/g, '1');
-    dayPart = dayPart.replace(/[อoO]/g, '0');
-    dayPart = dayPart.replace(/ท/g, '2');
-    dayPart = dayPart.replace(/!/g, '7');
-    dayPart = dayPart.replace(/z/g, '2');
-    dayPart = dayPart.replace(/g/g, '9');
-    dayPart = convertThaiDigits(dayPart).replace(/\D/g, '');
+    dayPart = convertThaiDigits(dayPart).replace(/[ดnl|]/g, '1').replace(/[อoO]/g, '0').replace(/\D/g, '');
     
-    // แปลงอักษรลายมือเขียนเพี้ยนในตำแหน่งปี
-    yearPart = yearPart.replace(/โ/g, '2');
-    yearPart = yearPart.replace(/ม/g, '3');
-    yearPart = yearPart.replace(/ใ/g, '2');
-    yearPart = yearPart.replace(/ร/g, '5');
-    yearPart = yearPart.replace(/=/g, '4');
-    yearPart = yearPart.replace(/d/g, '2');
-    yearPart = yearPart.replace(/ไ/g, '2');
-    yearPart = yearPart.replace(/[ดnl|]/g, '1');
-    yearPart = yearPart.replace(/[อoO]/g, '0');
-    yearPart = yearPart.replace(/ท/g, '2');
-    yearPart = yearPart.replace(/z/gi, '2');
-    yearPart = yearPart.replace(/g/g, '9');
-    yearPart = yearPart.replace(/O/gi, '0');
-    yearPart = yearPart.replace(/ต/g, '56');
-    yearPart = convertThaiDigits(yearPart).replace(/\D/g, '');
+    // แปลงอักษรในตำแหน่งปี
+    yearPart = yearPart.replace(/\./g, '');
+    yearPart = convertThaiDigits(yearPart).replace(/[ดnl|]/g, '1').replace(/[อoO]/g, '0').replace(/\D/g, '');
     
     const monthMap = {
       'มกราคม': 1, 'ม.ค.': 1, 'ม.ค': 1,
@@ -265,10 +228,12 @@ function extractDateByKeyword(text, keywords) {
 
 // ฟังก์ชันดึงเลขที่เอกสารแบบยืดหยุ่นและรองรับสแลชเพี้ยน
 function extractDocId(text) {
-  const normText = convertThaiDigits(text);
+  // ดึงเฉพาะ 1,500 ตัวอักษรแรกเพื่อป้องกันไม่ให้ไปดึงเลข Zoom ID หรือเอกสารแนบท้าย
+  const headerScope = text.substring(0, 1500);
+  const normText = convertThaiDigits(headerScope);
   
-  // รองรับการอ่านสแลชเพี้ยนเป็น l, |, \, 1, I (ไม่แยกที่จุด เพื่อให้ได้เลขส่วนย่อยทศนิยมครบ)
-  const slashRegex = /(?:ที่|[ททืีิุึั]?[ีิุึั]?)\s*\b([0-9ดอoOn|l.]{2,10}\s*[\/|\\lI1]\s*[0-9ดอoOn|l=A-Za-z.\-]{1,10})\b/g;
+  // รองรับคำว่า ที่ / เลขที่ / ที / ที่ ตช / ที่ กษ
+  const slashRegex = /(?:ที่|เลขที่|[ททืีิุึั]?[ีิุึั]?)\s*\b([0-9ดอoOn|l.]{2,10}\s*[\/|\\lI1=]\s*[0-9ดอoOn|l=A-Za-z.\-]{1,10})\b/g;
   let match;
   const matches = [];
   
@@ -279,15 +244,17 @@ function extractDocId(text) {
     const sameLine = normText.substring(lineStart, match.index);
     const contextAfter = normText.substring(matchEndIdx, matchEndIdx + 25);
     
-    if (sameLine.includes('โทร')) continue;
+    // ข้ามบรรทัดโทรศัพท์ / Zoom meeting ID / Passcode
+    if (sameLine.includes('โทร') || sameLine.includes('zoom') || sameLine.includes('meeting') || sameLine.includes('passcode') || sameLine.includes('id:')) continue;
     if (!contextAfter.includes("ลง") && !contextAfter.includes("ลอ")) {
       matches.push(matchedId);
     }
   }
   
   if (matches.length > 0) {
-    const mainId = matches.find(id => id.startsWith("00")) || matches[0];
-    const parts = mainId.split(/[\/|\\lI1]/);
+    // ให้ความสำคัญกับเลขที่มี 00 หรือ ตช / กษ ก่อน
+    const mainId = matches.find(id => id.startsWith("00") || id.startsWith("0")) || matches[0];
+    const parts = mainId.split(/[\/|\\lI1=]/);
     if (parts.length >= 2) {
       let p1 = parts[0].replace(/[^0-9ดอoOn|l.]/g, '');
       let p2 = parts[1].replace(/[^0-9ดอoOn|l=A-Za-z\-]/g, '');
@@ -386,43 +353,24 @@ exports.parseOcrTextToMemos = function(text) {
     learn_to = val;
   }
   
-  // 7. ข้อมูลตรายางประทับรับ (เลขรับ)
+  // 7. ข้อมูลตรายางประทับรับ (เลขรับ & วันที่รับ)
   let receive_no = null;
-  const recNoMatch = text.match(/(?:เลขรับ|เลชรับ|เลซรับ|เลขรบ|เลขรป|เลชรบ|เลซรบ|เลขรับ|เลข รับ)\s*[:.\-_]*\s*([๐-๙0-9A-Za-zก-์\s]{1,15})/i);
+  const recNoMatch = text.match(/(?:เลขรับ|เลชรับ|เลซรับ|เลขอรับ|รับที่|เลขที่รับ|เลขรบ|เลขรป|รับ\s*[:.\-_])[\s\S]{0,30}?([๐-๙\d]{1,8})/i) ||
+                     text.match(/(?:รับ)[^\d\n]*?([๐-๙\d]{2,6})/i);
   if (recNoMatch) {
-    let val = recNoMatch[1].trim();
-    val = val.replace(/ผนุตร/g, '804');
-    val = val.replace(/ผนตร/g, '804');
-    val = val.replace(/ย/g, '5'); // ลายมือเลข 5 เหมือน ย
-    val = val.replace(/บ/g, '5'); // ลายมือเลข 5 เหมือน บ
-    val = val.replace(/ซ/g, '6'); // ลายมือเลข 6 เหมือน ซ
-    val = val.replace(/7s/gi, '759');
-    val = val.replace(/s/gi, '5');
-    val = val.replace(/ท/g, '2');
-    val = val.replace(/ไ/g, '2');
-    val = val.replace(/โ/g, '2');
-    val = val.replace(/ใ/g, '2');
-    val = val.replace(/ม/g, '3');
-    val = val.replace(/[ดnl|]/g, '1');
-    val = val.replace(/[อoO]/g, '0');
-    val = val.replace(/\D/g, '');
-    if (val) receive_no = val;
+    const rawDigits = convertThaiDigits(recNoMatch[1].trim()).replace(/\D/g, '');
+    if (rawDigits) receive_no = rawDigits;
   }
   
   // วันที่รับ (receive_date)
   let receive_date = null;
-  const cleanText = text.replace(/[\`"'\-_\/\\~]/g, '');
-  const monthRegexPart = '(?:มี\\.?ค\\.?|มี่\\.?ค\\.?|ม\\.?ค\\.?|ก\\.?พ\\.?|เม\\.?ย\\.?|ม\\.?ย\\.?|มย\\.?|พ\\.?ค\\.?|มิ\\.?ย\\.?|ก\\.?ค\\.?|ส\\.?ค\\.?|ก\\.?ย\\.?|ต\\.?ค\\.?|พ\\.?ย\\.?|ธ\\.?ค\\.?|มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม|&)';
-  const recDateRegex = new RegExp(`(?:เลขรับ|เลชรับ|เลซรับ|เลขรบ|เลขรป|เลชรบ|เลซรบ|เลขรับ|เลข รับ)[\\s\\S]{0,150}?([^\\s]{1,8})\\s*${monthRegexPart}\\s*([^\\s]{2,8})`, 'i');
+  const cleanText = text.replace(/[\`"'\-_\/\\~]/g, ' ');
+  const monthRegexPart = '(?:มี\\.?ค\\.?|มี่\\.?ค\\.?|ม\\.?ค\\.?|ก\\.?พ\\.?|เม\\.?ย\\.?|ม\\.?ย\\.?|มย\\.?|พ\\.?ค\\.?|มิ\\.?ย\\.?|ก\\.?ค\\.?|ส\\.?ค\\.?|ก\\.?ย\\.?|ต\\.?ค\\.?|พ\\.?ย\\.?|ธ\\.?ค\\.?|มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม)';
   
+  const recDateRegex = new RegExp(`(?:เลขรับ|เลชรับ|เลซรับ|เลขอรับ|รับที่|รับ|ส่ง\\.รอง)[\\s\\S]{0,120}?([๐-๙\\d]{1,2})\\s*(${monthRegexPart})\\s*([๐-๙\\d]{2,4})`, 'i');
   const recDateMatch = cleanText.match(recDateRegex);
   if (recDateMatch) {
-    const startIdx = recDateMatch.index;
-    const matchedFullText = cleanText.substring(startIdx, startIdx + recDateMatch[0].length);
-    const dateTokensMatch = matchedFullText.match(new RegExp(`([^\\s]{1,8})\\s*(${monthRegexPart})\\s*([^\\s]{2,8})`, 'i'));
-    if (dateTokensMatch) {
-      receive_date = parseThaiDateToCE(dateTokensMatch[1] + " " + dateTokensMatch[2] + " " + dateTokensMatch[3]);
-    }
+    receive_date = parseThaiDateToCE(`${recDateMatch[1]} ${recDateMatch[2]} ${recDateMatch[3]}`);
   }
   
   // 8. วันที่ลงนาม (กรองไม่เอาวันนัดหมายหรือวันส่งรายงานรอบข้าง)
@@ -608,23 +556,42 @@ exports.parseOcrTextToMemos = function(text) {
   };
 }
 
-// ฟังก์ชันรัน EasyOCR/Python Script
+// ฟังก์ชันรัน EasyOCR/Python Script พร้อมแสดงสถานะแบบ Real-time
 function runRapidOCR(filePath) {
   return new Promise((resolve, reject) => {
+    const { spawn } = require('child_process');
     const pythonScript = path.join(__dirname, '..', 'utils', 'ocr_processor.py');
-    console.log(`[OCR Engine] กำลังประมวลผลไฟล์: ${filePath}`);
+    console.log(`[OCR Engine] เริ่มประมวลผลไฟล์: ${filePath}`);
     
-    execFile('python', [pythonScript, filePath], { maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (error) {
-        console.error("[OCR Engine] เกิดข้อผิดพลาด:", stderr || error.message);
-        return reject(new Error(`OCR failed: ${stderr || error.message}`));
+    const child = spawn('python', [pythonScript, filePath], { maxBuffer: 10 * 1024 * 1024 });
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    child.stderr.on('data', (data) => {
+      const msg = data.toString().trim();
+      stderr += msg + '\n';
+      // Real-time progress logging to console
+      if (msg.includes('[OCR')) {
+        console.log(`${msg}`);
+      }
+    });
+
+    child.on('close', (code) => {
+      if (code !== 0) {
+        console.error("[OCR Engine] เกิดข้อผิดพลาด:", stderr);
+        return reject(new Error(`OCR failed: ${stderr}`));
       }
       try {
         const response = JSON.parse(stdout);
         if (!response.success) {
           return reject(new Error(response.error || "Unknown OCR error"));
         }
-        console.log("[OCR Engine] ดึงข้อความเรียบร้อยแล้ว");
+        console.log("[OCR Engine] สแกนข้อความและจัดกลุ่มบรรทัดเรียบร้อยแล้ว!");
         resolve(response.text);
       } catch (err) {
         console.error("[OCR Engine] ผลลัพธ์จาก Python ไม่เป็น JSON:", stdout);
