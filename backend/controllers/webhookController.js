@@ -1,4 +1,6 @@
 const pool = require('../config/db');
+const { cleanToOnlyName, formatStandardFilename } = require('../utils/filenameParser');
+const { renameFileOnDrive } = require('../services/googleDriveService');
 
 exports.handleSheetUpdate = async (req, res) => {
   console.log("\n================ WEBHOOK RECEIVED ================");
@@ -62,7 +64,56 @@ exports.handleSheetUpdate = async (req, res) => {
         notes,
         taskId
       ]);
-
+            // 👥 หากมีการส่งข้อมูลผู้รับผิดชอบ (personInCharge / Column I) มาจาก Google Sheets
+      const personInCharge = data.personInCharge !== undefined ? data.personInCharge 
+        : (data.person_in_charge !== undefined ? data.person_in_charge 
+        : (data.responsible_person !== undefined ? data.responsible_person 
+        : (data.assignee !== undefined ? data.assignee : undefined)));
+      if (personInCharge !== undefined && personInCharge !== null) {
+        await client.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
+        const rawAssignees = String(personInCharge)
+          .split(/[,;\n]/)
+          .map(s => s.trim())
+          .filter(Boolean);
+        for (const rawAssignee of rawAssignees) {
+          const cleanName = cleanToOnlyName(rawAssignee);
+          if (!cleanName) continue;
+          // ค้นหา user_id ในระบบที่มีชื่อหรือตำแหน่งตรงกัน
+          const userRes = await client.query(
+            `SELECT id FROM users 
+             WHERE LOWER(TRIM(name)) = LOWER($1) 
+                OR LOWER(TRIM(role)) = LOWER($1)
+                OR LOWER(TRIM(name)) LIKE LOWER($2)
+             LIMIT 1`,
+            [cleanName, `%${cleanName}%`]
+          );
+          const matchedUserId = userRes.rows.length > 0 ? userRes.rows[0].id : null;
+          await client.query(
+            `INSERT INTO task_assignments (task_id, user_id, role_or_name)
+             VALUES ($1, $2, $3)`,
+            [taskId, matchedUserId, cleanName]
+          );
+        }
+      }
+      // 🏷️ อัปเดตเปลี่ยนชื่อไฟล์บน Google Drive หากแก้ไขข้อมูลที่ส่งผลต่อชื่อไฟล์
+      const docRes = await client.query(
+        `SELECT t.receive_no, t.sender, d.id as doc_id, d.filename, d.drive_file_id,
+         (SELECT string_agg(role_or_name, ', ') FROM task_assignments ta WHERE ta.task_id = t.id) as "personInCharge"
+         FROM tasks t
+         LEFT JOIN documents d ON t.document_id = d.id
+         WHERE t.id = $1`,
+        [taskId]
+      );
+      if (docRes.rows.length > 0 && docRes.rows[0].doc_id && docRes.rows[0].filename) {
+        const row = docRes.rows[0];
+        const newFilename = formatStandardFilename(row.receive_no, row.sender, row.personInCharge, row.filename);
+        if (newFilename && newFilename !== row.filename) {
+          if (row.drive_file_id) {
+            renameFileOnDrive(row.drive_file_id, newFilename).catch(err => console.error("[Webhook Drive Rename Error]", err.message));
+          }
+          await client.query('UPDATE documents SET filename = $1 WHERE id = $2', [newFilename, row.doc_id]);
+        }
+      }
       const editorEmail = data.editorEmail || null;
       const logDetails = { source: 'google_sheets' };
       if (editorEmail) logDetails.editor = editorEmail;
@@ -73,7 +124,7 @@ exports.handleSheetUpdate = async (req, res) => {
       );
 
       await client.query('COMMIT');
-      console.log(`[Webhook] Successfully updated task ID ${taskId} from Google Sheets`);
+            console.log(`[Webhook] Successfully updated task ID ${taskId} and assignees from Google Sheets`);
       res.status(200).json({ success: true, message: 'Updated from Sheet' });
     } catch (e) {
       await client.query('ROLLBACK');

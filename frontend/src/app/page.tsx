@@ -479,14 +479,14 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--wrapper)] text-[var(--foreground)] transition-colors duration-300">
+    <div className="min-h-screen bg-(--wrapper) text-foreground transition-colors duration-300">
 
       <Header filters={filters} setFilters={setFilters} users={usersList} />
 
       <main className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 md:p-8 space-y-6">
 
 
-      <div className='bg-[var(--container)] p-4 rounded-lg border-2 border-(--shadow)/70'>
+      <div className='bg-(--container) p-4 rounded-lg border-2 border-(--shadow)/70'>
         <div className="flex flex-col gap-4 mb-4 ">
           
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -536,7 +536,7 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="w-full min-h-[48px] px-4 py-2 border rounded-md bg-[var(--button)] border-[var(--container)] text-left flex items-center justify-between focus:outline-none transition-all duration-200"
+                className="w-full min-h-12 px-4 py-2 border rounded-md bg-(--button) border-(--container) text-left flex items-center justify-between focus:outline-none transition-all duration-200"
               >
                 <span className="truncate text-sm">
                   {filters.assignees.length === 0
@@ -550,7 +550,7 @@ export default function HomePage() {
 
               {/* Animated Dropdown Menu */}
               <div
-                className={`absolute left-0 right-0 mt-2 z-50 bg-[var(--background)] border border-[var(--blueText)] rounded-md shadow-lg max-h-60 overflow-y-auto transition-all duration-200 origin-top transform ${
+                className={`absolute left-0 right-0 mt-2 z-50 bg-background border border-(--blueText) rounded-md shadow-lg max-h-60 overflow-y-auto transition-all duration-200 origin-top transform ${
                   isDropdownOpen
                     ? 'opacity-100 scale-y-100 translate-y-0 pointer-events-auto'
                     : 'opacity-0 scale-y-95 -translate-y-2 pointer-events-none'
@@ -575,8 +575,8 @@ export default function HomePage() {
                       <div
                         key={user.id}
                         onClick={() => handleUserToggle(user.id)}
-                        className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer text-sm transition-colors duration-150 hover:bg-[var(--blueBG)]/30 select-none ${
-                          isSelected ? 'font-semibold text-[var(--blueText)] bg-[var(--blueBG)]/20' : ''
+                        className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer text-sm transition-colors duration-150 hover:bg-(--blueBG)/30 select-none ${
+                          isSelected ? 'font-semibold text-(--blueText) bg-(--blueBG)/20' : ''
                         }`}
                       >
                         <input
@@ -586,7 +586,7 @@ export default function HomePage() {
                             e.stopPropagation();
                             handleUserToggle(user.id);
                           }}
-                          className="w-4 h-4 rounded border-gray-300 accent-[var(--blueText)] cursor-pointer shrink-0"
+                          className="w-4 h-4 rounded border-gray-300 accent-(--blueText) cursor-pointer shrink-0"
                         />
                         <span className="truncate">{user.name}</span>
                       </div>
@@ -622,13 +622,13 @@ export default function HomePage() {
 
         {loading && (
           <div className="flex flex-col items-center justify-center py-20 space-y-3">
-            <div className="w-8 h-8 border-4 border-[var(--blueText)] border-t-transparent rounded-full animate-spin"></div>
-            <p className="text-sm text-[var(--foreground)]/60">กำลังตรวจสอบสิทธิ์และดึงข้อมูล...</p>
+            <div className="w-8 h-8 border-4 border-(--blueText) border-t-transparent rounded-full animate-spin"></div>
+            <p className="text-sm text-(--foreground)/60">กำลังตรวจสอบสิทธิ์และดึงข้อมูล...</p>
           </div>
         )}
 
         {error && (
-          <div className="p-4 rounded-xl bg-[var(--redBG)]/20 border border-[var(--redBorder)]/40 text-[var(--redText)] text-center text-sm">
+          <div className="p-4 rounded-xl bg-(--redBG)/20 border border-(--redBorder)/40 text-(--redText) text-center text-sm">
             {error}
           </div>
         )}
