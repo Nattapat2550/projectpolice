@@ -1,14 +1,20 @@
 const { Pool } = require("pg");
 
-// รองรับทั้ง Supabase Environment Variables จาก Vercel และ DB เดิม
-const connectionString = 
+let connectionString = 
   process.env.projectpolice_POSTGRES_URL || 
   process.env.POSTGRES_URL || 
   process.env.DB;
 
+if (connectionString) {
+  // 💡 ป้องกันปัญหา pg-connection-string override ค่า ssl เมื่อมี ?sslmode=... ติดมาจาก Supabase/Vercel URL
+  connectionString = connectionString.replace(/[\?&]sslmode=[^&]*/g, '');
+}
+
 const pool = new Pool({
   connectionString: connectionString,
-  ssl: { rejectUnauthorized: false } 
+  ssl: { 
+    rejectUnauthorized: false 
+  } 
 });
 
 // 💡 FIX: รับ client มาเพื่อเช็คสถานะ จากนั้นทำการ release ทันทีเพื่อป้องกัน Connection Leak!
