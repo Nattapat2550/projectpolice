@@ -89,10 +89,10 @@ export const Header: React.FC<HeaderProps> = ({ filters, setFilters, users = [] 
 
   return (
     <>
-      <div className="pt-6 px-4 sm:px-6 md:px-8 flex justify-end w-full max-w-[1920px] mx-auto">
+      <div className="pt-6 px-4 sm:px-6 md:px-8 flex flex-1 w-full max-w-[1920px] mx-auto">
         <button
           onClick={() => setIsModalOpen(true)}
-          className="relative flex items-center gap-2 px-5 py-2.5 text-sm font-medium rounded-full bg-[var(--container)] border border-[var(--shadow)]/30 shadow-sm hover:shadow-md hover:border-[var(--blueText)]/50 focus:outline-none active:scale-95 transition-all"
+          className="relative flex items-center w-full gap-2 px-5 py-2.5 text-sm font-medium rounded-full bg-[var(--container)] border border-[var(--shadow)]/80 border-2 hover:shadow-md hover:border-[var(--blueText)]/50 focus:outline-none active:scale-95 transition-all"
         >
           <svg className="w-4 h-4 text-[var(--foreground)]/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />

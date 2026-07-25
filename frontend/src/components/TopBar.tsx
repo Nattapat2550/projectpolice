@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useState, useEffect, useRef } from 'react';
-import { LogOut, Settings, LogIn } from 'lucide-react';
+import { LogOut, Settings, LogIn, CircleQuestionMark, Home, ChartColumn } from 'lucide-react';
 import DarkModeBtn from './DarkModeBtn';
 
 export default function TopBar() {
@@ -70,16 +70,9 @@ export default function TopBar() {
         className="flex justify-between items-center w-full px-4 sm:px-6 py-3 sm:py-4 shadow-md z-50 relative gap-2"
         style={{ backgroundColor: 'var(--header-bg)' }}
         >
-            <Link href="/" aria-label="กลับหน้าหลัก ระบบติดตามงานมอบหมาย" className="shrink min-w-0 flex-1">
+            <Link href="/" aria-label="กลับหน้าหลัก ระบบติดตามงานมอบหมาย" className="shrink min-w-0 flex-1 py-2 hover:bg-white/10 rounded-lg transition-colors">
                 <div className="flex items-center gap-2 sm:gap-4 group min-w-0">
-                    <Image 
-                        src="/police.png" 
-                        alt="โลโก้ระบบติดตามงานมอบหมาย" 
-                        width={40} 
-                        height={40} 
-                        className="transition-transform group-hover:scale-110 w-8 h-8 sm:w-10 sm:h-10 shrink-0" 
-                        priority
-                    />
+                    <Home></Home>
                     <strong className="text-sm sm:text-lg lg:text-xl font-bold truncate text-white block">
                         ระบบติดตามงานมอบหมาย
                     </strong>
@@ -87,13 +80,16 @@ export default function TopBar() {
             </Link>
 
             <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                <div className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 rounded-lg ">
                 <DarkModeBtn />
+                </div>
 
                 <Link
                     href="/dashboard"
                     aria-label="ไปหน้า Dashboard"
                     className="flex items-center gap-1 sm:gap-2 hover:bg-white/10 px-2 sm:px-4 py-2 rounded-lg transition-colors"
                 >
+                    <ChartColumn></ChartColumn>
                     <span className="font-medium hidden md:inline text-white">Dashboard</span>
                 </Link>
 
@@ -102,7 +98,7 @@ export default function TopBar() {
                     aria-label="ไปหน้าช่วยเหลือการใช้งาน"
                     className="flex items-center gap-1 sm:gap-2 hover:bg-white/10 px-2 sm:px-4 py-2 rounded-lg transition-colors"
                 >
-                    <Image src="/window.svg" alt="ไอคอนช่วยเหลือ" width={24} height={24} className="w-5 h-5 sm:w-6 sm:h-6 shrink-0" />
+                    <CircleQuestionMark></CircleQuestionMark>
                     <span className="font-medium hidden md:inline text-white">ช่วยเหลือ</span>
                 </Link>
 

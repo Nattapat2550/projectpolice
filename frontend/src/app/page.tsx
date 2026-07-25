@@ -7,6 +7,7 @@ import { StatCard } from '@/components/firstpage/StatCard';
 import { TaskTable, Task, SortKey, SortConfig } from '@/components/firstpage/TaskTable';
 import Link from 'next/link';
 import Swal from 'sweetalert2';
+import { ChevronDown, CircleDashed, Flame, Hourglass, ListTodo, NotebookPen } from 'lucide-react';
 
 const PAGE_SIZE = 20;
 
@@ -309,28 +310,28 @@ export default function HomePage() {
   const getUrgencyBadgeStyle = (level: string) => {
     switch (level) {
       case 'ด่วนที่สุด':
-        return 'bg-[var(--redBG)] text-[var(--redText)] border-[var(--redBorder)]';
+        return 'bg-[var(--redBG)]/40 text-[var(--redText)] border-[var(--redBorder)]';
       case 'ด่วนมาก':
-        return 'bg-[var(--orangeBG)] text-[var(--orangeText)] border-[var(--orangeBorder)]';
+        return 'bg-[var(--orangeBG)]/40 text-[var(--orangeText)] border-[var(--orangeBorder)]';
       case 'ด่วน':
-        return 'bg-[var(--yellowBG)] text-[var(--yellowText)] border-[var(--yellowBorder)]';
+        return 'bg-[var(--yellowBG)]/40 text-[var(--yellowText)] border-[var(--yellowBorder)]';
       case 'ปกติ':
       default:
-        return 'bg-[var(--greenBG)] text-[var(--greenText)] border-[var(--greenBorder)]';
+        return 'bg-[var(--greenBG)]/40 text-[var(--greenText)] border-[var(--greenBorder)]';
     }
   };
 
   const getSecretBadgeStyle = (level: string) => {
     switch (level) {
       case 'ลับที่สุด':
-        return 'bg-[var(--redBG)] text-[var(--redText)] border-[var(--redBorder)]';
+        return 'bg-[var(--redBG)]/40 text-[var(--redText)] border-[var(--redBorder)]';
       case 'ลับมาก':
-        return 'bg-[var(--orangeBG)] text-[var(--orangeText)] border-[var(--orangeBorder)]';
+        return 'bg-[var(--orangeBG)]/40 text-[var(--orangeText)] border-[var(--orangeBorder)]';
       case 'ลับ':
-        return 'bg-[var(--yellowBG)] text-[var(--yellowText)] border-[var(--yellowBorder)]';
+        return 'bg-[var(--yellowBG)]/40 text-[var(--yellowText)] border-[var(--yellowBorder)]';
       case 'ปกติ':
       default:
-        return 'bg-[var(--greenBG)] text-[var(--greenText)] border-[var(--greenBorder)]';
+        return 'bg-[var(--greenBG)]/40 text-[var(--greenText)] border-[var(--greenBorder)]';
     }
   };
 
@@ -480,48 +481,49 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-[var(--wrapper)] text-[var(--foreground)] transition-colors duration-300">
-
+      
       <Header filters={filters} setFilters={setFilters} users={usersList} />
-
+    
       <main className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 md:p-8 space-y-6">
-
 
       <div className='bg-[var(--container)] p-4 rounded-lg border-2 border-(--shadow)/70'>
         <div className="flex flex-col gap-4 mb-4 ">
           
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             {/* Left side: Action Buttons */}
-            <div className="flex flex-row flex-1 items-center w-full sm:w-auto gap-4">
+            <div className="flex flex-row items-center w-full md:w-2/5 gap-4">
               <button 
                 onClick={handleReserveTask}
                 style={{ 
+                  width: '100%',
                   display: 'inline-flex', 
                   alignItems: 'center', 
                   justifyContent: 'center', 
                   minHeight: '48px', 
-                  padding: '0 24px',
+                  padding: '10px 24px',
                   backgroundColor: 'var(--button)',
                   color: 'var(--blueText)',
-                  border: '1px solid var(--shadow)',
+                  border: '1.5px solid var(--shadow)',
                   borderRadius: '0.4rem',
                   fontWeight: 'bold',
                   cursor: 'pointer'
                 }}
               >
-                📝 จองเลขรับ
+                <NotebookPen className='size-5'></NotebookPen> &nbsp; จองเลขรับ
               </button>
               <Link 
                 href={'/addFile'} 
                 aria-label="ไปหน้าเพิ่มงานติดตามใหม่" 
                 style={{ 
+                  width: '100%',
                   display: 'inline-flex', 
                   alignItems: 'center', 
                   justifyContent: 'center', 
                   minHeight: '48px', 
-                  padding: '0 24px',
+                  padding: '10px 24px',
                   backgroundColor: 'var(--greenBG)',
                   color: 'var(--greenText)',
-                  border: '1px solid var(--greenText)',
+                  border: '1.5px solid var(--greenText)',
                   borderRadius: '0.4rem',
                   textDecoration: 'none',
                   fontWeight: 'bold'
@@ -532,11 +534,11 @@ export default function HomePage() {
             </div>
 
             {/* Right side: Multi-Select Animated Dropdown */}
-            <div className="relative w-full sm:w-80" ref={dropdownRef}>
+            <div className="relative flex w-full sm:w-auto" ref={dropdownRef}>
               <button
                 type="button"
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="w-full min-h-[48px] px-4 py-2 border rounded-md bg-[var(--button)] border-[var(--container)] text-left flex items-center justify-between focus:outline-none transition-all duration-200"
+                className="w-full h-1 min-h-[48px] px-4 py-2 border border-2 rounded-md bg-[var(--button)] border-[var(--wrapper)] text-left flex items-center justify-between focus:outline-none transition-all duration-200"
               >
                 <span className="truncate text-sm">
                   {filters.assignees.length === 0
@@ -544,7 +546,7 @@ export default function HomePage() {
                     : `เลือกแล้ว (${filters.assignees.length} คน): ${selectedUserNames.join(', ')}`}
                 </span>
                 <span className={`transform transition-transform duration-200 ml-2 shrink-0 ${isDropdownOpen ? 'rotate-180' : 'rotate-0'}`}>
-                  ▼
+                  <ChevronDown></ChevronDown>
                 </span>
               </button>
 
@@ -602,18 +604,18 @@ export default function HomePage() {
           <StatCard
             title="งานทั้งหมดในระบบ"
             value={tasks.length}
-            icon="📁"
+            icon= {<ListTodo></ListTodo>}
           />
           <StatCard
             title="งานด่วน / ด่วนที่สุด"
             value={tasks.filter(t => ['ด่วน', 'ด่วนมาก', 'ด่วนที่สุด'].includes(t.urgency_level)).length}
-            icon="⚡"
+            icon={<Flame className='text-[var(--redText)]'></Flame>}
             valueClass="text-[var(--redText)]"
           />
           <StatCard
             title="กำลังดำเนินการ (Following)"
             value={tasks.filter(t => ['following', 'pending'].includes(t.status)).length}
-            icon="⏳"
+            icon={<Hourglass className='text-[var(--blueText)]'></Hourglass>}
             valueClass="text-[var(--blueText)]"
           />
         </div>

@@ -302,7 +302,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                         className={`appearance-none cursor-pointer inline-block px-2.5 py-0.5 text-xs rounded-md text-center focus:outline-none focus:ring-1 focus:ring-[var(--blueText)] ${
                           task.status === 'completed' || task.status === 'success'
                             ? 'bg-[var(--greenBG)]/30 text-[var(--greenText)] border border-[var(--greenBorder)]/30'
-                            : 'bg-[var(--wrapper)] text-[var(--foreground)]/70 border border-[var(--shadow)]/40'
+                            : 'bg-[var(--wrapper)]/60 text-[var(--foreground)]/70 border border-[var(--shadow)]/40'
                         }`}
                       >
                         <option value="following">กำลังติดตาม</option>
@@ -350,7 +350,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             <div
               key={task.id}
               onClick={() => router.push(`/tasks/${task.id}`)}
-              className={`rounded-2xl p-4 shadow-sm space-y-3.5 transition-all border cursor-pointer ${
+              className={`rounded-lg p-4 shadow-sm space-y-3.5 transition-all border cursor-pointer ${
                 flagged
                   ? 'bg-[var(--redBG)]/20 border-[var(--shadow)]/30'
                   : 'bg-[var(--container)] border-[var(--shadow)]/30 hover:border-[var(--blueText)]/50'
@@ -358,7 +358,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-center space-x-2">
-                  <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-md bg-[var(--wrapper)] ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>
+                  <span className={`text-xs font-semibold px-3 py-1 rounded-sm bg-[var(--button)] ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>
                     เลขรับ {task.receive_no ?? '-'}
                     <span className={flagged ? 'font-normal opacity-70' : 'text-[var(--foreground)]/40 font-normal'}>/{task.receive_year || '-'}</span>
                   </span>
@@ -366,7 +366,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                     {task.memo_no || '-'}
                   </span>
                 </div>
-                <span className={`px-2 py-0.5 text-xs font-medium rounded-full border ${getUrgencyBadgeStyle(task.urgency_level)}`}>
+                <span className={`px-2 py-0.5 text-xs font-medium rounded-sm border ${getUrgencyBadgeStyle(task.urgency_level)}` }>
                   {task.urgency_level || 'ปกติ'}
                 </span>
               </div>
@@ -411,7 +411,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                     className={`appearance-none cursor-pointer px-2 py-0.5 text-[11px] rounded focus:outline-none focus:ring-1 focus:ring-[var(--blueText)] text-center ${
                       task.status === 'completed' || task.status === 'success'
                         ? 'bg-[var(--greenBG)]/20 text-[var(--greenText)]'
-                        : 'bg-[var(--wrapper)] text-[var(--foreground)]/70'
+                        : 'bg-[var(--wrapper)]/60 text-[var(--foreground)]/70'
                     }`}
                   >
                     <option value="following">ติดตามอยู่</option>
