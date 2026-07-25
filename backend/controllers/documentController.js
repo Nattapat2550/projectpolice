@@ -1,6 +1,7 @@
 const fs = require('fs').promises; 
 const path = require('path');
 const { extractDataWithGemini } = require('../services/ocrService'); 
+const { parseFilenameInfo } = require('../utils/filenameParser');
 
 exports.processDocuments = async (req, res) => {
   const files = req.files;
@@ -22,13 +23,39 @@ exports.processDocuments = async (req, res) => {
       const geminiResult = await extractDataWithGemini(safePath, file.mimetype, engine);
       const { text, extractedData } = geminiResult;
 
-      let dataWithDefaultUser = extractedData || {};
-      dataWithDefaultUser.assignee = userName; 
+      // สกัดข้อมูลจากชื่อไฟล์ (เช่น 556-ศตคม.(ตู่).pdf => 556=receive_no, ศตคม.=sender, ตู่=assignee)
+      const fnInfo = parseFilenameInfo(file.originalname);
+
+      let memos = Array.isArray(extractedData) ? extractedData : [];
+      if (memos.length === 0) {
+        memos = [{}];
+      }
+
+      const processedMemos = memos.map(memo => {
+        const receive_no = fnInfo.receive_no || memo.receive_no || null;
+        const sender = fnInfo.sender || memo.จาก || memo.sender || null;
+        
+        let assignments = Array.isArray(memo.assignments) ? [...memo.assignments] : [];
+        if (fnInfo.assignee) {
+          const exists = assignments.some(a => a && a.responsible_person === fnInfo.assignee);
+          if (!exists) {
+            assignments.unshift({ responsible_person: fnInfo.assignee });
+          }
+        }
+
+        return {
+          ...memo,
+          receive_no: receive_no,
+          จาก: sender,
+          sender: sender,
+          assignments: assignments
+        };
+      });
 
       results.push({
         filename: file.originalname,
         status: 'success',
-        extractedData: dataWithDefaultUser,
+        extractedData: processedMemos,
         fileInfo: {
             path: safePath, 
             originalname: file.originalname,
@@ -46,4 +73,4 @@ exports.processDocuments = async (req, res) => {
   }
   
   res.json({ total: files.length, results });
-};
+};

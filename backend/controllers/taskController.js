@@ -1,9 +1,10 @@
 const pool = require('../config/db');
 const fs = require('fs').promises;
 const path = require('path'); // เพิ่ม module path สำหรับป้องกัน Path Traversal
-const { uploadToDrive } = require('../services/googleDriveService');
+const { uploadToDrive, deleteFromDrive, renameFileOnDrive } = require('../services/googleDriveService');
 const { appendTaskToSheet, appendMultipleTasksToSheet, updateTaskInSheet } = require('../services/googleSheetsService');
 const { generateHash } = require('../utils/duplicateChecker');
+const { formatStandardFilename } = require('../utils/filenameParser');
 
 const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID; 
 // กำหนดโฟลเดอร์สำหรับเก็บไฟล์ชั่วคราวให้ชัดเจน (แก้ไข path ให้ตรงกับที่ตั้งโฟลเดอร์ uploads ของคุณ)
@@ -211,6 +212,7 @@ exports.confirmTasks = async (req, res) => {
     const { fileInfo, memos, createdBy } = req.body;
     const validCreatorId = isValidUUID(createdBy) ? createdBy : null;
     let documentId = null;
+    let driveData = null;
 
     if (fileInfo && fileInfo.path) {
       // 🔒 Snyk Fix (CWE-22): ทำความสะอาด path ที่รับมาจาก Frontend 
@@ -220,23 +222,36 @@ exports.confirmTasks = async (req, res) => {
       // บังคับเปลี่ยน path เป็นอันที่ปลอดภัย
       fileInfo.path = safePath;
 
-      const driveData = await uploadToDrive(
-        { path: fileInfo.path, originalname: fileInfo.originalname, mimetype: fileInfo.mimetype },
-        DRIVE_FOLDER_ID
-      );
+      // 🏷️ สร้างชื่อไฟล์มาตรฐานตามรูปแบบ (เช่น 556-ศตคม.(ตู่).pdf) จากข้อมูล memo ล่าสุดที่ผู้ใช้ยืนยัน/แก้ไข
+      const primaryMemo = Array.isArray(memos) && memos.length > 0 ? memos[0] : {};
+      const recNoForName = primaryMemo.receive_no || null;
+      const senderForName = primaryMemo.sender || primaryMemo.จาก || null;
+      const assigneeForName = primaryMemo.assignments || null;
 
-      const hash = generateHash(fileInfo.text + Date.now().toString());
+      const formattedFilename = formatStandardFilename(recNoForName, senderForName, assigneeForName, fileInfo.originalname);
+
+      try {
+        driveData = await uploadToDrive(
+          { path: fileInfo.path, originalname: formattedFilename, mimetype: fileInfo.mimetype },
+          DRIVE_FOLDER_ID
+        );
+      } catch (driveErr) {
+        console.error("[Confirm Drive Upload Error]:", driveErr.message);
+      }
+
+      const textContent = fileInfo.text || '';
+      const hash = generateHash(textContent + Date.now().toString());
 
       const docRes = await client.query(
         `INSERT INTO documents (filename, content, content_hash, keywords_found, drive_file_id, drive_web_view_link, created_by)
          VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
         [
-          fileInfo.originalname,
-          fileInfo.text,
+          formattedFilename,
+          textContent,
           hash,
           JSON.stringify({ memos }), 
-          driveData.id,
-          driveData.webViewLink,
+          driveData ? driveData.id : null,
+          driveData ? driveData.webViewLink : null,
           validCreatorId
         ]
       );
@@ -262,22 +277,45 @@ exports.confirmTasks = async (req, res) => {
 
           const { receiveNo, receiveYear } = await handleReceiveNoAndYear(client, memo.receive_no, parsedReceiveDate);
 
-          const existingRes = await client.query('SELECT id FROM tasks WHERE receive_no = $1 AND receive_year = $2', [receiveNo, receiveYear]);
+          const memoSender = memo.sender || memo.จาก || null;
+
+          const existingRes = await client.query('SELECT id, document_id FROM tasks WHERE receive_no = $1 AND receive_year = $2', [receiveNo, receiveYear]);
           let taskId;
           
           if (existingRes.rows.length > 0) {
               taskId = existingRes.rows[0].id;
+              const oldDocumentId = existingRes.rows[0].document_id;
+
+              // 1. อัปเดตงานในตาราง tasks ก่อนเพื่อให้ document_id ชี้ไปที่เอกสารใหม่
               await client.query(
-                  `UPDATE tasks SET document_id = COALESCE($1, document_id), title = $2, memo_no = $3, memo_date = $4, main_text = $5, task_detail = $6, due_date = COALESCE($7, due_date), is_urgent = $8, urgency_level = $9, secret_level = $10, sign_date = $11, meeting_date = $13, reply_due_date = $14, created_at = COALESCE(CAST($12 AS timestamp), created_at), updated_at = NOW() WHERE id = $15`,
-                  [documentId, memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', memo.ที่, parsedMemoDate, memo.main_text, memo.task_detail || null, finalDueDate, memo.isUrgent || false, memo.urgency_level || null, memo.secret_level || null, parsedSignDate, parsedReceiveDate, parsedMeetingDate, parsedReplyDueDate, taskId]
+                  `UPDATE tasks SET document_id = COALESCE($1, document_id), title = $2, memo_no = $3, memo_date = $4, main_text = $5, task_detail = $6, due_date = COALESCE($7, due_date), is_urgent = $8, urgency_level = $9, secret_level = $10, sign_date = $11, meeting_date = $13, reply_due_date = $14, sender = $16, created_at = COALESCE(CAST($12 AS timestamp), created_at), updated_at = NOW() WHERE id = $15`,
+                  [documentId, memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', memo.ที่, parsedMemoDate, memo.main_text, memo.task_detail || null, finalDueDate, memo.isUrgent || false, memo.urgency_level || null, memo.secret_level || null, parsedSignDate, parsedReceiveDate, parsedMeetingDate, parsedReplyDueDate, taskId, memoSender]
               );
+
+              // 2. ลบเอกสารเก่าและไฟล์เก่าใน Drive หากไม่มีงานอื่นใช้อยู่
+              if (documentId && oldDocumentId && documentId !== oldDocumentId) {
+                  const countRes = await client.query('SELECT COUNT(*) FROM tasks WHERE document_id = $1', [oldDocumentId]);
+                  const otherCount = parseInt(countRes.rows[0].count, 10);
+
+                  if (otherCount === 0) {
+                      const docInfoRes = await client.query('SELECT drive_file_id FROM documents WHERE id = $1', [oldDocumentId]);
+                      if (docInfoRes.rows.length > 0) {
+                          const oldDriveFileId = docInfoRes.rows[0].drive_file_id;
+                          if (oldDriveFileId) {
+                              deleteFromDrive(oldDriveFileId).catch(err => console.error("[Drive Delete Error]", err.message));
+                          }
+                      }
+                      await client.query('DELETE FROM documents WHERE id = $1', [oldDocumentId]);
+                  }
+              }
+
               await logTaskAction(client, taskId, validCreatorId, 'updated_task', { source: 'confirm_tasks_upsert' });
               await client.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
               updatedTaskIds.push(taskId);
           } else {
               const taskRes = await client.query(
-                `INSERT INTO tasks (document_id, title, memo_no, memo_date, main_text, task_detail, due_date, is_urgent, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, created_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $14, $15, $16, $17, COALESCE(CAST($13 AS timestamp), NOW())) RETURNING id`,
+                `INSERT INTO tasks (document_id, title, memo_no, memo_date, main_text, task_detail, due_date, is_urgent, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, sender, created_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $14, $15, $16, $17, $18, COALESCE(CAST($13 AS timestamp), NOW())) RETURNING id`,
                 [ 
                   documentId, 
                   memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', 
@@ -295,7 +333,8 @@ exports.confirmTasks = async (req, res) => {
                   parsedMeetingDate,
                   parsedReplyDueDate,
                   receiveNo,
-                  receiveYear
+                  receiveYear,
+                  memoSender
                 ]
               );
               taskId = taskRes.rows[0].id;
@@ -319,6 +358,26 @@ exports.confirmTasks = async (req, res) => {
             await logTaskAction(client, taskId, validCreatorId, 'assigned_user', { user_id: userId, role_or_name: personStr });
           }
         }
+      }
+    }
+
+    // 🏷️ อัปเดตเปลี่ยนชื่อไฟล์บน Google Drive และ DB ให้ตรงตามข้อมูลรับงานและผู้รับผิดชอบล่าสุดที่บันทึกจริง
+    if (documentId && driveData && driveData.id) {
+      const finalMemoRes = await client.query(
+          `SELECT t.receive_no, t.sender, d.filename,
+           (SELECT string_agg(role_or_name, ', ') FROM task_assignments ta WHERE ta.task_id = t.id) as "personInCharge"
+           FROM tasks t
+           LEFT JOIN documents d ON t.document_id = d.id
+           WHERE t.document_id = $1 LIMIT 1`,
+          [documentId]
+      );
+      if (finalMemoRes.rows.length > 0) {
+          const fm = finalMemoRes.rows[0];
+          const finalName = formatStandardFilename(fm.receive_no, fm.sender, fm.personInCharge, fm.filename || fileInfo.originalname);
+          if (finalName && finalName !== fm.filename) {
+              renameFileOnDrive(driveData.id, finalName).catch(e => console.error("[Confirm Drive Rename Error]", e.message));
+              await client.query('UPDATE documents SET filename = $1 WHERE id = $2', [finalName, documentId]);
+          }
       }
     }
     
@@ -455,12 +514,32 @@ exports.updateTaskDetail = async (req, res) => {
 
     await client.query('COMMIT');
 
-    // Sync Update to Google Sheets
+    // Sync Update to Google Sheets & Rename file in Google Drive if needed
     try {
-      const getFresh = await pool.query('SELECT * FROM tasks WHERE id = $1', [id]);
+      const getFresh = await pool.query(
+        `SELECT t.*, d.filename, d.drive_file_id,
+         (SELECT string_agg(role_or_name, ', ') FROM task_assignments ta WHERE ta.task_id = t.id) as "personInCharge"
+         FROM tasks t
+         LEFT JOIN documents d ON t.document_id = d.id
+         WHERE t.id = $1`,
+        [id]
+      );
+
       if (getFresh.rows.length > 0) {
         const t = getFresh.rows[0];
-        const personInCharge = Array.isArray(assignments) ? assignments.map(a => a.role_or_name || 'เพิ่มด้วยตนเอง').join(', ') : '';
+        const personInCharge = t.personInCharge || (Array.isArray(assignments) ? assignments.map(a => a.role_or_name || 'เพิ่มด้วยตนเอง').join(', ') : '');
+        
+        // 🏷️ เปลี่ยนชื่อไฟล์บน Google Drive และ DB ให้ตรงตามรูปแบบมาตรฐานล่าสุดเสมอ
+        if (t.document_id && t.filename) {
+          const newFilename = formatStandardFilename(t.receive_no, t.sender, personInCharge, t.filename);
+          if (newFilename && newFilename !== t.filename) {
+            if (t.drive_file_id) {
+              renameFileOnDrive(t.drive_file_id, newFilename).catch(e => console.error("Drive rename error:", e.message));
+            }
+            await pool.query('UPDATE documents SET filename = $1 WHERE id = $2', [newFilename, t.document_id]);
+          }
+        }
+
         updateTaskInSheet({
           id: t.id,
           receive_no: t.receive_no,
@@ -477,7 +556,7 @@ exports.updateTaskDetail = async (req, res) => {
         }).catch(e => console.error("Sheet update error:", e.message));
       }
     } catch (e) {
-      console.error("Failed to prepare sheet update", e);
+      console.error("Failed to prepare sheet/drive update", e);
     }
 
     res.status(200).json({ success: true, message: 'บันทึกความเปลี่ยนแปลงเรียบร้อย' });
@@ -556,15 +635,26 @@ exports.deleteTask = async (req, res) => {
     await client.query('BEGIN');
     const { id } = req.params;
 
-    const assignmentsRes = await client.query('SELECT id FROM task_assignments WHERE task_id = $1', [id]);
-    const assignmentIds = assignmentsRes.rows.map(row => row.id);
-
-    await client.query('DELETE FROM task_assignments WHERE task_id = $1', [id]);
-    const result = await client.query('DELETE FROM tasks WHERE id = $1 RETURNING *', [id]);
-
-    if (result.rows.length === 0) {
+    const taskRes = await client.query('SELECT document_id FROM tasks WHERE id = $1', [id]);
+    if (taskRes.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ success: false, message: 'Task not found' });
+    }
+
+    const docId = taskRes.rows[0].document_id;
+
+    await client.query('DELETE FROM task_assignments WHERE task_id = $1', [id]);
+    await client.query('DELETE FROM tasks WHERE id = $1', [id]);
+
+    if (docId) {
+      const otherRes = await client.query('SELECT COUNT(*) FROM tasks WHERE document_id = $1', [docId]);
+      if (parseInt(otherRes.rows[0].count, 10) === 0) {
+        const docRes = await client.query('SELECT drive_file_id FROM documents WHERE id = $1', [docId]);
+        if (docRes.rows.length > 0 && docRes.rows[0].drive_file_id) {
+          deleteFromDrive(docRes.rows[0].drive_file_id).catch(e => console.error("Drive delete error on task deletion:", e.message));
+        }
+        await client.query('DELETE FROM documents WHERE id = $1', [docId]);
+      }
     }
 
     await client.query('COMMIT');
@@ -655,7 +745,11 @@ exports.createTask = async (req, res) => {
             task_detail: main_text,
             sign_date: parsedSignDate
         };
-        appendTaskToSheet(fullTaskData).catch(err => console.error("[Google Sheets Sync error]", err.message));
+        if (existingRes.rows.length > 0) {
+            updateTaskInSheet(fullTaskData).catch(err => console.error("[Google Sheets Update Sync error]", err.message));
+        } else {
+            appendTaskToSheet(fullTaskData).catch(err => console.error("[Google Sheets Append Sync error]", err.message));
+        }
     } catch (e) {
         console.error("Failed to prepare sheet sync", e);
     }
