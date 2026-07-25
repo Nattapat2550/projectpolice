@@ -16,8 +16,8 @@ exports.processDocuments = async (req, res) => {
     try {
       // 🔒 Snyk Fix (CWE-22): บังคับให้เป็นแค่ชื่อไฟล์ หั่น Path ../ ทิ้งทั้งหมด
       const safeFileName = path.basename(file.path);
-      // รวมกับ Default Directory ของโปรเจค (แก้ path ไปที่โฟลเดอร์เก็บไฟล์ของคุณ เช่น uploads)
-      safePath = path.join(process.cwd(), 'uploads', safeFileName);
+      // รวมกับโฟลเดอร์ของไฟล์อัปโหลดจริง (ป้องกัน Path Traversal และรองรับ Fallback Directory ใน Serverless)
+      safePath = path.join(path.dirname(file.path), safeFileName);
 
       const engine = req.body.engine || 'gemini'; // Default to gemini if not provided
       const geminiResult = await extractDataWithGemini(safePath, file.mimetype, engine);

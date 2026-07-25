@@ -217,7 +217,7 @@ exports.confirmTasks = async (req, res) => {
     if (fileInfo && fileInfo.path) {
       // 🔒 Snyk Fix (CWE-22): ทำความสะอาด path ที่รับมาจาก Frontend 
       const safeFileName = path.basename(fileInfo.path);
-      const safePath = path.join(process.cwd(), 'uploads', safeFileName);
+      const safePath = path.join(path.dirname(fileInfo.path), safeFileName);
       
       // บังคับเปลี่ยน path เป็นอันที่ปลอดภัย
       fileInfo.path = safePath;

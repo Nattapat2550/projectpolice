@@ -1,7 +1,13 @@
 const { Pool } = require("pg");
 
+// รองรับทั้ง Supabase Environment Variables จาก Vercel และ DB เดิม
+const connectionString = 
+  process.env.projectpolice_POSTGRES_URL || 
+  process.env.POSTGRES_URL || 
+  process.env.DB;
+
 const pool = new Pool({
-  connectionString: process.env.DB,
+  connectionString: connectionString,
   ssl: { rejectUnauthorized: false } 
 });
 
