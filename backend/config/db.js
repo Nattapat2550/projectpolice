@@ -6,8 +6,14 @@ let connectionString =
   process.env.DB;
 
 if (connectionString) {
-  // 💡 ป้องกันปัญหา pg-connection-string override ค่า ssl เมื่อมี ?sslmode=... ติดมาจาก Supabase/Vercel URL
-  connectionString = connectionString.replace(/[\?&]sslmode=[^&]*/g, '');
+  try {
+    // 💡 ใช้ URL API ของ Node.js ลบ sslmode ออกอย่างปลอดภัยโดยไม่ทำให้ชื่อ Database หรือ URL พัง
+    const parsedUrl = new URL(connectionString);
+    parsedUrl.searchParams.delete('sslmode');
+    connectionString = parsedUrl.toString();
+  } catch (err) {
+    console.warn("Could not parse DB connectionString URL:", err.message);
+  }
 }
 
 const pool = new Pool({
