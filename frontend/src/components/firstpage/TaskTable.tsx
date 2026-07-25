@@ -192,9 +192,9 @@ export const TaskTable: React.FC<TaskTableProps> = ({
   return (
     <div className="space-y-4">
       {/* 🖥️ [1] Desktop & iPad แนวนอน (ตารางเต็มรูปแบบ พร้อม sort) */}
-      <div className="hidden xl:block bg-[var(--container)] border border-[var(--shadow)]/30 rounded-2xl shadow-sm overflow-hidden transition-all">
+      <div className="hidden xl:block bg-[var(--container)] rounded-lg overflow-hidden transition-all p-4 border-2 border-(--shadow)/70">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse xl:min-w-0">
+          <table className="w-full text-left border-collapse xl:min-w-0 ">
             <thead>
               <tr className="border-b border-[var(--shadow)]/30 bg-[var(--wrapper)]/30 text-xs font-semibold uppercase tracking-wider text-[var(--foreground)]/70">
                 {COLUMNS.map((col) => {

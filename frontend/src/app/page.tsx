@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header, SearchFilters, emptyFilters, UserOption } from '@/components/firstpage/Header';
 import { StatCard } from '@/components/firstpage/StatCard';
@@ -382,9 +382,8 @@ export default function HomePage() {
         .map((a) => a.personInCharge || a.role_or_name)
         .filter((n): n is string => !!n);
       const matchAssignee =
-        selectedAssigneeNames.length === 0 ||
-        selectedAssigneeNames.every((name) => taskAssigneeNames.includes(name));
-
+  selectedAssigneeNames.length === 0 ||
+  selectedAssigneeNames.some((name) => taskAssigneeNames.includes(name));
       return (
         matchTitle &&
         matchReceiveNo &&
@@ -445,54 +444,160 @@ export default function HomePage() {
     });
   };
 
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const selectedUserNames = useMemo(() => {
+  const userMap = new Map(usersList.map((u) => [u.id, u.name]));
+  return filters.assignees.map((id) => userMap.get(id)).filter(Boolean);
+}, [filters.assignees, usersList]);
+
+  // Toggle user selection for multi-choice filtering
+  const handleUserToggle = (userId: string) => {
+    setFilters((prev) => {
+      const exists = prev.assignees.includes(userId);
+      const updatedAssignees = exists
+        ? prev.assignees.filter((id) => id !== userId)
+        : [...prev.assignees, userId];
+
+      return {
+        ...prev,
+        assignees: updatedAssignees,
+      };
+    });
+  };
+
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] transition-colors duration-300">
+    <div className="min-h-screen bg-[var(--wrapper)] text-[var(--foreground)] transition-colors duration-300">
 
       <Header filters={filters} setFilters={setFilters} users={usersList} />
 
       <main className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 md:p-8 space-y-6">
 
-        <div className="flex flex-row justify-end items-center mb-4">
-            <button 
+
+      <div className='bg-[var(--container)] p-4 rounded-lg border-2 border-(--shadow)/70'>
+        <div className="flex flex-col gap-4 mb-4 ">
+          
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            {/* Left side: Action Buttons */}
+            <div className="flex flex-row flex-1 items-center w-full sm:w-auto gap-4">
+              <button 
                 onClick={handleReserveTask}
                 style={{ 
-                    display: 'inline-flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    minHeight: '48px', 
-                    padding: '0 24px',
-                    marginRight: '16px',
-                    backgroundColor: 'var(--blueBG)',
-                    color: 'var(--blueText)',
-                    border: '1px solid var(--blueText)',
-                    borderRadius: '0.4rem',
-                    fontWeight: 'bold',
-                    cursor: 'pointer'
+                  display: 'inline-flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  minHeight: '48px', 
+                  padding: '0 24px',
+                  backgroundColor: 'var(--button)',
+                  color: 'var(--blueText)',
+                  border: '1px solid var(--shadow)',
+                  borderRadius: '0.4rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
                 }}
-            >
+              >
                 📝 จองเลขรับ
-            </button>
-            <Link 
+              </button>
+              <Link 
                 href={'/addFile'} 
                 aria-label="ไปหน้าเพิ่มงานติดตามใหม่" 
                 style={{ 
-                    display: 'inline-flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    minHeight: '48px', 
-                    padding: '0 24px',
-                    backgroundColor: 'var(--greenBG)',
-                    color: 'var(--greenText)',
-                    border: '1px solid var(--greenText)',
-                    borderRadius: '0.4rem',
-                    textDecoration: 'none',
-                    fontWeight: 'bold'
+                  display: 'inline-flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  minHeight: '48px', 
+                  padding: '0 24px',
+                  backgroundColor: 'var(--greenBG)',
+                  color: 'var(--greenText)',
+                  border: '1px solid var(--greenText)',
+                  borderRadius: '0.4rem',
+                  textDecoration: 'none',
+                  fontWeight: 'bold'
                 }}
-            >
+              >
                 + เพิ่มงานติดตาม
-            </Link>
-        </div>
+              </Link>
+            </div>
 
+            {/* Right side: Multi-Select Animated Dropdown */}
+            <div className="relative w-full sm:w-80" ref={dropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="w-full min-h-[48px] px-4 py-2 border rounded-md bg-[var(--button)] border-[var(--container)] text-left flex items-center justify-between focus:outline-none transition-all duration-200"
+              >
+                <span className="truncate text-sm">
+                  {filters.assignees.length === 0
+                    ? '-- เลือกผู้รับผิดชอบ -- (กำลังแสดงทั้งหมด)'
+                    : `เลือกแล้ว (${filters.assignees.length} คน): ${selectedUserNames.join(', ')}`}
+                </span>
+                <span className={`transform transition-transform duration-200 ml-2 shrink-0 ${isDropdownOpen ? 'rotate-180' : 'rotate-0'}`}>
+                  ▼
+                </span>
+              </button>
+
+              {/* Animated Dropdown Menu */}
+              <div
+                className={`absolute left-0 right-0 mt-2 z-50 bg-[var(--background)] border border-[var(--blueText)] rounded-md shadow-lg max-h-60 overflow-y-auto transition-all duration-200 origin-top transform ${
+                  isDropdownOpen
+                    ? 'opacity-100 scale-y-100 translate-y-0 pointer-events-auto'
+                    : 'opacity-0 scale-y-95 -translate-y-2 pointer-events-none'
+                }`}
+              >
+                {/* Clear All Option inside dropdown */}
+                {filters.assignees.length > 0 && (
+                  <div
+                    onClick={() => setFilters((prev) => ({ ...prev, assignees: [] }))}
+                    className="px-4 py-2 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 cursor-pointer border-b border-gray-200 dark:border-gray-800 font-semibold flex items-center justify-between"
+                  >
+                    <span>✕ ล้างการเลือกทั้งหมด</span>
+                  </div>
+                )}
+
+                {usersList.length === 0 ? (
+                  <div className="p-3 text-sm text-gray-500 text-center">ไม่มีข้อมูลผู้ใช้งาน</div>
+                ) : (
+                  usersList.map((user) => {
+                    const isSelected = filters.assignees.includes(user.id);
+                    return (
+                      <div
+                        key={user.id}
+                        onClick={() => handleUserToggle(user.id)}
+                        className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer text-sm transition-colors duration-150 hover:bg-[var(--blueBG)]/30 select-none ${
+                          isSelected ? 'font-semibold text-[var(--blueText)] bg-[var(--blueBG)]/20' : ''
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => {
+                            e.stopPropagation();
+                            handleUserToggle(user.id);
+                          }}
+                          className="w-4 h-4 rounded border-gray-300 accent-[var(--blueText)] cursor-pointer shrink-0"
+                        />
+                        <span className="truncate">{user.name}</span>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+       
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard
             title="งานทั้งหมดในระบบ"
@@ -511,6 +616,8 @@ export default function HomePage() {
             icon="⏳"
             valueClass="text-[var(--blueText)]"
           />
+        </div>
+
         </div>
 
         {loading && (
