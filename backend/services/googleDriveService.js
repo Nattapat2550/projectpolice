@@ -66,4 +66,38 @@ const uploadToDrive = async (fileObject, folderId) => {
   }
 };
 
-module.exports = { uploadToDrive };
+/**
+ * ลบไฟล์ออกจาก Google Drive ตาม fileId
+ * @param {String} fileId - ID ของไฟล์ใน Google Drive
+ */
+const deleteFromDrive = async (fileId) => {
+  if (!fileId) return;
+  try {
+    await driveService.files.delete({ fileId });
+    console.log(`[Drive Service] Successfully deleted old file from Google Drive: ${fileId}`);
+  } catch (error) {
+    console.error(`[Drive Service Delete Error]:`, error.message);
+  }
+};
+
+/**
+ * เปลี่ยนชื่อไฟล์บน Google Drive ตาม fileId
+ * @param {String} fileId - ID ของไฟล์ใน Google Drive
+ * @param {String} newName - ชื่อไฟล์ใหม่ที่ต้องการเปลี่ยน
+ */
+const renameFileOnDrive = async (fileId, newName) => {
+  if (!fileId || !newName) return;
+  try {
+    await driveService.files.update({
+      fileId: fileId,
+      requestBody: {
+        name: newName
+      }
+    });
+    console.log(`[Drive Service] Successfully renamed file ${fileId} to "${newName}"`);
+  } catch (error) {
+    console.error(`[Drive Service Rename Error]:`, error.message);
+  }
+};
+
+module.exports = { uploadToDrive, deleteFromDrive, renameFileOnDrive };

@@ -28,6 +28,16 @@ const formatDateTH = (dateStr) => {
   return `${day}/${month}/${yearBE}`;
 };
 
+const cleanToOnlyName = (str) => {
+  if (!str || typeof str !== 'string') return '';
+  return str.split(',').map(item => {
+    let s = item.trim();
+    s = s.replace(/[\(\[\（].*?[\)\]\）]/g, '').trim();
+    s = s.replace(/^(?:พล\.ต\.อ\.|พล\.ต\.ท\.|พล\.ต\.ต\.|พ\.ต\.อ\.|พ\.ต\.ท\.|พ\.ต\.ต\.|ร\.ต\.อ\.|ร\.ต\.ท\.|ร\.ต\.ต\.|ด\.ต\.|จ\.ส\.ต\.|ส\.ต\.อ\.|ส\.ต\.ท\.|ส\.ต\.ต\.|นาย|นางสาว|นาง|น\.ส\.)\s*/gi, '').trim();
+    return s || item.trim();
+  }).filter(Boolean).join(', ');
+};
+
 const getSheetName = (yearAD) => {
   if (!yearAD) {
       return `${new Date().getFullYear() + 543}`;
@@ -87,7 +97,7 @@ exports.appendTaskToSheet = async (taskData) => {
       formatDateTH(taskData.memo_date) || '',
       taskData.sender || '',
       taskData.title || '',
-      taskData.personInCharge || '',
+      cleanToOnlyName(taskData.personInCharge) || '',
       formatDateTH(taskData.due_date) || '',
       taskData.task_detail || '',
       formatDateTH(taskData.sign_date) || '',
@@ -134,7 +144,7 @@ exports.appendMultipleTasksToSheet = async (tasksArray) => {
           formatDateTH(taskData.memo_date) || '',
           taskData.sender || '',
           taskData.title || '',
-          taskData.personInCharge || '',
+          cleanToOnlyName(taskData.personInCharge) || '',
           formatDateTH(taskData.due_date) || '',
           taskData.task_detail || '',
           formatDateTH(taskData.sign_date) || '',
@@ -182,7 +192,8 @@ exports.updateTaskInSheet = async (taskData) => {
     const rowIndex = rows.findIndex(row => row[0] === taskData.id);
     
     if (rowIndex === -1) {
-      console.warn(`[Google Sheets] Task ID ${taskData.id} not found in sheet ${sheetName}. Cannot update.`);
+      console.warn(`[Google Sheets] Task ID ${taskData.id} not found in sheet ${sheetName}. Appending to sheet instead.`);
+      await exports.appendTaskToSheet(taskData);
       return;
     }
 
@@ -197,7 +208,7 @@ exports.updateTaskInSheet = async (taskData) => {
       formatDateTH(taskData.memo_date) || '',
       taskData.sender || '',
       taskData.title || '',
-      taskData.personInCharge || '',
+      cleanToOnlyName(taskData.personInCharge) || '',
       formatDateTH(taskData.due_date) || '',
       taskData.task_detail || '',
       formatDateTH(taskData.sign_date) || '',

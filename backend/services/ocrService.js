@@ -606,8 +606,9 @@ exports.extractDataWithGemini = async (filePath, mimeType, engine = 'gemini') =>
   if (engine === 'gemini') {
     const { GoogleGenerativeAI } = require('@google/generative-ai');
     
-    // ดึง API Key จาก .env
+    // ดึง API Key และ Gemini Model จาก .env
     const apiKey = process.env.GEMINI_API_KEY;
+    const geminiModel = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite";
     if (!apiKey) {
       console.error("Warning: GEMINI_API_KEY is not defined in environment variables.");
     }
@@ -615,8 +616,8 @@ exports.extractDataWithGemini = async (filePath, mimeType, engine = 'gemini') =>
     const genAI = new GoogleGenerativeAI(apiKey);
 
     try {
-      // ใช้โมเดลตามที่ผู้ใช้กำหนด (หากอัปเดตเป็น gemini-1.5-flash-lite หรือ 1.5-flash ในอนาคตก็เปลี่ยนได้)
-      const model = genAI.getGenerativeModel({ model: "gemini-3.1-flash-lite" }); 
+      // ดึงเวอร์ชันโมเดลจาก environment variable (GEMINI_MODEL)
+      const model = genAI.getGenerativeModel({ model: geminiModel }); 
 
       const prompt = `
     คุณเป็นผู้ช่วยผู้เชี่ยวชาญในการอ่านและสกัดข้อมูลจากเอกสารราชการไทย (Thai Official Documents) โดยเฉพาะบันทึกข้อความ (Memo)
@@ -630,6 +631,7 @@ exports.extractDataWithGemini = async (filePath, mimeType, engine = 'gemini') =>
       "memos": [
         {
           "ที่": "ระบุที่ของเอกสาร (ถ้าไม่มีให้ใส่ null)",
+          "จาก": "ระบุหน่วยงานหรือส่วนราชการต้นทางที่ส่งหนังสือมา เช่น ศตคม., ภ.5, บก.สส. (ถ้าไม่มีให้ใส่ null)",
           "วันที่": "ระบุวันที่ (ถ้าไม่มีให้ใส่ null)",
           "เวลา": "ระบุเวลา (ถ้าไม่มีให้ใส่ null)",
           "เรื่อง": "ระบุเรื่อง (ถ้าไม่มีให้ใส่ null)",

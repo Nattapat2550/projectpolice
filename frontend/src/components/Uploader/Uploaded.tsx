@@ -14,6 +14,8 @@ interface ResponsibilityAssignment {
 
 interface MemoData {
     ที่?: string;
+    จาก?: string;
+    sender?: string;
     วันที่?: string; 
     เวลา?: string;
     เรื่อง?: string;
@@ -150,6 +152,8 @@ export default function Uploaded({ extractedData }: UploadedProps) {
 
                         return {
                             ...memo,
+                            จาก: memo.จาก || memo.sender || "",
+                            sender: memo.sender || memo.จาก || "",
                             isUrgent: memo.isUrgent || false,
                             task_detail: memo.task_detail || "",
                             meeting_date: memo.meeting_date || "",
@@ -227,8 +231,55 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                     let baseDate = parseThaiDate(memo.วันที่);
                     if (!baseDate || isNaN(baseDate.getTime())) baseDate = new Date();
                     baseDate.setDate(baseDate.getDate() + parseInt(file.deadline));
+
+                    const cleanToOnlyName = (str?: string) => {
+                        if (!str) return "";
+                        let s = str.trim();
+                        s = s.replace(/[\(\[\（].*?[\)\]\）]/g, '').trim();
+                        s = s.replace(/^(?:พล\.ต\.อ\.|พล\.ต\.ท\.|พล\.ต\.ต\.|พ\.ต\.อ\.|พ\.ต\.ท\.|พ\.ต\.ต\.|ร\.ต\.อ\.|ร\.ต\.ท\.|ร\.ต\.ต\.|ด\.ต\.|จ\.ส\.ต\.|ส\.ต\.อ\.|ส\.ต\.ท\.|ส\.ต\.ต\.|นาย|นางสาว|นาง|น\.ส\.)\s*/gi, '').trim();
+                        return s || str.trim();
+                    };
+
+                    const mappedAssignments: ResponsibilityAssignment[] = [];
+                    if (file.selectedAssignees && file.selectedAssignees.length > 0) {
+                        if (file.selectedAssignees.includes("all")) {
+                            users.forEach(u => {
+                                mappedAssignments.push({
+                                    user_id: String(u.id || u._id),
+                                    responsible_person: u.name ? cleanToOnlyName(u.name) : 'ทุกคน',
+                                    topics: []
+                                });
+                            });
+                        } else {
+                            file.selectedAssignees.forEach(uid => {
+                                const u = users.find(x => String(x.id || x._id) === uid);
+                                mappedAssignments.push({
+                                    user_id: u ? String(u.id || u._id) : undefined,
+                                    responsible_person: u ? cleanToOnlyName(u.name) : cleanToOnlyName(uid),
+                                    topics: []
+                                });
+                            });
+                        }
+                    }
+
+                    if (mappedAssignments.length === 0 && memo.assignments && memo.assignments.length > 0) {
+                        memo.assignments.forEach(assign => {
+                            if (assign.responsible_person) {
+                                mappedAssignments.push({
+                                    user_id: assign.user_id,
+                                    responsible_person: cleanToOnlyName(assign.responsible_person),
+                                    topics: assign.topics || []
+                                });
+                            }
+                        });
+                    }
                     
-                    return { ...memo, assignments: [], due_date: baseDate.toISOString().split('T')[0] };
+                    return { 
+                        ...memo, 
+                        sender: memo.จาก || memo.sender || '',
+                        assignments: mappedAssignments, 
+                        due_date: baseDate.toISOString().split('T')[0] 
+                    };
                 });
 
                 const token = typeof window !== 'undefined' ? localStorage.getItem("token") || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1] : null;
@@ -394,6 +445,10 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                                                     <div className="flex items-center gap-2">
                                                         <strong className="w-12 shrink-0">เรียน:</strong>
                                                         <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.เรียน || ''} onChange={(e) => handleMemoChange(fileIdx, index, "เรียน", e.target.value)} />
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <strong className="w-12 shrink-0">จาก:</strong>
+                                                        <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.จาก || memo.sender || ''} onChange={(e) => { handleMemoChange(fileIdx, index, "จาก", e.target.value); handleMemoChange(fileIdx, index, "sender", e.target.value); }} />
                                                     </div>
                                                     
                                                     <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-(--shadow)/60">
