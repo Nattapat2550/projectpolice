@@ -19,8 +19,12 @@ const {
     createTask,
     getTaskLogs,
     reserveTask,
-    getNextReserveNo
+    getNextReserveNo,
+    overwriteTaskDocument,
+    attachTaskDocument,
+    deleteTaskAttachment
 } = require('../controllers/taskController');
+const { upload } = require('../middleware/upload');
 
 const router = express.Router();
 
@@ -41,6 +45,9 @@ router.put('/:id/status', protect, updateTaskStatus);
 router.get('/:id', getTaskById);
 router.get('/:id/logs', protect, getTaskLogs);
 router.put('/:id', protect, updateTaskDetail);
+router.post('/:id/overwrite-doc', protect, upload.single('file'), overwriteTaskDocument);
+router.post('/:id/attach-doc', protect, upload.array('files', 10), attachTaskDocument);
+router.delete('/:id/attach-doc/:docId', protect, deleteTaskAttachment);
 router.delete('/:id', protect, deleteTask);
 
 module.exports = router;

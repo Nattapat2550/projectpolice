@@ -196,14 +196,38 @@ exports.uploadExcelTasks = async (req, res) => {
                     dueDate = rDate.getFullYear() + '-' + String(rDate.getMonth() + 1).padStart(2, '0') + '-' + String(rDate.getDate()).padStart(2, '0');
                 }
 
+                // ค้นหาฟิลด์ต่างๆ จากคอลัมน์ที่เป็นไปได้ (รองรับภาษาไทยหลายแบบ)
+                let excelSender = null;
+                let excelRecipientTo = null;
+                let excelAdditionalDocs = null;
+                let excelMemoNo = null;
+
+                for (const key of Object.keys(row)) {
+                    const cleanKey = key.replace(/\s+/g, '');
+                    if (cleanKey === "จาก" || cleanKey === "ส่วนราชการ" || cleanKey === "ผู้ส่ง" || cleanKey === "หน่วยงาน" || cleanKey === "หน่วยงานผู้ส่ง") {
+                        if (!excelSender) excelSender = row[key] ? String(row[key]).trim() : null;
+                    }
+                    if (cleanKey === "ถึง" || cleanKey === "เรียน" || cleanKey === "ผู้รับ" || cleanKey === "หน่วยงานรับ") {
+                        if (!excelRecipientTo) excelRecipientTo = row[key] ? String(row[key]).trim() : null;
+                    }
+                    if (cleanKey === "เอกสารข้อมูลเพิ่มเติม" || cleanKey === "สิ่งที่ส่งมาด้วย" || cleanKey === "เอกสารแนบ" || cleanKey === "สิ่งที่ส่งมา") {
+                        if (!excelAdditionalDocs) excelAdditionalDocs = row[key] ? String(row[key]).trim() : null;
+                    }
+                    if (cleanKey === "ที่หนังสือ" || cleanKey === "เลขที่หนังสือ" || cleanKey === "ที่") {
+                        if (!excelMemoNo) excelMemoNo = row[key] ? String(row[key]).trim() : null;
+                    }
+                }
+
                 allData.push({
                     original_row: index + 1,
                     received_date: receivedDate,
                     receive_no: receiveNo,
                     receive_year: receiveYear,
-                    memo_no: row["ที่หนังสือ"] ? String(row["ที่หนังสือ"]).trim() : null,
+                    memo_no: excelMemoNo || (row["ที่หนังสือ"] ? String(row["ที่หนังสือ"]).trim() : null),
                     memo_date: parseDateSafe(row["ลงวันที่"]),
-                    sender: row["จาก"] ? String(row["จาก"]).trim() : null,
+                    sender: excelSender || (row["จาก"] ? String(row["จาก"]).trim() : null),
+                    recipient_to: excelRecipientTo || (row["ถึง"] || row["เรียน"] ? String(row["ถึง"] || row["เรียน"]).trim() : null),
+                    additional_docs: excelAdditionalDocs || (row["เอกสารข้อมูลเพิ่มเติม"] || row["เอกสารแนบ"] || row["สิ่งที่ส่งมาด้วย"] ? String(row["เอกสารข้อมูลเพิ่มเติม"] || row["เอกสารแนบ"] || row["สิ่งที่ส่งมาด้วย"]).trim() : null),
                     title: subject || "ไม่มีชื่องาน",
                     assignee_name: row["ผู้ปฏิบัติ"] ? String(row["ผู้ปฏิบัติ"]).trim() : null,
                     due_date_str: dueDate,
@@ -300,21 +324,25 @@ exports.uploadExcelTasks = async (req, res) => {
                         let safeSender = item.sender ? String(item.sender) : null;
                         let safeTaskDetail = item.command_text && item.command_text.length > 0 ? item.command_text.join('\n') : null;
 
+                        let safeRecipientTo = item.recipient_to ? String(item.recipient_to) : null;
+                        let safeAdditionalDocs = item.additional_docs ? String(item.additional_docs) : null;
+
                         let rowPlaceholders = [];
-                        for(let j = 0; j < 18; j++) rowPlaceholders.push(`$${counter++}`);
+                        for(let j = 0; j < 20; j++) rowPlaceholders.push(`$${counter++}`);
                         valuesPlaceholders.push(`(${rowPlaceholders.join(', ')})`);
                         
                         flatValues.push(
                             safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, 
                             safeSender, parsedDueDate, created_by, parsedCreatedAt, safeTaskDetail, item.is_urgent,
                             item.receive_no, item.receive_year, item.signed_date, 
-                            item.meeting_date || null, item.reply_due_date || null, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ'
+                            item.meeting_date || null, item.reply_due_date || null, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ',
+                            safeRecipientTo, safeAdditionalDocs
                         );
                     });
 
                     const taskQuery = `
                         INSERT INTO tasks 
-                        (title, memo_no, memo_date, main_text, notes, sender, due_date, created_by, created_at, task_detail, is_urgent, receive_no, receive_year, sign_date, meeting_date, reply_due_date, urgency_level, secret_level) 
+                        (title, memo_no, memo_date, main_text, notes, sender, due_date, created_by, created_at, task_detail, is_urgent, receive_no, receive_year, sign_date, meeting_date, reply_due_date, urgency_level, secret_level, recipient_to, additional_docs) 
                         VALUES ${valuesPlaceholders.join(', ')} 
                         RETURNING id
                     `;
@@ -351,9 +379,12 @@ exports.uploadExcelTasks = async (req, res) => {
                             let safeSender = item.sender ? String(item.sender) : null;
                             let safeTaskDetail = item.command_text && item.command_text.length > 0 ? item.command_text.join('\n') : null;
 
+                            let safeRecipientTo = item.recipient_to ? String(item.recipient_to) : null;
+                            let safeAdditionalDocs = item.additional_docs ? String(item.additional_docs) : null;
+
                             await pool.query(
-                                `UPDATE tasks SET title = COALESCE($1, title), memo_no = COALESCE($2, memo_no), memo_date = COALESCE($3, memo_date), main_text = COALESCE($4, main_text), notes = COALESCE($5, notes), sender = COALESCE($6, sender), due_date = COALESCE($7, due_date), task_detail = COALESCE($8, task_detail), is_urgent = $9, sign_date = COALESCE($10, sign_date), meeting_date = COALESCE($11, meeting_date), reply_due_date = COALESCE($12, reply_due_date), urgency_level = COALESCE($13, urgency_level), secret_level = COALESCE($14, secret_level), updated_at = NOW() WHERE id = $15`,
-                                [safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, safeSender, parsedDueDate, safeTaskDetail, item.is_urgent, item.signed_date, item.meeting_date || null, item.reply_due_date || null, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ', taskId]
+                                `UPDATE tasks SET title = COALESCE($1, title), memo_no = COALESCE($2, memo_no), memo_date = COALESCE($3, memo_date), main_text = COALESCE($4, main_text), notes = COALESCE($5, notes), sender = COALESCE($6, sender), due_date = COALESCE($7, due_date), task_detail = COALESCE($8, task_detail), is_urgent = $9, sign_date = COALESCE($10, sign_date), meeting_date = COALESCE($11, meeting_date), reply_due_date = COALESCE($12, reply_due_date), urgency_level = COALESCE($13, urgency_level), secret_level = COALESCE($14, secret_level), recipient_to = COALESCE($15, recipient_to), additional_docs = COALESCE($16, additional_docs), updated_at = NOW() WHERE id = $17`,
+                                [safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, safeSender, parsedDueDate, safeTaskDetail, item.is_urgent, item.signed_date, item.meeting_date || null, item.reply_due_date || null, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ', safeRecipientTo, safeAdditionalDocs, taskId]
                             );
                             updatedTaskIds.push(taskId);
                             await pool.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);

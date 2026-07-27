@@ -61,10 +61,10 @@ async function ensureSheetExists(sheets, spreadsheetId, sheetName) {
           console.log(`[Google Sheets] Created new sheet: ${sheetName}`);
           
           // 2. Add headers to the newly created sheet
-          const headers = ['ID', 'เลขทะเบียน', 'ปีทะเบียน', 'วันที่รับ', 'ที่หนังสือ', 'ลงวันที่', 'จาก', 'เรื่อง', 'ผู้ปฏิบัติ', 'วันที่', 'ข้อสั่งการ', 'วันที่ลงนาม', 'หมายเหตุ'];
+          const headers = ['ID', 'เลขทะเบียน', 'ปีทะเบียน', 'วันที่รับ', 'ที่หนังสือ', 'ลงวันที่', 'จาก', 'ถึง', 'เรื่อง', 'ผู้ปฏิบัติ', 'วันที่', 'ข้อสั่งการ', 'วันที่ลงนาม', 'หมายเหตุ', 'เอกสารข้อมูลเพิ่มเติม'];
           await sheets.spreadsheets.values.append({
               spreadsheetId,
-              range: `${sheetName}!A1:M1`,
+              range: `${sheetName}!A1:O1`,
               valueInputOption: 'USER_ENTERED',
               resource: { values: [headers] }
           });
@@ -96,17 +96,19 @@ exports.appendTaskToSheet = async (taskData) => {
       taskData.memo_no || '',
       formatDateTH(taskData.memo_date) || '',
       taskData.sender || '',
+      taskData.recipient_to || '',
       taskData.title || '',
       cleanToOnlyName(taskData.personInCharge) || '',
       formatDateTH(taskData.due_date) || '',
       taskData.task_detail || '',
       formatDateTH(taskData.sign_date) || '',
-      taskData.notes || ''
+      taskData.notes || '',
+      taskData.additional_docs || ''
     ];
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A:M`,
+      range: `${sheetName}!A:O`,
       valueInputOption: 'USER_ENTERED',
       resource: {
         values: [rowData],
@@ -143,17 +145,19 @@ exports.appendMultipleTasksToSheet = async (tasksArray) => {
           taskData.memo_no || '',
           formatDateTH(taskData.memo_date) || '',
           taskData.sender || '',
+          taskData.recipient_to || '',
           taskData.title || '',
           cleanToOnlyName(taskData.personInCharge) || '',
           formatDateTH(taskData.due_date) || '',
           taskData.task_detail || '',
           formatDateTH(taskData.sign_date) || '',
-          taskData.notes || ''
+          taskData.notes || '',
+          taskData.additional_docs || ''
         ]);
 
         await sheets.spreadsheets.values.append({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${sheetName}!A:M`,
+          range: `${sheetName}!A:O`,
           valueInputOption: 'USER_ENTERED',
           resource: { values },
         });
@@ -207,18 +211,20 @@ exports.updateTaskInSheet = async (taskData) => {
       taskData.memo_no || '',
       formatDateTH(taskData.memo_date) || '',
       taskData.sender || '',
+      taskData.recipient_to || '',
       taskData.title || '',
       cleanToOnlyName(taskData.personInCharge) || '',
       formatDateTH(taskData.due_date) || '',
       taskData.task_detail || '',
       formatDateTH(taskData.sign_date) || '',
-      taskData.notes || ''
+      taskData.notes || '',
+      taskData.additional_docs || ''
     ];
 
     // 2. Update the specific row
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A${sheetRowNumber}:M${sheetRowNumber}`,
+      range: `${sheetName}!A${sheetRowNumber}:O${sheetRowNumber}`,
       valueInputOption: 'USER_ENTERED',
       resource: {
         values: [rowData],

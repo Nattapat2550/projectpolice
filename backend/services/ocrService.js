@@ -340,6 +340,19 @@ exports.parseOcrTextToMemos = function(text) {
     }
   }
   
+  // 5.1 จาก (sender / ส่วนราชการ)
+  let sender_from = null;
+  const senderMatch = text.match(/(?:ส่วนราชการ|จาก)\s*[:.\-_]?\s*([^\n]*)/i);
+  if (senderMatch) {
+    let val = senderMatch[1].trim();
+    if (val.length < 2) {
+      const remainingText = text.substring(senderMatch.index + senderMatch[0].length).trim();
+      const linesS = remainingText.split('\n').map(l => l.trim()).filter(Boolean);
+      if (linesS.length > 0) val = linesS[0];
+    }
+    sender_from = val || null;
+  }
+  
   // 6. เรียน (Fuzzy Match)
   let learn_to = null;
   const learnMatch = text.match(/[เแ]\s*[รว]\s*[ีิีุึั]?[ย]?\s*[นง]\s*(?!(?:เชิญ|เสนอ|ชี้แจง|มาเพื่อ))\s*([^\n]*)/i);
@@ -351,6 +364,22 @@ exports.parseOcrTextToMemos = function(text) {
       if (lines.length > 0) val = lines[0];
     }
     learn_to = val;
+  }
+  
+  // 6.1 ถึง (recipient_to) - ใช้ค่าจาก "เรียน" เป็น "ถึง"
+  let recipient_to = learn_to;
+  
+  // 6.2 เอกสารข้อมูลเพิ่มเติม (สิ่งที่ส่งมาด้วย)
+  let additional_docs = null;
+  const addDocsMatch = text.match(/(?:สิ่งที่ส่งมาด้วย|สิ่งที่แนบมาด้วย|เอกสารแนบ|สิ่งที่ส่งมา)\s*(?::?|\s)\s*([^\n]*)/i);
+  if (addDocsMatch) {
+    let val = addDocsMatch[1].trim();
+    if (val.length < 2) {
+      const remainingText = text.substring(addDocsMatch.index + addDocsMatch[0].length).trim();
+      const lines2 = remainingText.split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines2.length > 0) val = lines2[0];
+    }
+    additional_docs = val || null;
   }
   
   // 7. ข้อมูลตรายางประทับรับ (เลขรับ & วันที่รับ)
@@ -520,10 +549,14 @@ exports.parseOcrTextToMemos = function(text) {
     "memos": [
       {
         "ที่": doc_id,
+        "จาก": sender_from,
+        "sender": sender_from,
         "วันที่": doc_date,
         "เวลา": null,
         "เรื่อง": subject,
         "เรียน": learn_to,
+        "recipient_to": recipient_to || learn_to,
+        "additional_docs": additional_docs,
         "receive_no": receive_no,
         "receive_date": receive_date,
         "sign_date": sign_date,
@@ -631,11 +664,13 @@ exports.extractDataWithGemini = async (filePath, mimeType, engine = 'gemini') =>
       "memos": [
         {
           "ที่": "ระบุที่ของเอกสาร (ถ้าไม่มีให้ใส่ null)",
-          "จาก": "ระบุหน่วยงานหรือส่วนราชการต้นทางที่ส่งหนังสือมา เช่น ศตคม., ภ.5, บก.สส. (ถ้าไม่มีให้ใส่ null)",
+          "จาก": "ระบุข้อความหรือหน่วยงานต้นทางที่อยู่หลังคำว่า 'ส่วนราชการ' หรือ 'จาก' เช่น ฝอ.ศตคม.ตร., ภ.5, บก.สส. (ถ้าไม่มีให้ใส่ null)",
           "วันที่": "ระบุวันที่ (ถ้าไม่มีให้ใส่ null)",
           "เวลา": "ระบุเวลา (ถ้าไม่มีให้ใส่ null)",
           "เรื่อง": "ระบุเรื่อง (ถ้าไม่มีให้ใส่ null)",
-          "เรียน": "ระบุผู้ที่เอกสารส่งถึง (ถ้าไม่มีให้ใส่ null)",
+          "เรียน": "ระบุผู้ที่เอกสารส่งถึงที่อยู่หลังคำว่า 'เรียน' เช่น รอง ผบ.ตร./ผอ.ศตคม.ตร. (ถ้าไม่มีให้ใส่ null)",
+          "ถึง": "ระบุผู้รับปลายทาง หรือหน่วยงานที่เอกสารส่งถึงที่อยู่หลังคำว่า 'เรียน' หรือ 'ถึง' เช่น รอง ผบ.ตร./ผอ.ศตคม.ตร. (ถ้าไม่มีให้ใส่ null)",
+          "เอกสารข้อมูลเพิ่มเติม": "ระบุข้อมูลสิ่งที่ส่งมาด้วย หรือเอกสารแนบที่ระบุในเอกสาร เช่น 'สำเนาหนังสือ สน.บางนา 1 ฉบับ' (ถ้าไม่มีให้ใส่ null)",
           "receive_no": "ระบุเลขรับ จากตรายางประทับรับหนังสือ (ถ้าไม่มีให้ใส่ null) **สำคัญ: ต้องระบุเป็นตัวเลขอารบิกเท่านั้น (เช่น 556) ห้ามมีตัวอักษร**",
           "receive_date": "ระบุวันที่รับ จากตรายางประทับรับหนังสือ (ถ้าไม่มีให้ใส่ null) **สำคัญ: ต้องระบุในรูปแบบ YYYY-MM-DD เท่านั้น (ปี ค.ศ.)**",
           "sign_date": "ระบุวันที่ลงนาม จากลายเซ็นท้ายเอกสาร (ถ้าไม่มีให้ใส่ null) **สำคัญ: ต้องระบุในรูปแบบ YYYY-MM-DD เท่านั้น (ปี ค.ศ.)**",

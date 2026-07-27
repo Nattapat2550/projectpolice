@@ -29,6 +29,8 @@ export interface Task {
   memo_date: string | null;
   sign_date?: string | null;
   sender: string;
+  recipient_to?: string | null;
+  additional_docs?: string | null;
   status: string;
   is_urgent: boolean;
   urgency_level: string;
@@ -51,6 +53,7 @@ export type SortKey =
   | 'memo_date'
   | 'title'
   | 'sender'
+  | 'recipient_to'
   | 'urgency_level'
   | 'secret_level'
   | 'status'
@@ -78,6 +81,16 @@ interface TaskTableProps {
   onStatusChange?: (taskId: string, newStatus: string) => void;
 }
 
+const formatReceiveYear = (year?: number | string | null) => {
+  if (!year) return '-';
+  const numYear = typeof year === 'string' ? parseInt(year, 10) : year;
+  if (isNaN(numYear) || numYear === 0) return year.toString();
+  if (numYear < 2400) {
+    return (numYear + 543).toString();
+  }
+  return numYear.toString();
+};
+
 // 🔴 เช็คว่าชื่อเรื่องมีคำว่า "กันเลขลงรับ" หรือไม่ -> ใช้ไฮไลต์ทั้งแถวเป็นสีแดง
 const isKanLekLongRub = (title?: string | null) => !!title && title.includes('กันเลขลงรับ');
 
@@ -89,6 +102,7 @@ const COLUMNS: { key: SortKey; label: string; className?: string }[] = [
 
 const COLUMNS_AFTER_ASSIGNEE: { key: SortKey; label: string; className?: string }[] = [
   { key: 'sender', label: 'จาก (หน่วยงาน)', className: 'w-auto' },
+  { key: 'recipient_to', label: 'ถึง', className: 'w-auto' },
   { key: 'urgency_level', label: 'ความเร่งด่วน', className: 'w-auto' },
   { key: 'status', label: 'สถานะ', className: 'w-auto' },
   { key: 'secret_level', label: 'ชั้นความลับ', className: 'w-auto' },
@@ -263,7 +277,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                   >
                     <td className={`px-1.5 py-3 font-medium ${flagged ? 'text-[var(--redText)]' : ''}`}>
                       {task.receive_no ?? '-'}
-                      <span className={flagged ? 'font-normal opacity-70' : 'text-[var(--foreground)]/40 font-normal'}>/{task.receive_year || '-'}</span>
+                      <span className={flagged ? 'font-normal opacity-70' : 'text-[var(--foreground)]/40 font-normal'}>/{formatReceiveYear(task.receive_year)}</span>
                     </td>
                     <td className={`px-1.5 py-3 font-mono text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>
                       {task.memo_no || '-'}
@@ -306,6 +320,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                     </td>
 
                     <td className={`px-1.5 py-3 truncate ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>{task.sender || '-'}</td>
+                    <td className={`px-1.5 py-3 truncate ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>{task.recipient_to || '-'}</td>
                     <td className="px-1.5 py-3 text-center">
                       <span className={`inline-block px-2.5 py-1 text-xs font-semibold rounded-full border ${getUrgencyBadgeStyle(task.urgency_level)}`}>
                         {task.urgency_level || 'ปกติ'}
@@ -377,7 +392,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                 <div className="flex items-center space-x-2">
                   <span className={`text-xs font-semibold px-3 py-1 rounded-sm bg-[var(--button)] ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>
                     เลขรับ {task.receive_no ?? '-'}
-                    <span className={flagged ? 'font-normal opacity-70' : 'text-[var(--foreground)]/40 font-normal'}>/{task.receive_year || '-'}</span>
+                    <span className={flagged ? 'font-normal opacity-70' : 'text-[var(--foreground)]/40 font-normal'}>/{formatReceiveYear(task.receive_year)}</span>
                   </span>
                   <span className={`font-mono text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/50'}`}>
                     {task.memo_no || '-'}
@@ -394,6 +409,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                 </h4>
                 <div className={`text-xs flex flex-col space-y-0.5 pt-1 ${flagged ? 'text-[var(--redText)]/80' : 'text-[var(--foreground)]/60'}`}>
                   <p><span className="font-medium">จาก:</span> {task.sender || '-'}</p>
+                  <p><span className="font-medium">ถึง:</span> {task.recipient_to || '-'}</p>
+                  {task.additional_docs && <p><span className="font-medium">เอกสารเพิ่มเติม:</span> {task.additional_docs}</p>}
                   <p><span className="font-medium">วันที่หนังสือ:</span> {formatDate(task.memo_date)}</p>
                   <p>
                     <span className="font-medium">ชั้นความลับ:</span>{' '}

@@ -7,6 +7,8 @@ export interface SearchFilters {
   receive_year: string;
   memo_no: string;
   sender: string;
+  recipient_to: string;
+  additional_docs: string;
   status: string;
   urgency_level: string;
   secret_level: string;
@@ -19,6 +21,8 @@ export const emptyFilters: SearchFilters = {
   receive_year: '',
   memo_no: '',
   sender: '',
+  recipient_to: '',
+  additional_docs: '',
   status: '',
   urgency_level: '',
   secret_level: '',
@@ -164,6 +168,29 @@ export const Header: React.FC<HeaderProps> = ({ filters, setFilters, users = [] 
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="space-y-1.5">
+                  <label className={labelClass}>ถึง (ผู้รับ / เรียน)</label>
+                  <input
+                    type="text"
+                    placeholder="เช่น ผบ.ตช. ..."
+                    className={inputClass}
+                    value={filters.recipient_to}
+                    onChange={(e) => setFilters({ ...filters, recipient_to: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className={labelClass}>เอกสารข้อมูลเพิ่มเติม</label>
+                  <input
+                    type="text"
+                    placeholder="เช่น สิ่งที่ส่งมาด้วย..."
+                    className={inputClass}
+                    value={filters.additional_docs}
+                    onChange={(e) => setFilters({ ...filters, additional_docs: e.target.value })}
+                  />
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-5">
                 <div className="space-y-1.5">
                   <label className={labelClass}>เลขรับ</label>
@@ -177,7 +204,7 @@ export const Header: React.FC<HeaderProps> = ({ filters, setFilters, users = [] 
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className={labelClass}>ปี (receive_year)</label>
+                  <label className={labelClass}>ปี (พ.ศ.)</label>
                   <input
                     type="text"
                     inputMode="numeric"

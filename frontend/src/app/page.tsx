@@ -75,6 +75,8 @@ function normalizeTask(raw: any, usersMap: Map<string, UserMeta>, userByNameMap:
     memo_date: raw.memo_date ?? raw.date ?? null,
     sign_date: raw.sign_date ?? null,
     sender: raw.sender ?? '-',
+    recipient_to: raw.recipient_to ?? null,
+    additional_docs: raw.additional_docs ?? null,
     status: raw.status ?? 'following',
     is_urgent: raw.is_urgent ?? raw.isUrgent ?? false,
     urgency_level: raw.urgency_level ?? 'ปกติ',
@@ -355,7 +357,7 @@ export default function HomePage() {
       return date.toLocaleDateString('th-TH', {
         day: 'numeric',
         month: 'short',
-        year: '2-digit',
+        year: 'numeric',
       });
     } catch {
       return dateStr;
@@ -369,6 +371,8 @@ export default function HomePage() {
     const rYear = filters.receive_year.trim();
     const m = filters.memo_no.trim().toLowerCase();
     const s = filters.sender.trim().toLowerCase();
+    const recTo = (filters.recipient_to || '').trim().toLowerCase();
+    const addDocs = (filters.additional_docs || '').trim().toLowerCase();
     const status = filters.status.trim();
     const urgency = filters.urgency_level.trim();
     const secret = filters.secret_level.trim();
@@ -384,9 +388,12 @@ export default function HomePage() {
     return tasks.filter((task) => {
       const matchTitle = !t || task.title?.toLowerCase().includes(t);
       const matchReceiveNo = !rNo || task.receive_no?.toString().includes(rNo);
-      const matchReceiveYear = !rYear || task.receive_year?.toString().includes(rYear);
+      const thYear = task.receive_year ? (task.receive_year < 2400 ? task.receive_year + 543 : task.receive_year).toString() : '';
+      const matchReceiveYear = !rYear || task.receive_year?.toString().includes(rYear) || thYear.includes(rYear);
       const matchMemo = !m || task.memo_no?.toLowerCase().includes(m);
       const matchSender = !s || task.sender?.toLowerCase().includes(s);
+      const matchRecipientTo = !recTo || task.recipient_to?.toLowerCase().includes(recTo);
+      const matchAdditionalDocs = !addDocs || task.additional_docs?.toLowerCase().includes(addDocs);
       const matchStatus = !status || task.status === status;
       const matchUrgency = !urgency || task.urgency_level === urgency;
       const matchSecret = !secret || task.secret_level === secret;
@@ -403,6 +410,8 @@ export default function HomePage() {
         matchReceiveYear &&
         matchMemo &&
         matchSender &&
+        matchRecipientTo &&
+        matchAdditionalDocs &&
         matchStatus &&
         matchUrgency &&
         matchSecret &&

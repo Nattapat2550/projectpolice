@@ -359,6 +359,46 @@ export default function DetailsPanel({
                                                     />
                                                 </div>
                                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                                                    <strong>ที่ (เลขที่หนังสือ): </strong>
+                                                    <input 
+                                                        type="text" 
+                                                        className={styles.CustomSelect}
+                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
+                                                        value={taskData?.memo_no || ""} 
+                                                        onChange={(e) => setTaskData({ ...taskData, memo_no: e.target.value })} 
+                                                    />
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                                                    <strong>วันที่ (วันที่หนังสือ): </strong>
+                                                    <input 
+                                                        type="date" 
+                                                        className={styles.CustomSelect}
+                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
+                                                        value={taskData?.memo_date ? new Date(taskData.memo_date).toISOString().split('T')[0] : ""} 
+                                                        onChange={(e) => setTaskData({ ...taskData, memo_date: e.target.value })} 
+                                                    />
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                                                    <strong>จาก (ส่วนราชการ): </strong>
+                                                    <input 
+                                                        type="text" 
+                                                        className={styles.CustomSelect}
+                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
+                                                        value={taskData?.sender || ""} 
+                                                        onChange={(e) => setTaskData({ ...taskData, sender: e.target.value })} 
+                                                    />
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                                                    <strong>ถึง (เรียน): </strong>
+                                                    <input 
+                                                        type="text" 
+                                                        className={styles.CustomSelect}
+                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
+                                                        value={taskData?.recipient_to || ""} 
+                                                        onChange={(e) => setTaskData({ ...taskData, recipient_to: e.target.value })} 
+                                                    />
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
                                                     <strong>เลขรับ: </strong>
                                                     <input 
                                                         type="number" 
@@ -376,6 +416,66 @@ export default function DetailsPanel({
                                                         style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
                                                         value={taskData?.sign_date ? new Date(taskData.sign_date).toISOString().split('T')[0] : ""} 
                                                         onChange={(e) => setTaskData({ ...taskData, sign_date: e.target.value })} 
+                                                    />
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                                                    <strong>เปลี่ยนกำหนดส่ง: </strong>
+                                                    <input 
+                                                        type="datetime-local" 
+                                                        className={styles.CustomSelect}
+                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
+                                                        value={taskData?.date ? formatForInput(taskData.date) : ""} 
+                                                        onChange={(e) => {
+                                                            setTaskData({ ...taskData, date: e.target.value });
+                                                        }} 
+                                                    />
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                                                    <strong>ชั้นความเร่งด่วน: </strong>
+                                                    <select
+                                                        className={styles.CustomSelect}
+                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
+                                                        value={taskData?.urgency_level || ""}
+                                                        onChange={(e) => setTaskData({ ...taskData, urgency_level: e.target.value })}
+                                                    >
+                                                        <option value="">ปกติ (ไม่ระบุ)</option>
+                                                        <option value="ด่วน">ด่วน</option>
+                                                        <option value="ด่วนมาก">ด่วนมาก</option>
+                                                        <option value="ด่วนที่สุด">ด่วนที่สุด</option>
+                                                    </select>
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                                                    <strong>ชั้นความลับ: </strong>
+                                                    <select
+                                                        className={styles.CustomSelect}
+                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
+                                                        value={taskData?.secret_level || ""}
+                                                        onChange={(e) => setTaskData({ ...taskData, secret_level: e.target.value })}
+                                                    >
+                                                        <option value="">ปกติ (ไม่ระบุ)</option>
+                                                        <option value="ลับ">ลับ</option>
+                                                        <option value="ลับมาก">ลับมาก</option>
+                                                        <option value="ลับที่สุด">ลับที่สุด</option>
+                                                    </select>
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                                                    <strong>วันนัดประชุม: </strong>
+                                                    <input 
+                                                        type="date" 
+                                                        className={styles.CustomSelect}
+                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
+                                                        value={taskData?.meeting_date ? new Date(taskData.meeting_date).toISOString().split('T')[0] : ""} 
+                                                        onChange={(e) => setTaskData({ ...taskData, meeting_date: e.target.value })} 
+                                                    />
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
+                                                    <strong>วันนัดส่งแบบตอบรับ (ประชุม): </strong>
+                                                    <input 
+                                                        type="date" 
+                                                        className={styles.CustomSelect}
+                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
+                                                        value={taskData?.reply_due_date ? new Date(taskData.reply_due_date).toISOString().split('T')[0] : ""} 
+                                                        onChange={(e) => setTaskData({ ...taskData, reply_due_date: e.target.value })} 
                                                     />
                                                 </div>
                                             </div>

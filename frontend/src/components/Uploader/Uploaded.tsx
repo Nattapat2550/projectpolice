@@ -16,6 +16,8 @@ interface MemoData {
     ที่?: string;
     วันที่?: string; 
     เวลา?: string;
+    จาก?: string;
+    sender?: string;
     เรื่อง?: string;
     เรียน?: string;
     main_text?: string;
@@ -27,6 +29,8 @@ interface MemoData {
     receive_no?: string;
     receive_date?: string;
     sign_date?: string;
+    recipient_to?: string;
+    additional_docs?: string;
     assignments?: ResponsibilityAssignment[];
     due_date?: string; 
     isUrgent?: boolean;
@@ -409,24 +413,35 @@ export default function Uploaded({ extractedData, onClearExtractedData }: Upload
                                                 <h3 className="text-md font-bold" style={{ color: "var(--header)" }}>📄 เอกสารหน้าที่/ฉบับที่ {index + 1}</h3>
                                                 <div className="flex flex-col gap-2 p-4 rounded-lg border bg-(--container) border-(--shadow) shrink-0 text-foreground">
                                                     <div className="flex items-center gap-2">
-                                                        <strong className="w-12 shrink-0">ที่:</strong>
+                                                        <strong className="w-28 shrink-0">ที่:</strong>
                                                         <input type="text" className="border border-(--shadow) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.ที่ || ''} onChange={(e) => handleMemoChange(fileIdx, index, "ที่", e.target.value)} />
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <strong className="w-12 shrink-0">วันที่:</strong>
+                                                        <strong className="w-28 shrink-0">วันที่:</strong>
                                                         <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 font-bold text-(--blueText) focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.วันที่ || ''} onChange={(e) => handleMemoChange(fileIdx, index, "วันที่", e.target.value)} />
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <strong className="w-12 shrink-0">เวลา:</strong>
-                                                        <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.เวลา || ''} onChange={(e) => handleMemoChange(fileIdx, index, "เวลา", e.target.value)} />
+                                                        <strong className="w-28 shrink-0">จาก:</strong>
+                                                        <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.จาก || memo.sender || ''} onChange={(e) => { handleMemoChange(fileIdx, index, "จาก", e.target.value); handleMemoChange(fileIdx, index, "sender", e.target.value); }} />
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <strong className="w-12 shrink-0">เรื่อง:</strong>
+                                                        <strong className="w-28 shrink-0">ถึง (เรียน):</strong>
+                                                        <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.recipient_to || memo.เรียน || ''} onChange={(e) => { handleMemoChange(fileIdx, index, "recipient_to", e.target.value); handleMemoChange(fileIdx, index, "เรียน", e.target.value); }} />
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <strong className="w-28 shrink-0">เรื่อง:</strong>
                                                         <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.เรื่อง || ''} onChange={(e) => handleMemoChange(fileIdx, index, "เรื่อง", e.target.value)} />
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <strong className="w-12 shrink-0">เรียน:</strong>
-                                                        <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.เรียน || ''} onChange={(e) => handleMemoChange(fileIdx, index, "เรียน", e.target.value)} />
+                                                        <strong className="w-28 shrink-0">เอกสารแนบเพิ่มเติม:</strong>
+                                                        <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.additional_docs || ''} onChange={(e) => handleMemoChange(fileIdx, index, "additional_docs", e.target.value)} />
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 font-bold text-(--blueText) focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.วันที่ || ''} onChange={(e) => handleMemoChange(fileIdx, index, "วันที่", e.target.value)} />
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <strong className="w-28 shrink-0">เวลา:</strong>
+                                                        <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.เวลา || ''} onChange={(e) => handleMemoChange(fileIdx, index, "เวลา", e.target.value)} />
                                                     </div>
                                                     
                                                     <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-(--shadow)/60">

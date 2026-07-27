@@ -37,6 +37,8 @@ CREATE TABLE tasks (
   task_detail TEXT,         -- รายละเอียดสิ่งที่ต้องดำเนินการรวม
   main_text TEXT,           -- เนื้อหารวมของงาน
   sender TEXT, -- เก็บฟิลด์ "จาก"
+  recipient_to TEXT, -- เก็บฟิลด์ "ถึง"
+  additional_docs TEXT, -- เก็บฟิลด์ "เอกสารข้อมูลเพิ่มเติม"
   status VARCHAR(50) DEFAULT 'following',
   notes TEXT,                -- บันทึก/รายละเอียด
   is_urgent BOOLEAN DEFAULT FALSE,
@@ -59,7 +61,7 @@ CREATE TABLE task_assignments (
 );
 
 -- 4. ตาราง "Log การทำงาน" (เชื่อมกับ Tasks และ Users)
-CREATE TABLE task_logs (
+CREATE TABLE IF NOT EXISTS task_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
   user_id UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -67,3 +69,19 @@ CREATE TABLE task_logs (
   details TEXT, -- JSON or text format detailing the change
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+-- 5. ตาราง "เอกสารประกอบเพิ่มเติม" (Attached Documents)
+CREATE TABLE IF NOT EXISTS task_documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
+  filename VARCHAR(255) NOT NULL,
+  drive_file_id VARCHAR(255),
+  drive_web_view_link TEXT,
+  doc_type VARCHAR(50) DEFAULT 'attachment',
+  created_at TIMESTAMP DEFAULT NOW(),
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- 6. คำสั่งอัปเดตโครงสร้างตารางเดิม (สำหรับฐานข้อมูลที่มีตารางอยู่แล้ว)
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recipient_to TEXT;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS additional_docs TEXT;

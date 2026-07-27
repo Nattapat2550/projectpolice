@@ -5,6 +5,7 @@ const { uploadToDrive, deleteFromDrive, renameFileOnDrive } = require('../servic
 const { appendTaskToSheet, appendMultipleTasksToSheet, updateTaskInSheet } = require('../services/googleSheetsService');
 const { generateHash } = require('../utils/duplicateChecker');
 const { formatStandardFilename } = require('../utils/filenameParser');
+const { extractDataWithGemini } = require('../services/ocrService');
 
 const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID; 
 // กำหนดโฟลเดอร์สำหรับเก็บไฟล์ชั่วคราวให้ชัดเจน (แก้ไข path ให้ตรงกับที่ตั้งโฟลเดอร์ uploads ของคุณ)
@@ -121,7 +122,9 @@ exports.getAllTasks = async (req, res) => {
         t.receive_year,
         t.memo_no,
         t.memo_date,
-        t.sender
+        t.sender,
+        t.recipient_to,
+        t.additional_docs
       FROM tasks t
       LEFT JOIN agg_assignees aa ON t.id = aa.task_id
       ORDER BY t.due_date ASC NULLS LAST
@@ -171,7 +174,9 @@ exports.getUrgentTasks = async (req, res) => {
         t.receive_year,
         t.memo_no,
         t.memo_date,
-        t.sender
+        t.sender,
+        t.recipient_to,
+        t.additional_docs
       FROM tasks t
       LEFT JOIN agg_assignees aa ON t.id = aa.task_id
       WHERE t.is_urgent = true
@@ -278,6 +283,8 @@ exports.confirmTasks = async (req, res) => {
           const { receiveNo, receiveYear } = await handleReceiveNoAndYear(client, memo.receive_no, parsedReceiveDate);
 
           const memoSender = memo.sender || memo.จาก || null;
+          const memoRecipient = memo.recipient_to || memo.ถึง || null;
+          const memoAdditionalDocs = memo.additional_docs || memo.เอกสารข้อมูลเพิ่มเติม || null;
 
           const existingRes = await client.query('SELECT id, document_id FROM tasks WHERE receive_no = $1 AND receive_year = $2', [receiveNo, receiveYear]);
           let taskId;
@@ -288,8 +295,8 @@ exports.confirmTasks = async (req, res) => {
 
               // 1. อัปเดตงานในตาราง tasks ก่อนเพื่อให้ document_id ชี้ไปที่เอกสารใหม่
               await client.query(
-                  `UPDATE tasks SET document_id = COALESCE($1, document_id), title = $2, memo_no = $3, memo_date = $4, main_text = $5, task_detail = $6, due_date = COALESCE($7, due_date), is_urgent = $8, urgency_level = $9, secret_level = $10, sign_date = $11, meeting_date = $13, reply_due_date = $14, sender = $16, created_at = COALESCE(CAST($12 AS timestamp), created_at), updated_at = NOW() WHERE id = $15`,
-                  [documentId, memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', memo.ที่, parsedMemoDate, memo.main_text, memo.task_detail || null, finalDueDate, memo.isUrgent || false, memo.urgency_level || null, memo.secret_level || null, parsedSignDate, parsedReceiveDate, parsedMeetingDate, parsedReplyDueDate, taskId, memoSender]
+                  `UPDATE tasks SET document_id = COALESCE($1, document_id), title = $2, memo_no = $3, memo_date = $4, main_text = $5, task_detail = $6, due_date = COALESCE($7, due_date), is_urgent = $8, urgency_level = $9, secret_level = $10, sign_date = $11, meeting_date = $13, reply_due_date = $14, sender = $16, recipient_to = $17, additional_docs = $18, created_at = COALESCE(CAST($12 AS timestamp), created_at), updated_at = NOW() WHERE id = $15`,
+                  [documentId, memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', memo.ที่, parsedMemoDate, memo.main_text, memo.task_detail || null, finalDueDate, memo.isUrgent || false, memo.urgency_level || null, memo.secret_level || null, parsedSignDate, parsedReceiveDate, parsedMeetingDate, parsedReplyDueDate, taskId, memoSender, memoRecipient, memoAdditionalDocs]
               );
 
               // 2. ลบเอกสารเก่าและไฟล์เก่าใน Drive หากไม่มีงานอื่นใช้อยู่
@@ -314,8 +321,8 @@ exports.confirmTasks = async (req, res) => {
               updatedTaskIds.push(taskId);
           } else {
               const taskRes = await client.query(
-                `INSERT INTO tasks (document_id, title, memo_no, memo_date, main_text, task_detail, due_date, is_urgent, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, sender, created_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $14, $15, $16, $17, $18, COALESCE(CAST($13 AS timestamp), NOW())) RETURNING id`,
+                `INSERT INTO tasks (document_id, title, memo_no, memo_date, main_text, task_detail, due_date, is_urgent, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, sender, recipient_to, additional_docs, created_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $14, $15, $16, $17, $18, $19, $20, COALESCE(CAST($13 AS timestamp), NOW())) RETURNING id`,
                 [ 
                   documentId, 
                   memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', 
@@ -334,7 +341,9 @@ exports.confirmTasks = async (req, res) => {
                   parsedReplyDueDate,
                   receiveNo,
                   receiveYear,
-                  memoSender
+                  memoSender,
+                  memoRecipient,
+                  memoAdditionalDocs
                 ]
               );
               taskId = taskRes.rows[0].id;
@@ -429,7 +438,7 @@ exports.updateTaskDetail = async (req, res) => {
     try {
       await client.query('BEGIN');
       const { id } = req.params;
-      const { name, date, notes, assignments, isUrgent, main_text, task_detail, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, receive_no } = req.body;
+      const { name, date, notes, assignments, isUrgent, main_text, task_detail, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, receive_no, recipient_to, additional_docs } = req.body;
   
       const validDate = (date === "" || !date) ? null : date;
       const urgentValue = isUrgent !== undefined ? isUrgent : null; 
@@ -453,12 +462,15 @@ exports.updateTaskDetail = async (req, res) => {
              meeting_date = CASE WHEN $16::boolean THEN $11 ELSE meeting_date END,
              reply_due_date = CASE WHEN $17::boolean THEN $12 ELSE reply_due_date END,
              receive_no = COALESCE($13, receive_no),
+             recipient_to = COALESCE($18, recipient_to),
+             additional_docs = COALESCE($19, additional_docs),
              updated_at = NOW() 
          WHERE id = $14`,
         [
           name, validDate, notes, urgentValue, main_text, task_detail, urgency_level, secret_level, 
           receive_date, sDate, mDate, rDate, receive_no, id,
-          req.body.hasOwnProperty('sign_date'), req.body.hasOwnProperty('meeting_date'), req.body.hasOwnProperty('reply_due_date')
+          req.body.hasOwnProperty('sign_date'), req.body.hasOwnProperty('meeting_date'), req.body.hasOwnProperty('reply_due_date'),
+          recipient_to, additional_docs
         ]
       );
 
@@ -589,6 +601,8 @@ exports.getTaskById = async (req, res) => {
         t.receive_no,
         t.receive_year,
         t.sender,
+        t.recipient_to,
+        t.additional_docs,
         t.created_at AS "createdAt",
         TO_CHAR(t.sign_date, 'YYYY-MM-DD') AS sign_date,
         TO_CHAR(t.meeting_date, 'YYYY-MM-DD') AS meeting_date,
@@ -621,6 +635,12 @@ exports.getTaskById = async (req, res) => {
     }
     const task = rows[0];
     task.personInCharge = task.assignments.map(a => a.personInCharge).join(', ') || 'ไม่ระบุ';
+
+    const docsRes = await pool.query(
+      `SELECT id, filename, drive_file_id, drive_web_view_link, doc_type, created_at FROM task_documents WHERE task_id = $1 ORDER BY created_at ASC`,
+      [id]
+    );
+    task.attached_documents = docsRes.rows;
 
     res.status(200).json({ success: true, data: task });
   } catch (err) {
@@ -673,7 +693,7 @@ exports.createTask = async (req, res) => {
   try {
     await client.query('BEGIN');
     
-    const { title, memo_no, memo_date, due_date, main_text, is_urgent, assignments, createdBy, created_by, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, sender } = req.body;
+    const { title, memo_no, memo_date, due_date, main_text, is_urgent, assignments, createdBy, created_by, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, sender, recipient_to, additional_docs } = req.body;
     let validCreatorId = createdBy || created_by || null;
     validCreatorId = isValidUUID(validCreatorId) ? validCreatorId : null;
 
@@ -697,16 +717,16 @@ exports.createTask = async (req, res) => {
     if (existingRes.rows.length > 0) {
         taskId = existingRes.rows[0].id;
         await client.query(
-          `UPDATE tasks SET title = COALESCE($1, title), memo_no = $2, memo_date = $3, main_text = $4, due_date = COALESCE($5, due_date), is_urgent = COALESCE($6, is_urgent), urgency_level = $7, secret_level = $8, sign_date = $10, meeting_date = $11, reply_due_date = $12, sender = $14, created_at = COALESCE(CAST($9 AS timestamp), created_at), updated_at = NOW() WHERE id = $13`,
-          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, taskId, sender]
+          `UPDATE tasks SET title = COALESCE($1, title), memo_no = $2, memo_date = $3, main_text = $4, due_date = COALESCE($5, due_date), is_urgent = COALESCE($6, is_urgent), urgency_level = $7, secret_level = $8, sign_date = $10, meeting_date = $11, reply_due_date = $12, sender = $14, recipient_to = $15, additional_docs = $16, created_at = COALESCE(CAST($9 AS timestamp), created_at), updated_at = NOW() WHERE id = $13`,
+          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, taskId, sender, recipient_to, additional_docs]
         );
         await logTaskAction(client, taskId, validCreatorId, 'updated_task', { source: 'manual_create_upsert' });
         await client.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
     } else {
         const taskRes = await client.query(
-          `INSERT INTO tasks (title, memo_no, memo_date, main_text, due_date, is_urgent, status, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, sender, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $12, $13, $14, $15, $16, $17, COALESCE(CAST($11 AS timestamp), NOW())) RETURNING id`,
-          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent || false, 'following', validCreatorId, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, receiveNo, receiveYear, sender]
+          `INSERT INTO tasks (title, memo_no, memo_date, main_text, due_date, is_urgent, status, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, sender, recipient_to, additional_docs, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $12, $13, $14, $15, $16, $17, $18, $19, COALESCE(CAST($11 AS timestamp), NOW())) RETURNING id`,
+          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent || false, 'following', validCreatorId, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, receiveNo, receiveYear, sender, recipient_to, additional_docs]
         );
         taskId = taskRes.rows[0].id;
         await logTaskAction(client, taskId, validCreatorId, 'created_task', { source: 'manual_create' });
@@ -775,9 +795,200 @@ exports.getTaskLogs = async (req, res) => {
        ORDER BY tl.created_at DESC`,
       [id]
     );
-    res.status(200).json({ success: true, data: rows });
+    res.status(200).json({ success: true, data: logsRes.rows });
   } catch (err) {
     console.error("Get task logs error:", err.message);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+};
+
+exports.overwriteTaskDocument = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { id } = req.params;
+    const file = req.file;
+
+    if (!file) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, message: 'กรุณาเลือกไฟล์เอกสารที่ต้องการอัปโหลด' });
+    }
+
+    const taskRes = await client.query('SELECT id, document_id, memo_no, sender, receive_no FROM tasks WHERE id = $1', [id]);
+    if (taskRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลงานนี้' });
+    }
+    const oldTask = taskRes.rows[0];
+
+    const safeFileName = path.basename(file.path);
+    const safePath = path.join(path.dirname(file.path), safeFileName);
+
+    let extractedMemos = [];
+    try {
+      const geminiRes = await extractDataWithGemini(safePath, file.mimetype, 'gemini');
+      if (geminiRes && Array.isArray(geminiRes.extractedData)) {
+        extractedMemos = geminiRes.extractedData;
+      }
+    } catch (ocrErr) {
+      console.warn('[Overwrite OCR Warning]:', ocrErr.message);
+    }
+
+    const primaryMemo = extractedMemos.length > 0 ? extractedMemos[0] : {};
+    const formattedFilename = formatStandardFilename(
+      primaryMemo.receive_no || oldTask.receive_no,
+      primaryMemo.sender || primaryMemo.จาก || oldTask.sender,
+      primaryMemo.assignments || null,
+      file.originalname
+    );
+
+    let driveData = null;
+    try {
+      driveData = await uploadToDrive(
+        { path: safePath, originalname: formattedFilename, mimetype: file.mimetype },
+        DRIVE_FOLDER_ID
+      );
+    } catch (driveErr) {
+      console.error('[Overwrite Drive Error]:', driveErr.message);
+    }
+
+    const hash = generateHash(file.originalname + Date.now().toString());
+    const docRes = await client.query(
+      `INSERT INTO documents (filename, content, content_hash, keywords_found, drive_file_id, drive_web_view_link, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [
+        formattedFilename,
+        '',
+        hash,
+        JSON.stringify({ memos: extractedMemos }),
+        driveData ? driveData.id : null,
+        driveData ? driveData.webViewLink : null,
+        req.user ? req.user.id : null
+      ]
+    );
+    const newDocId = docRes.rows[0].id;
+
+    const newTitle = primaryMemo.เรื่อง || null;
+    const newMemoNo = primaryMemo.ที่ || null;
+    const newMemoDate = parseThaiDateToIso(primaryMemo.วันที่) || null;
+    const newSender = primaryMemo.sender || primaryMemo.จาก || null;
+    const newRecipientTo = primaryMemo.recipient_to || primaryMemo.เรียน || null;
+    const newAdditionalDocs = primaryMemo.additional_docs || null;
+    const newMainText = primaryMemo.main_text || null;
+    const newTaskDetail = primaryMemo.task_detail || null;
+    const newSignDate = parseThaiDateToIso(primaryMemo.sign_date) || null;
+    const newMeetingDate = parseThaiDateToIso(primaryMemo.meeting_date) || null;
+    const newReplyDueDate = parseThaiDateToIso(primaryMemo.reply_due_date) || null;
+
+    await client.query(
+      `UPDATE tasks SET 
+        document_id = $1,
+        title = COALESCE($2, title),
+        memo_no = COALESCE($3, memo_no),
+        memo_date = COALESCE($4, memo_date),
+        sender = COALESCE($5, sender),
+        recipient_to = COALESCE($6, recipient_to),
+        additional_docs = COALESCE($7, additional_docs),
+        main_text = COALESCE($8, main_text),
+        task_detail = COALESCE($9, task_detail),
+        sign_date = COALESCE($10, sign_date),
+        meeting_date = COALESCE($11, meeting_date),
+        reply_due_date = COALESCE($12, reply_due_date),
+        updated_at = NOW()
+       WHERE id = $13`,
+      [
+        newDocId, newTitle, newMemoNo, newMemoDate, newSender, newRecipientTo,
+        newAdditionalDocs, newMainText, newTaskDetail, newSignDate, newMeetingDate,
+        newReplyDueDate, id
+      ]
+    );
+
+    try { await fs.unlink(safePath); } catch (e) {}
+
+    await logTaskAction(client, id, req.user ? req.user.id : null, 'overwrite_document', { filename: formattedFilename });
+
+    await client.query('COMMIT');
+    res.status(200).json({ success: true, message: 'อัปโหลดเอกสารและอัปเดตข้อมูลทับสำเร็จเรียบร้อย!' });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Overwrite document error:', err.message);
+    res.status(500).json({ success: false, message: 'Server Error', error: err.message });
+  } finally {
+    client.release();
+  }
+};
+
+exports.attachTaskDocument = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { id } = req.params;
+    const files = req.files || (req.file ? [req.file] : []);
+
+    if (!files || files.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, message: 'กรุณาเลือกไฟล์เอกสารที่ต้องการแนบเพิ่มเติม' });
+    }
+
+    const taskRes = await client.query('SELECT id FROM tasks WHERE id = $1', [id]);
+    if (taskRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลงานนี้' });
+    }
+
+    const createdDocs = [];
+    for (const file of files) {
+      const safeFileName = path.basename(file.path);
+      const safePath = path.join(path.dirname(file.path), safeFileName);
+
+      let driveData = null;
+      try {
+        driveData = await uploadToDrive(
+          { path: safePath, originalname: file.originalname, mimetype: file.mimetype },
+          DRIVE_FOLDER_ID
+        );
+      } catch (driveErr) {
+        console.error('[Attach Drive Error]:', driveErr.message);
+      }
+
+      const docRes = await client.query(
+        `INSERT INTO task_documents (task_id, filename, drive_file_id, drive_web_view_link, doc_type, created_by)
+         VALUES ($1, $2, $3, $4, 'attachment', $5) RETURNING id, filename, drive_web_view_link, created_at`,
+        [id, file.originalname, driveData ? driveData.id : null, driveData ? driveData.webViewLink : null, req.user ? req.user.id : null]
+      );
+      createdDocs.push(docRes.rows[0]);
+
+      try { await fs.unlink(safePath); } catch (e) {}
+    }
+
+    await logTaskAction(client, id, req.user ? req.user.id : null, 'attached_document', { count: files.length });
+
+    await client.query('COMMIT');
+    res.status(200).json({ success: true, message: 'อัปโหลดเอกสารเพิ่มเติมสำเร็จ!', data: createdDocs });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Attach document error:', err.message);
+    res.status(500).json({ success: false, message: 'Server Error', error: err.message });
+  } finally {
+    client.release();
+  }
+};
+
+exports.deleteTaskAttachment = async (req, res) => {
+  try {
+    const { id, docId } = req.params;
+    const docRes = await pool.query('SELECT drive_file_id FROM task_documents WHERE id = $1 AND task_id = $2', [docId, id]);
+    if (docRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'ไม่พบเอกสารแนบนี้' });
+    }
+    const driveFileId = docRes.rows[0].drive_file_id;
+    if (driveFileId) {
+      deleteFromDrive(driveFileId).catch(e => console.error('[Drive Delete Error]:', e.message));
+    }
+    await pool.query('DELETE FROM task_documents WHERE id = $1', [docId]);
+    res.status(200).json({ success: true, message: 'ลบเอกสารแนบเรียบร้อยแล้ว' });
+  } catch (err) {
+    console.error('Delete attachment error:', err.message);
     res.status(500).json({ success: false, message: 'Server Error' });
   }
 };

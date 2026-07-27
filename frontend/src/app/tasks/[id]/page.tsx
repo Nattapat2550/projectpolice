@@ -11,6 +11,7 @@ import {
     Clock,
     FileText,
     Flame,
+    FolderOpen,
     Hash,
     History,
     Link as LinkIcon,
@@ -33,6 +34,13 @@ import {
 type TaskStatus = "following" | "problem" | "completed";
 type UrgencyLevel = "ปกติ" | "ด่วน" | "ด่วนมาก" | "ด่วนที่สุด";
 type SecretLevel = "ปกติ" | "ลับ" | "ลับมาก" | "ลับที่สุด";
+
+interface AttachmentDoc {
+    id: string;
+    filename: string;
+    drive_web_view_link?: string;
+    created_at?: string;
+}
 
 interface Assignment {
     assignment_id?: string;
@@ -64,6 +72,8 @@ interface TaskData {
     isUrgent?: boolean;
     is_urgent?: boolean;
     date?: string;
+    sender?: string | null;
+    recipient_to?: string | null;
     main_text?: string | null;
     task_detail?: string | null;
     notes?: string | null;
@@ -80,6 +90,7 @@ interface TaskData {
     creatorName?: string;
     document_link?: string | null;
     assignments: Assignment[];
+    attached_documents?: AttachmentDoc[];
     personInCharge?: string;
 }
 
@@ -261,6 +272,9 @@ export default function TaskDetailPage() {
     const [users, setUsers] = useState<UserOption[]>([]);
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [showLogs, setShowLogs] = useState(false);
+    const [uploadingDoc, setUploadingDoc] = useState(false);
+    const overwriteInputRef = useRef<HTMLInputElement>(null);
+    const attachInputRef = useRef<HTMLInputElement>(null);
     const titleRef = useRef<HTMLTextAreaElement>(null);
     const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
@@ -282,6 +296,119 @@ export default function TaskDetailPage() {
         if (token) headers["Authorization"] = `Bearer ${token}`;
         return headers;
     };
+
+    const handleOverwriteDocument = () => {
+        overwriteInputRef.current?.click();
+    };
+
+    const handleAttachDocument = () => {
+        attachInputRef.current?.click();
+    };
+
+    const onOverwriteDocSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !id) return;
+        setUploadingDoc(true);
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+            const token = getToken();
+            const res = await fetch(`${backendUrl}/api/v1/tasks/${id}/overwrite-doc`, {
+                method: "POST",
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                body: formData,
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                Swal.fire({ icon: "success", title: "อัปโหลดและประมวลผลข้อมูลทับสำเร็จ", timer: 2000, showConfirmButton: false });
+                fetchTask();
+            } else {
+                throw new Error(data.message || "Upload failed");
+            }
+        } catch (err: any) {
+            console.error("Overwrite error:", err);
+            Swal.fire({ icon: "error", title: "เกิดข้อผิดพลาด", text: err.message || "ไม่สามารถอัปโหลดข้อมูลทับได้" });
+        } finally {
+            setUploadingDoc(false);
+            if (e.target) e.target.value = "";
+        }
+    };
+
+    const onAttachDocSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0 || !id) return;
+        setUploadingDoc(true);
+        try {
+            const formData = new FormData();
+            Array.from(files).forEach((f) => formData.append("files", f));
+            const token = getToken();
+            const res = await fetch(`${backendUrl}/api/v1/tasks/${id}/attach-docs`, {
+                method: "POST",
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+                body: formData,
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+                Swal.fire({ icon: "success", title: "อัปโหลดเอกสารเพิ่มเติมสำเร็จ", timer: 2000, showConfirmButton: false });
+                fetchTask();
+            } else {
+                throw new Error(data.message || "Upload failed");
+            }
+        } catch (err: any) {
+            console.error("Attach doc error:", err);
+            Swal.fire({ icon: "error", title: "เกิดข้อผิดพลาด", text: err.message || "ไม่สามารถอัปโหลดเอกสารเพิ่มเติมได้" });
+        } finally {
+            setUploadingDoc(false);
+            if (e.target) e.target.value = "";
+        }
+    };
+
+    const handleDeleteAttachment = async (attachmentId: string, filename: string) => {
+        const confirm = await Swal.fire({
+            title: `ลบเอกสาร "${filename}"?`,
+            text: "คุณแน่ใจหรือไม่ที่จะลบเอกสารแนบนี้?",
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "ลบ",
+            cancelButtonText: "ยกเลิก",
+            confirmButtonColor: "#d33",
+        });
+        if (!confirm.isConfirmed) return;
+        try {
+            const token = getToken();
+            const res = await fetch(`${backendUrl}/api/v1/tasks/${id}/attachments/${attachmentId}`, {
+                method: "DELETE",
+                headers: token ? { Authorization: `Bearer ${token}` } : {},
+            });
+            if (res.ok) {
+                Swal.fire({ icon: "success", title: "ลบเอกสารสำเร็จ", timer: 1500, showConfirmButton: false });
+                fetchTask();
+            }
+        } catch (err) {
+            Swal.fire({ icon: "error", title: "เกิดข้อผิดพลาดในการลบเอกสาร" });
+        }
+    };
+
+    function buildUpdateBody(source: TaskData) {
+        return {
+            name: source.name,
+            date: source.date,
+            sender: source.sender,
+            recipient_to: source.recipient_to,
+            notes: source.notes,
+            assignments: source.assignments,
+            isUrgent: source.isUrgent ?? source.is_urgent,
+            main_text: source.main_text,
+            task_detail: source.task_detail,
+            urgency_level: source.urgency_level,
+            secret_level: source.secret_level,
+            meeting_date: source.meeting_date,
+            reply_due_date: source.reply_due_date,
+            receive_no: source.receive_no,
+            receive_date: source.date,
+            sign_date: source.sign_date,
+        };
+    }
 
     const fetchTask = useCallback(async () => {
         try {
@@ -425,25 +552,6 @@ export default function TaskDetailPage() {
             Swal.fire({ icon: "error", title: "เกิดข้อผิดพลาด", text: "ไม่สามารถอัปเดตความเร่งด่วนได้" });
         }
     };
-
-    function buildUpdateBody(source: TaskData) {
-        return {
-            name: source.name,
-            date: source.date,
-            notes: source.notes,
-            assignments: source.assignments,
-            isUrgent: source.isUrgent ?? source.is_urgent,
-            main_text: source.main_text,
-            task_detail: source.task_detail,
-            urgency_level: source.urgency_level,
-            secret_level: source.secret_level,
-            meeting_date: source.meeting_date,
-            reply_due_date: source.reply_due_date,
-            receive_no: source.receive_no,
-            receive_date: source.date,
-            sign_date: source.sign_date,
-        };
-    }
 
     const handleSave = async () => {
         if (!draft) return;
@@ -801,19 +909,31 @@ export default function TaskDetailPage() {
                                     </span>
                                 )}
                             </Field>
+                            <Field label="จาก (ส่วนราชการ)">
+                                {isEditing && draft ? (
+                                    <input
+                                        type="text"
+                                        value={draft.sender || ""}
+                                        onChange={(e) => updateDraft({ sender: e.target.value })}
+                                        className={inputClass}
+                                    />
+                                ) : (
+                                    <ReadValue>{taskData.sender || "-"}</ReadValue>
+                                )}
+                            </Field>
+                            <Field label="ถึง (เรียน)">
+                                {isEditing && draft ? (
+                                    <input
+                                        type="text"
+                                        value={draft.recipient_to || ""}
+                                        onChange={(e) => updateDraft({ recipient_to: e.target.value })}
+                                        className={inputClass}
+                                    />
+                                ) : (
+                                    <ReadValue>{taskData.recipient_to || "-"}</ReadValue>
+                                )}
+                            </Field>
                         </div>
-
-                        {taskData.document_link && (
-                            <a
-                                href={taskData.document_link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="mt-5 inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium bg-(--wrapper) hover:bg-(--shadow) transition w-fit cursor-pointer select-none"
-                            >
-                                <LinkIcon size={15} />
-                                เปิดเอกสารต้นฉบับ
-                            </a>
-                        )}
                     </SectionCard>
 
                     <SectionCard title="เนื้อหาเรื่อง" icon={<FileText size={19} style={{ color: "var(--header)" }} />}>
@@ -852,6 +972,72 @@ export default function TaskDetailPage() {
                             />
                         ) : (
                             <p className="whitespace-pre-wrap leading-relaxed opacity-90">{taskData.notes || "ไม่มีหมายเหตุ"}</p>
+                        )}
+                    </SectionCard>
+
+                    {/* 📁 กล่องเอกสารประกอบเพิ่มเติม (วางไว้ล่างสุดฝั่งซ้าย) */}
+                    <SectionCard
+                        title={`เอกสารประกอบเพิ่มเติม ${taskData.attached_documents && taskData.attached_documents.length > 0 ? `(${taskData.attached_documents.length})` : ''}`}
+                        icon={<FolderOpen size={19} style={{ color: "var(--header)" }} />}
+                    >
+                        {taskData.attached_documents && taskData.attached_documents.length > 0 ? (
+                            <div className="divide-y divide-(--shadow)/40">
+                                {taskData.attached_documents.map((doc) => (
+                                    <div key={doc.id} className="py-3 flex items-center justify-between gap-3 first:pt-0 last:pb-0">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center shrink-0">
+                                                <FileText size={18} className="text-blue-600 dark:text-blue-400" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-sm font-medium truncate text-(--foreground)">{doc.filename}</p>
+                                                <p className="text-xs opacity-60">
+                                                    {doc.created_at ? formatThaiDate(doc.created_at, true) : ''}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            {doc.drive_web_view_link ? (
+                                                <a
+                                                    href={doc.drive_web_view_link}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition flex items-center gap-1.5"
+                                                >
+                                                    <LinkIcon size={13} />
+                                                    เปิดดูเอกสาร
+                                                </a>
+                                            ) : (
+                                                <span className="text-xs opacity-40">ไม่มีลิงก์</span>
+                                            )}
+                                            {canEdit && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleDeleteAttachment(doc.id, doc.filename)}
+                                                    className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 transition cursor-pointer"
+                                                    title="ลบเอกสารแนบ"
+                                                >
+                                                    <Trash2 size={15} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-6 opacity-60 text-sm">
+                                ยังไม่มีเอกสารแนบเพิ่มเติม
+                                {canEdit && (
+                                    <div className="mt-2">
+                                        <button
+                                            type="button"
+                                            onClick={handleAttachDocument}
+                                            className="inline-flex items-center gap-1.5 text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                                        >
+                                            <Plus size={13} /> กดที่นี่เพื่ออัปโหลดเอกสารเพิ่มเติม
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         )}
                     </SectionCard>
                 </div>
@@ -959,6 +1145,7 @@ export default function TaskDetailPage() {
                                             className={`${inputClass} sm:flex-1`}
                                         />
                                         <button
+                                            type="button"
                                             onClick={() => removeAssignment(i)}
                                             className="flex items-center justify-center rounded-lg px-3 py-2 bg-(--redBG) text-(--redText) hover:opacity-80 transition shrink-0 cursor-pointer select-none"
                                         >
@@ -967,6 +1154,7 @@ export default function TaskDetailPage() {
                                     </div>
                                 ))}
                                 <button
+                                    type="button"
                                     onClick={addAssignment}
                                     className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-medium border-2 border-dashed border-(--shadow) hover:bg-(--wrapper) transition cursor-pointer select-none"
                                 >
@@ -975,6 +1163,61 @@ export default function TaskDetailPage() {
                             </div>
                         )}
                     </SectionCard>
+
+                    {/* 🌟 ปุ่มจัดการเอกสารอยู่ใต้กล่องผู้รับผิดชอบ */}
+                    <div className="flex flex-col gap-2.5">
+                        {taskData.document_link && (
+                            <a
+                                href={taskData.document_link}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium bg-(--wrapper) hover:bg-(--shadow) transition border border-(--shadow) cursor-pointer select-none shadow-sm"
+                            >
+                                <LinkIcon size={15} />
+                                เปิดเอกสารต้นฉบับ
+                            </a>
+                        )}
+
+                        {canEdit && (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={handleOverwriteDocument}
+                                    disabled={uploadingDoc}
+                                    className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition border border-amber-500/30 cursor-pointer select-none shadow-sm"
+                                >
+                                    {uploadingDoc ? <Loader2 size={15} className="animate-spin" /> : <Pencil size={15} />}
+                                    อัปโหลดข้อมูลทับ
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={handleAttachDocument}
+                                    disabled={uploadingDoc}
+                                    className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium bg-blue-500/10 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20 transition border border-blue-500/30 cursor-pointer select-none shadow-sm"
+                                >
+                                    {uploadingDoc ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                                    อัปโหลดเอกสารเพิ่มเติม
+                                </button>
+
+                                <input
+                                    type="file"
+                                    ref={overwriteInputRef}
+                                    onChange={onOverwriteDocSelected}
+                                    accept=".pdf,image/*,.docx"
+                                    className="hidden"
+                                />
+                                <input
+                                    type="file"
+                                    ref={attachInputRef}
+                                    onChange={onAttachDocSelected}
+                                    accept=".pdf,image/*,.docx,.xlsx,.doc"
+                                    multiple
+                                    className="hidden"
+                                />
+                            </>
+                        )}
+                    </div>
                 </div>
             </div>
 

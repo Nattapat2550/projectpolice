@@ -252,6 +252,9 @@ export default function TaskExcelUploadPage() {
                             <div>
                                 <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1">ข้อมูลหนังสือ</span>
                                 <div className="text-sm"><span className="text-zinc-500 mr-2">[เลขที่หนังสือ]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.memo_no || renderNull()}</span></div>
+                                <div className="text-sm"><span className="text-zinc-500 mr-2">[จาก]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.sender || renderNull()}</span></div>
+                                <div className="text-sm"><span className="text-zinc-500 mr-2">[ถึง]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.recipient_to || renderNull()}</span></div>
+                                {row.additional_docs && <div className="text-sm"><span className="text-zinc-500 mr-2">[เอกสารแนบ]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.additional_docs}</span></div>}
                                 <div className="text-sm"><span className="text-zinc-500 mr-2">[ลงวันที่]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.memo_date || renderNull()}</span></div>
                                 <div className="text-sm"><span className="text-zinc-500 mr-2">[เลขรับ]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.receive_no ? `${row.receive_no}/${row.receive_year}` : renderNull()}</span></div>
                             </div>
