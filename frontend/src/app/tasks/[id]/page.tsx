@@ -40,6 +40,8 @@ interface AttachmentDoc {
     filename: string;
     drive_web_view_link?: string;
     created_at?: string;
+    created_by?: string;
+    uploader_name?: string;
 }
 
 interface Assignment {
@@ -319,7 +321,34 @@ export default function TaskDetailPage() {
     const onOverwriteDocSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || !id) return;
+
+        const confirm = await Swal.fire({
+            title: "ยืนยันการอัปโหลดข้อมูลทับ?",
+            html: `คุณกำลังเลือกไฟล์ <b>"${file.name}"</b> เพื่ออัปโหลดทับเอกสารเดิม<br/><br/><span style="font-size: 0.85rem; color: #d97706;">⚠️ AI จะอ่านสกัดข้อมูลจากไฟล์ใหม่นี้ และอัปเดตข้อมูลหัวข้อ/เลขที่/สาระสำคัญทับข้อมูลเดิม</span>`,
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonText: "ยืนยันอัปโหลดทับ",
+            cancelButtonText: "ยกเลิก",
+            confirmButtonColor: "#d33",
+            cancelButtonColor: "#6e7881",
+        });
+
+        if (!confirm.isConfirmed) {
+            if (e.target) e.target.value = "";
+            return;
+        }
+
         setUploadingDoc(true);
+        Swal.fire({
+            title: "กำลังวิเคราะห์และสกัดข้อมูลด้วย AI...",
+            text: "ระบบกำลังอ่านเนื้อหาในไฟล์และอัปเดตข้อมูลทับ กรุณารอสักครู่",
+            allowOutsideClick: false,
+            allowEscapeKey: false,
+            didOpen: () => {
+                Swal.showLoading();
+            }
+        });
+
         try {
             const formData = new FormData();
             formData.append("file", file);
@@ -331,14 +360,34 @@ export default function TaskDetailPage() {
             });
             const data = await res.json();
             if (res.ok && data.success) {
-                Swal.fire({ icon: "success", title: "อัปโหลดและประมวลผลข้อมูลทับสำเร็จ", timer: 2000, showConfirmButton: false });
+                const memo = data.data?.extractedMemo;
+                let summaryHtml = `<div style="text-align: left; font-size: 0.9rem; margin-top: 0.5rem; line-height: 1.6;">`;
+                summaryHtml += `<p style="color: #059669; font-weight: bold; margin-bottom: 0.5rem;">✓ อัปเดตข้อมูลเอกสารสำเร็จเรียบร้อยแล้ว</p>`;
+                if (memo) {
+                    if (memo.ที่) summaryHtml += `<p><b>• เลขที่ Memo:</b> ${memo.ที่}</p>`;
+                    if (memo.เรื่อง) summaryHtml += `<p><b>• เรื่อง:</b> ${memo.เรื่อง}</p>`;
+                    if (memo.จาก) summaryHtml += `<p><b>• ส่วนราชการ (จาก):</b> ${memo.จาก}</p>`;
+                }
+                summaryHtml += `</div>`;
+
+                await Swal.fire({
+                    icon: "success",
+                    title: "อัปโหลดข้อมูลทับสำเร็จ!",
+                    html: summaryHtml,
+                    confirmButtonText: "ตกลง",
+                    confirmButtonColor: "#059669"
+                });
                 fetchTask();
             } else {
                 throw new Error(data.message || "Upload failed");
             }
         } catch (err: any) {
             console.error("Overwrite error:", err);
-            Swal.fire({ icon: "error", title: "เกิดข้อผิดพลาด", text: err.message || "ไม่สามารถอัปโหลดข้อมูลทับได้" });
+            Swal.fire({
+                icon: "error",
+                title: "เกิดข้อผิดพลาดในการอัปโหลดทับ",
+                text: err.message || "ไม่สามารถอัปโหลดข้อมูลทับได้ กรุณาลองใหม่อีกครั้ง"
+            });
         } finally {
             setUploadingDoc(false);
             if (e.target) e.target.value = "";
@@ -353,7 +402,7 @@ export default function TaskDetailPage() {
             const formData = new FormData();
             Array.from(files).forEach((f) => formData.append("files", f));
             const token = getToken();
-            const res = await fetch(`${backendUrl}/api/v1/tasks/${id}/attach-docs`, {
+            const res = await fetch(`${backendUrl}/api/v1/tasks/${id}/attach-doc`, {
                 method: "POST",
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
                 body: formData,
@@ -1019,9 +1068,18 @@ export default function TaskDetailPage() {
                                             </div>
                                             <div className="min-w-0">
                                                 <p className="text-sm font-medium truncate text-(--foreground)">{doc.filename}</p>
-                                                <p className="text-xs opacity-60">
-                                                    {doc.created_at ? formatThaiDate(doc.created_at, true) : ''}
-                                                </p>
+                                                <div className="flex flex-wrap items-center gap-1.5 text-xs opacity-70 mt-0.5">
+                                                    {doc.uploader_name && (
+                                                        <span className="flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400">
+                                                            <User size={12} className="shrink-0" />
+                                                            {doc.uploader_name}
+                                                        </span>
+                                                    )}
+                                                    {doc.uploader_name && doc.created_at && <span>•</span>}
+                                                    {doc.created_at && (
+                                                        <span>{formatThaiDate(doc.created_at, true)}</span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2 shrink-0">
@@ -1213,9 +1271,14 @@ export default function TaskDetailPage() {
                                     type="button"
                                     onClick={handleOverwriteDocument}
                                     disabled={uploadingDoc}
-                                    className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 transition border border-amber-500/30 cursor-pointer select-none shadow-sm"
+                                    style={{
+                                        backgroundColor: "var(--orangeBG)",
+                                        color: "var(--orangeText)",
+                                        border: "1.5px solid var(--orangeBorder)",
+                                    }}
+                                    className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold shadow-xs transition hover:opacity-85 cursor-pointer select-none disabled:opacity-50"
                                 >
-                                    {uploadingDoc ? <Loader2 size={15} className="animate-spin" /> : <Pencil size={15} />}
+                                    {uploadingDoc ? <Loader2 size={16} className="animate-spin" /> : <Pencil size={16} />}
                                     อัปโหลดข้อมูลทับ
                                 </button>
 
@@ -1223,9 +1286,14 @@ export default function TaskDetailPage() {
                                     type="button"
                                     onClick={handleAttachDocument}
                                     disabled={uploadingDoc}
-                                    className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium bg-blue-500/10 text-blue-700 dark:text-blue-300 hover:bg-blue-500/20 transition border border-blue-500/30 cursor-pointer select-none shadow-sm"
+                                    style={{
+                                        backgroundColor: "var(--button)",
+                                        color: "var(--blueText)",
+                                        border: "1.5px solid var(--wrapper)",
+                                    }}
+                                    className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold shadow-xs transition hover:opacity-85 cursor-pointer select-none disabled:opacity-50"
                                 >
-                                    {uploadingDoc ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                                    {uploadingDoc ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
                                     อัปโหลดเอกสารเพิ่มเติม
                                 </button>
 

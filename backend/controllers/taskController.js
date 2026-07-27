@@ -637,7 +637,12 @@ exports.getTaskById = async (req, res) => {
     task.personInCharge = task.assignments.map(a => a.personInCharge).join(', ') || 'ไม่ระบุ';
 
     const docsRes = await pool.query(
-      `SELECT id, filename, drive_file_id, drive_web_view_link, doc_type, created_at FROM task_documents WHERE task_id = $1 ORDER BY created_at ASC`,
+      `SELECT d.id, d.filename, d.drive_file_id, d.drive_web_view_link, d.doc_type, d.created_at, d.created_by,
+              u.name AS uploader_name
+       FROM task_documents d
+       LEFT JOIN users u ON d.created_by = u.id
+       WHERE d.task_id = $1
+       ORDER BY d.created_at ASC`,
       [id]
     );
     task.attached_documents = docsRes.rows;
@@ -795,10 +800,10 @@ exports.getTaskLogs = async (req, res) => {
        ORDER BY tl.created_at DESC`,
       [id]
     );
-    res.status(200).json({ success: true, data: logsRes.rows });
+    res.status(200).json({ success: true, data: rows });
   } catch (err) {
     console.error("Get task logs error:", err.message);
-    res.status(500).json({ success: false, message: 'Server Error' });
+    res.status(500).json({ success: false, message: 'Server Error', error: err.message });
   }
 };
 
@@ -908,7 +913,14 @@ exports.overwriteTaskDocument = async (req, res) => {
     await logTaskAction(client, id, req.user ? req.user.id : null, 'overwrite_document', { filename: formattedFilename });
 
     await client.query('COMMIT');
-    res.status(200).json({ success: true, message: 'อัปโหลดเอกสารและอัปเดตข้อมูลทับสำเร็จเรียบร้อย!' });
+    res.status(200).json({
+      success: true,
+      message: 'อัปโหลดเอกสารและอัปเดตข้อมูลทับสำเร็จเรียบร้อย!',
+      data: {
+        filename: formattedFilename,
+        extractedMemo: primaryMemo
+      }
+    });
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Overwrite document error:', err.message);
@@ -953,10 +965,14 @@ exports.attachTaskDocument = async (req, res) => {
 
       const docRes = await client.query(
         `INSERT INTO task_documents (task_id, filename, drive_file_id, drive_web_view_link, doc_type, created_by)
-         VALUES ($1, $2, $3, $4, 'attachment', $5) RETURNING id, filename, drive_web_view_link, created_at`,
+         VALUES ($1, $2, $3, $4, 'attachment', $5) RETURNING id, filename, drive_web_view_link, created_at, created_by`,
         [id, file.originalname, driveData ? driveData.id : null, driveData ? driveData.webViewLink : null, req.user ? req.user.id : null]
       );
-      createdDocs.push(docRes.rows[0]);
+      const insertedDoc = docRes.rows[0];
+      if (req.user && req.user.name) {
+        insertedDoc.uploader_name = req.user.name;
+      }
+      createdDocs.push(insertedDoc);
 
       try { await fs.unlink(safePath); } catch (e) {}
     }
