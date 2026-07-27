@@ -1,2 +1,5 @@
 Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run "cmd /c start-app.bat", 1, False
+Set fso = CreateObject("Scripting.FileSystemObject")
+scriptDir = fso.GetParentFolderName(WScript.ScriptFullName)
+exePath = scriptDir & "\PoliceLauncher.exe"
+WshShell.Run """" & exePath & """", 1, False
