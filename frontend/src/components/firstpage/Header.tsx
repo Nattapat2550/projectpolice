@@ -46,7 +46,7 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
 ];
 
 const selectClass =
-  'w-full px-4 py-2.5 text-sm rounded-xl bg-[var(--wrapper)]/40 border border-[var(--shadow)]/40 focus:bg-[var(--background)] focus:ring-2 focus:ring-[var(--blueText)]/50 focus:border-transparent outline-none transition-all appearance-none';
+  'w-full px-4 py-2.5 text-sm rounded-xl bg-[var(--wrapper)]/40 border border-[var(--shadow)]/40 focus:bg-[var(--background)] focus:ring-2 focus:ring-[var(--blueText)]/50 focus:border-transparent outline-none transition-all appearance-none cursor-pointer';
 
 const inputClass =
   'w-full px-4 py-2.5 text-sm rounded-xl bg-[var(--wrapper)]/40 border border-[var(--shadow)]/40 focus:bg-[var(--background)] focus:ring-2 focus:ring-[var(--blueText)]/50 focus:border-transparent outline-none transition-all';
@@ -92,7 +92,7 @@ export const Header: React.FC<HeaderProps> = ({ filters, setFilters, users = [] 
       <div className="pt-6 px-4 sm:px-6 md:px-8 flex flex-1 w-full max-w-[1920px] mx-auto">
         <button
           onClick={() => setIsModalOpen(true)}
-          className="relative flex items-center w-full gap-2 px-5 py-2.5 text-sm font-medium rounded-full bg-[var(--container)] border border-[var(--shadow)]/80 border-2 hover:shadow-md hover:border-[var(--blueText)]/50 focus:outline-none active:scale-95 transition-all"
+          className="relative flex items-center w-full gap-2 px-5 py-2.5 text-sm font-medium rounded-full bg-[var(--container)] border border-[var(--shadow)]/80 border-2 hover:shadow-md hover:border-[var(--blueText)]/50 focus:outline-none active:scale-95 transition-all cursor-pointer select-none"
         >
           <svg className="w-4 h-4 text-[var(--foreground)]/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -110,7 +110,7 @@ export const Header: React.FC<HeaderProps> = ({ filters, setFilters, users = [] 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
           <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm cursor-pointer"
             onClick={() => setIsModalOpen(false)}
           ></div>
 
@@ -120,7 +120,7 @@ export const Header: React.FC<HeaderProps> = ({ filters, setFilters, users = [] 
               <h2 className="text-lg font-semibold text-[var(--foreground)]">ค้นหาข้อมูล</h2>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="p-1.5 rounded-full bg-[var(--wrapper)]/80 text-[var(--foreground)]/60 hover:text-[var(--redText)] transition-colors"
+                className="p-1.5 rounded-full bg-[var(--wrapper)]/80 text-[var(--foreground)]/60 hover:text-[var(--redText)] transition-colors cursor-pointer select-none"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -196,7 +196,7 @@ export const Header: React.FC<HeaderProps> = ({ filters, setFilters, users = [] 
                 <button
                   type="button"
                   onClick={() => setIsAssigneeOpen((v) => !v)}
-                  className={`${selectClass} flex items-center justify-between text-left`}
+                  className={`${selectClass} flex items-center justify-between text-left cursor-pointer select-none`}
                 >
                   <span className={selectedUsers.length ? 'text-[var(--foreground)]' : 'text-[var(--foreground)]/50'}>
                     {selectedUsers.length > 0 ? `เลือกแล้ว ${selectedUsers.length} คน` : 'ทั้งหมด'}
@@ -217,7 +217,7 @@ export const Header: React.FC<HeaderProps> = ({ filters, setFilters, users = [] 
                         <button
                           type="button"
                           onClick={() => removeAssignee(u.id)}
-                          className="p-0.5 rounded-full hover:bg-[var(--blueText)]/20 transition-colors"
+                          className="p-0.5 rounded-full hover:bg-[var(--blueText)]/20 transition-colors cursor-pointer select-none"
                         >
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -248,18 +248,19 @@ export const Header: React.FC<HeaderProps> = ({ filters, setFilters, users = [] 
                         filteredUserOptions.map((u) => {
                           const checked = filters.assignees.includes(u.id);
                           return (
-                            <label
+                            <div
                               key={u.id}
-                              className="flex items-center gap-2.5 px-4 py-2 text-sm hover:bg-[var(--wrapper)]/40 cursor-pointer transition-colors"
+                              onClick={() => toggleAssignee(u.id)}
+                              className="flex items-center gap-2.5 px-4 py-2 text-sm hover:bg-[var(--wrapper)]/40 cursor-pointer transition-colors select-none"
                             >
                               <input
                                 type="checkbox"
                                 checked={checked}
-                                onChange={() => toggleAssignee(u.id)}
-                                className="w-4 h-4 rounded accent-[var(--blueText)]"
+                                readOnly
+                                className="w-4 h-4 rounded accent-[var(--blueText)] pointer-events-none"
                               />
                               <span className="text-[var(--foreground)]/90">{u.name}</span>
-                            </label>
+                            </div>
                           );
                         })
                       )}
@@ -269,14 +270,14 @@ export const Header: React.FC<HeaderProps> = ({ filters, setFilters, users = [] 
                       <button
                         type="button"
                         onClick={() => setFilters({ ...filters, assignees: [] })}
-                        className="text-xs font-medium text-[var(--foreground)]/60 hover:text-[var(--redText)] transition-colors"
+                        className="text-xs font-medium text-[var(--foreground)]/60 hover:text-[var(--redText)] transition-colors cursor-pointer select-none"
                       >
                         ล้างที่เลือก
                       </button>
                       <button
                         type="button"
                         onClick={() => setIsAssigneeOpen(false)}
-                        className="text-xs font-semibold text-[var(--blueText)] hover:opacity-80 transition-colors"
+                        className="text-xs font-semibold text-[var(--blueText)] hover:opacity-80 transition-colors cursor-pointer select-none"
                       >
                         เสร็จสิ้น
                       </button>
@@ -293,9 +294,9 @@ export const Header: React.FC<HeaderProps> = ({ filters, setFilters, users = [] 
                     value={filters.status}
                     onChange={(e) => setFilters({ ...filters, status: e.target.value })}
                   >
-                    <option value="">ทั้งหมด</option>
+                    <option value="" className="bg-[var(--container)] text-[var(--foreground)] font-semibold">ทั้งหมด</option>
                     {STATUS_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      <option key={opt.value} value={opt.value} className="bg-[var(--container)] text-[var(--foreground)] font-semibold">{opt.label}</option>
                     ))}
                   </select>
                 </div>
@@ -306,9 +307,9 @@ export const Header: React.FC<HeaderProps> = ({ filters, setFilters, users = [] 
                     value={filters.urgency_level}
                     onChange={(e) => setFilters({ ...filters, urgency_level: e.target.value })}
                   >
-                    <option value="">ทั้งหมด</option>
+                    <option value="" className="bg-[var(--container)] text-[var(--foreground)] font-semibold">ทั้งหมด</option>
                     {URGENCY_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>{opt}</option>
+                      <option key={opt} value={opt} className="bg-[var(--container)] text-[var(--foreground)] font-semibold">{opt}</option>
                     ))}
                   </select>
                 </div>
@@ -319,9 +320,9 @@ export const Header: React.FC<HeaderProps> = ({ filters, setFilters, users = [] 
                     value={filters.secret_level}
                     onChange={(e) => setFilters({ ...filters, secret_level: e.target.value })}
                   >
-                    <option value="">ทั้งหมด</option>
+                    <option value="" className="bg-[var(--container)] text-[var(--foreground)] font-semibold">ทั้งหมด</option>
                     {SECRET_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>{opt}</option>
+                      <option key={opt} value={opt} className="bg-[var(--container)] text-[var(--foreground)] font-semibold">{opt}</option>
                     ))}
                   </select>
                 </div>
@@ -331,13 +332,13 @@ export const Header: React.FC<HeaderProps> = ({ filters, setFilters, users = [] 
             <div className="px-6 py-4 bg-[var(--wrapper)]/10 border-t border-[var(--shadow)]/20 flex justify-end gap-3 pb-8 sm:pb-4">
               <button
                 onClick={handleClear}
-                className="px-5 py-2 text-sm font-medium rounded-xl text-[var(--foreground)]/70 hover:bg-[var(--wrapper)]/50 transition-colors"
+                className="px-5 py-2 text-sm font-medium rounded-xl text-[var(--foreground)]/70 hover:bg-[var(--wrapper)]/50 transition-colors cursor-pointer select-none"
               >
                 ล้างค่า
               </button>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="px-5 py-2 text-sm font-semibold rounded-xl bg-[var(--foreground)] text-[var(--background)] shadow-md hover:opacity-90 active:scale-95 transition-all"
+                className="px-5 py-2 text-sm font-semibold rounded-xl bg-[var(--foreground)] text-[var(--background)] shadow-md hover:opacity-90 active:scale-95 transition-all cursor-pointer select-none"
               >
                 ดูผลลัพธ์
               </button>

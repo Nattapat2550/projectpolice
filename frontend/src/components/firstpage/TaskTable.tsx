@@ -130,7 +130,7 @@ const PaginationBar: React.FC<{
         <button
           onClick={() => onPageChange(Math.max(1, currentPage - 1))}
           disabled={currentPage === 1}
-          className="px-3 py-1.5 rounded-lg border border-[var(--shadow)]/40 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[var(--wrapper)]/50 transition-colors"
+          className="px-3 py-1.5 rounded-lg border border-[var(--shadow)]/40 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[var(--wrapper)]/50 transition-colors cursor-pointer select-none"
         >
           ก่อนหน้า
         </button>
@@ -142,7 +142,7 @@ const PaginationBar: React.FC<{
             <button
               key={p}
               onClick={() => onPageChange(p)}
-              className={`min-w-[2rem] px-2 py-1.5 rounded-lg transition-colors ${
+              className={`min-w-[2rem] px-2 py-1.5 rounded-lg transition-colors cursor-pointer select-none ${
                 p === currentPage
                   ? 'bg-[var(--foreground)] text-[var(--background)] font-semibold'
                   : 'hover:bg-[var(--wrapper)]/50 border border-transparent'
@@ -156,7 +156,7 @@ const PaginationBar: React.FC<{
         <button
           onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
           disabled={currentPage === totalPages}
-          className="px-3 py-1.5 rounded-lg border border-[var(--shadow)]/40 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[var(--wrapper)]/50 transition-colors"
+          className="px-3 py-1.5 rounded-lg border border-[var(--shadow)]/40 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-[var(--wrapper)]/50 transition-colors cursor-pointer select-none"
         >
           ถัดไป
         </button>
@@ -203,7 +203,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                     <th key={col.key} className={`${col.className || ''} px-1.5 py-3 select-none`}>
                       <button
                         onClick={() => onSort(col.key)}
-                        className={`flex items-center gap-1 hover:text-[var(--blueText)] transition-colors ${
+                        className={`flex items-center gap-1 hover:text-[var(--blueText)] transition-colors cursor-pointer select-none ${
                           isActive ? 'text-[var(--blueText)]' : ''
                         }`}
                         title={`เรียงตาม${col.label}`}
@@ -222,7 +222,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                     <th key={col.key} className={`${col.className || ''} px-3 py-4 select-none`}>
                       <button
                         onClick={() => onSort(col.key)}
-                        className={`flex items-center gap-1 hover:text-[var(--blueText)] transition-colors ${
+                        className={`flex items-center gap-1 hover:text-[var(--blueText)] transition-colors cursor-pointer select-none ${
                           isActive ? 'text-[var(--blueText)]' : ''
                         }`}
                         title={`เรียงตาม${col.label}`}

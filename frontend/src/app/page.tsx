@@ -534,13 +534,13 @@ export default function HomePage() {
             </div>
 
             {/* Right side: Multi-Select Animated Dropdown */}
-            <div className="relative flex w-full sm:w-auto" ref={dropdownRef}>
+            <div className="relative w-full sm:w-80 md:w-[360px] shrink-0" ref={dropdownRef}>
               <button
                 type="button"
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="w-full h-1 min-h-[48px] px-4 py-2 border border-2 rounded-md bg-[var(--button)] border-[var(--wrapper)] text-left flex items-center justify-between focus:outline-none transition-all duration-200"
+                className="w-full h-[48px] px-4 py-2 border-2 rounded-md bg-[var(--button)] border-[var(--wrapper)] text-left flex items-center justify-between focus:outline-none transition-colors duration-150 cursor-pointer select-none"
               >
-                <span className="truncate text-sm">
+                <span className="truncate text-sm font-medium">
                   {filters.assignees.length === 0
                     ? '-- เลือกผู้รับผิดชอบ -- (กำลังแสดงทั้งหมด)'
                     : `เลือกแล้ว (${filters.assignees.length} คน): ${selectedUserNames.join(', ')}`}
@@ -552,7 +552,7 @@ export default function HomePage() {
 
               {/* Animated Dropdown Menu */}
               <div
-                className={`absolute left-0 right-0 mt-2 z-50 bg-[var(--background)] border border-[var(--blueText)] rounded-md shadow-lg max-h-60 overflow-y-auto transition-all duration-200 origin-top transform ${
+                className={`absolute left-0 right-0 top-full mt-2 z-50 bg-[var(--container)] border-2 border-[var(--shadow)] rounded-xl shadow-xl max-h-60 overflow-y-auto transition-opacity duration-150 origin-top transform ${
                   isDropdownOpen
                     ? 'opacity-100 scale-y-100 translate-y-0 pointer-events-auto'
                     : 'opacity-0 scale-y-95 -translate-y-2 pointer-events-none'
@@ -562,14 +562,14 @@ export default function HomePage() {
                 {filters.assignees.length > 0 && (
                   <div
                     onClick={() => setFilters((prev) => ({ ...prev, assignees: [] }))}
-                    className="px-4 py-2 text-xs text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 cursor-pointer border-b border-gray-200 dark:border-gray-800 font-semibold flex items-center justify-between"
+                    className="px-4 py-2.5 text-xs text-red-500 hover:bg-red-500/10 cursor-pointer border-b border-[var(--shadow)] font-bold flex items-center justify-between transition-colors select-none"
                   >
                     <span>✕ ล้างการเลือกทั้งหมด</span>
                   </div>
                 )}
 
                 {usersList.length === 0 ? (
-                  <div className="p-3 text-sm text-gray-500 text-center">ไม่มีข้อมูลผู้ใช้งาน</div>
+                  <div className="p-4 text-sm text-[var(--foreground)]/60 text-center">ไม่มีข้อมูลผู้ใช้งาน</div>
                 ) : (
                   usersList.map((user) => {
                     const isSelected = filters.assignees.includes(user.id);
@@ -577,18 +577,15 @@ export default function HomePage() {
                       <div
                         key={user.id}
                         onClick={() => handleUserToggle(user.id)}
-                        className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer text-sm transition-colors duration-150 hover:bg-[var(--blueBG)]/30 select-none ${
-                          isSelected ? 'font-semibold text-[var(--blueText)] bg-[var(--blueBG)]/20' : ''
+                        className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer text-sm transition-colors duration-150 hover:bg-[var(--wrapper)] select-none border-b border-[var(--shadow)]/30 last:border-0 ${
+                          isSelected ? 'font-bold text-[var(--blueText)] bg-[var(--blueBG)]/30' : 'text-[var(--foreground)] font-medium'
                         }`}
                       >
                         <input
                           type="checkbox"
                           checked={isSelected}
-                          onChange={(e) => {
-                            e.stopPropagation();
-                            handleUserToggle(user.id);
-                          }}
-                          className="w-4 h-4 rounded border-gray-300 accent-[var(--blueText)] cursor-pointer shrink-0"
+                          readOnly
+                          className="w-4 h-4 rounded border-gray-300 accent-[var(--blueText)] cursor-pointer shrink-0 pointer-events-none"
                         />
                         <span className="truncate">{user.name}</span>
                       </div>

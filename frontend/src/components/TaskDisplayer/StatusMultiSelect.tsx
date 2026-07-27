@@ -97,19 +97,21 @@ export default function StatusMultiSelect({
                         {availableStatuses.map((statusItem, idx) => {
                             const isChecked = statusFilter.includes(statusItem.value);
                             return (
-                                <label 
+                                <div 
                                     key={idx} 
                                     className={styles.CheckboxOption}
                                     style={{ backgroundColor: isChecked ? 'var(--greenBG, #e6f7ff)' : 'transparent' }}
+                                    onClick={() => handleStatusToggle(statusItem.value)}
                                 >
                                     <input 
                                         type="checkbox" 
                                         checked={isChecked}
-                                        onChange={() => handleStatusToggle(statusItem.value)}
+                                        readOnly
                                         className={styles.CheckboxInput}
+                                        style={{ pointerEvents: 'none' }}
                                     />
                                     <span>{statusItem.label}</span>
-                                </label>
+                                </div>
                             );
                         })}
                     </div>

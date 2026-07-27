@@ -7,19 +7,23 @@ import Swal from 'sweetalert2';
 import Header from '@/components/dashboard/Header';
 import MetricCards from '@/components/dashboard/MetricCards';
 import TaskTable from '@/components/dashboard/TaskTable';
+import MonthlyProgressChart from '@/components/dashboard/MonthlyProgressChart';
 
 // นำเข้า Types
 import { UserStat, TaskFromAPI, SortKey } from '@/components/dashboard/Types';
 
 export default function Dashboard() {
-    const [stats, setStats] = useState<UserStat[]>([]);
+    const [rawTasks, setRawTasks] = useState<TaskFromAPI[]>([]);
     const [loading, setLoading] = useState(true);
     
+    const [selectedYear, setSelectedYear] = useState<number | 'all'>('all');
+    const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+
     const [sortKey, setSortKey] = useState<SortKey>('userName');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
     const [expandedUser, setExpandedUser] = useState<string | null>(null);
 
-    // 1. ดึงข้อมูลและคำนวณสถิติ
+    // 1. ดึงข้อมูลดิบจาก API
     useEffect(() => {
         const fetchDashboardData = async () => {
             const token = localStorage.getItem("token");
@@ -38,51 +42,7 @@ export default function Dashboard() {
                 if (!response.ok) throw new Error('ไม่สามารถดึงข้อมูลได้');
 
                 const tasksArray: TaskFromAPI[] = await response.json();
-                
-                // 🔒 แก้ไข: ใช้ Record object แทน Map เพื่อหลบ Snyk False Positive (CWE-798)
-                const userStatsObj: Record<string, UserStat> = {};
-
-                tasksArray.forEach(task => {
-                    const assignees = Array.isArray(task.assigneesData) ? task.assigneesData : [];
-                    if (assignees.length === 0) {
-                        assignees.push({ name: 'ไม่ระบุชื่อ', color: '#e5e7eb' });
-                    }
-
-                    assignees.forEach(assignee => {
-                        const userName = assignee.name || 'ไม่ระบุชื่อ';
-
-                        if (!userStatsObj[userName]) {
-                            userStatsObj[userName] = {
-                                userName: userName,
-                                color: assignee.color || '#e5e7eb',
-                                totalTasks: 0,
-                                completedTasks: 0,
-                                incompleteTasks: 0,
-                                tasksDetails: []
-                            };
-                        }
-
-                        const userStat = userStatsObj[userName];
-                        userStat.totalTasks += 1;
-
-                        const isDone = task.status === 'completed';
-                        if (isDone) {
-                            userStat.completedTasks += 1;
-                        } else {
-                            userStat.incompleteTasks += 1;
-                        }
-
-                        userStat.tasksDetails.push({
-                            taskId: task.id,
-                            taskName: task.name || 'ไม่ระบุชื่องาน',
-                            status: task.status,
-                            dueDate: task.date,
-                            isUrgent: task.isUrgent
-                        });
-                    });
-                });
-
-                setStats(Object.values(userStatsObj));
+                setRawTasks(tasksArray);
             } catch (error) {
                 console.error("Dashboard Error:", error);
                 Swal.fire({
@@ -98,7 +58,80 @@ export default function Dashboard() {
         fetchDashboardData();
     }, []);
 
-    // 2. คำนวณ Metric ภาพรวม
+    // รายชื่อปีทั้งหมดที่มีในข้อมูล
+    const availableYears = useMemo(() => {
+        const yearsSet = new Set<number>();
+        yearsSet.add(new Date().getFullYear());
+        rawTasks.forEach(task => {
+            const dateStr = task.date || task.createdAt;
+            if (!dateStr) return;
+            const taskDate = new Date(dateStr);
+            if (!isNaN(taskDate.getTime())) {
+                yearsSet.add(taskDate.getFullYear());
+            }
+        });
+        return Array.from(yearsSet).sort((a, b) => b - a);
+    }, [rawTasks]);
+
+    // 2. คำนวณสถิติรายบุคคล (กรองตาม selectedYear และ selectedMonth)
+    const stats = useMemo(() => {
+        const userStatsObj: Record<string, UserStat> = {};
+
+        rawTasks.forEach(task => {
+            const dateStr = task.date || task.createdAt;
+            if (dateStr) {
+                const taskDate = new Date(dateStr);
+                if (!isNaN(taskDate.getTime())) {
+                    if (selectedYear !== 'all' && taskDate.getFullYear() !== selectedYear) return;
+                    if (selectedMonth !== null && taskDate.getMonth() !== selectedMonth) return;
+                }
+            } else if (selectedMonth !== null) {
+                return;
+            }
+
+            const assignees = Array.isArray(task.assigneesData) ? task.assigneesData : [];
+            if (assignees.length === 0) {
+                assignees.push({ name: 'ไม่ระบุชื่อ', color: '#e5e7eb' });
+            }
+
+            assignees.forEach(assignee => {
+                const userName = assignee.name || 'ไม่ระบุชื่อ';
+
+                if (!userStatsObj[userName]) {
+                    userStatsObj[userName] = {
+                        userName: userName,
+                        color: assignee.color || '#e5e7eb',
+                        totalTasks: 0,
+                        completedTasks: 0,
+                        incompleteTasks: 0,
+                        tasksDetails: []
+                    };
+                }
+
+                const userStat = userStatsObj[userName];
+                userStat.totalTasks += 1;
+
+                const isDone = task.status === 'completed';
+                if (isDone) {
+                    userStat.completedTasks += 1;
+                } else {
+                    userStat.incompleteTasks += 1;
+                }
+
+                userStat.tasksDetails.push({
+                    taskId: task.id,
+                    taskName: task.name || 'ไม่ระบุชื่องาน',
+                    status: task.status,
+                    dueDate: task.date,
+                    isUrgent: task.isUrgent
+                });
+            });
+        });
+
+        return Object.values(userStatsObj);
+    }, [rawTasks, selectedYear, selectedMonth]);
+
+    // 3. คำนวณ Metric ภาพรวม
     const globalMetrics = useMemo(() => {
         let total = 0;
         let completed = 0;
@@ -116,7 +149,7 @@ export default function Dashboard() {
         return Math.max(...stats.map(u => u.totalTasks));
     }, [stats]);
 
-    // 3. การจัดเรียงลำดับ (Sorting Logic)
+    // 4. การจัดเรียงลำดับ (Sorting Logic)
     const handleSort = (key: SortKey) => {
         if (sortKey === key) {
             setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
@@ -153,6 +186,16 @@ export default function Dashboard() {
             
             <MetricCards metrics={globalMetrics} />
             
+            {/* กราฟความก้าวหน้ารายเดือน */}
+            <MonthlyProgressChart 
+                rawTasks={rawTasks}
+                selectedYear={selectedYear}
+                setSelectedYear={setSelectedYear}
+                selectedMonth={selectedMonth}
+                setSelectedMonth={setSelectedMonth}
+                availableYears={availableYears}
+            />
+
             <TaskTable 
                 stats={sortedStats}
                 sortKey={sortKey}

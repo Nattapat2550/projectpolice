@@ -212,16 +212,19 @@ export default function DetailsDisplayer({
                                     />
                                 ) : (
                                     taskData?.task_detail ? (
-                                        <div className="flex items-start gap-3">
+                                        <div 
+                                            className="flex items-start gap-3 cursor-pointer select-none p-1 rounded-md hover:bg-(--button)/40 transition-colors"
+                                            onClick={handleToggleCheckbox}
+                                        >
                                             <input 
                                                 type="checkbox" 
-                                                className="mt-1.5 w-5 h-5 cursor-pointer shrink-0"
+                                                className="mt-1.5 w-5 h-5 cursor-pointer shrink-0 pointer-events-none"
                                                 checked={taskData.task_detail.startsWith('[x] ') || taskData.task_detail.startsWith('[X] ')}
-                                                onChange={handleToggleCheckbox}
+                                                readOnly
                                                 style={{ accentColor: "var(--greenBG)" }}
                                             />
                                             <div 
-                                                className={(taskData.task_detail.startsWith('[x] ') || taskData.task_detail.startsWith('[X] ')) ? "line-through opacity-70" : ""} 
+                                                className={(taskData.task_detail.startsWith('[x] ') || taskData.task_detail.startsWith('[X] ')) ? "line-through opacity-70 cursor-pointer" : "cursor-pointer"} 
                                                 style={{ wordBreak: 'break-word', width: '100%' }}
                                             >
                                                 {formatText(
