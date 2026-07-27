@@ -30,7 +30,7 @@
   --greyBG:#696969;
   --greyBorder:#5f5f5f;
 
-  --blueText:#1447e6;
+  --blueText:#385fd4;
 }
 
 @theme inline {
@@ -79,7 +79,7 @@ body {
   --button: #34334E;
   --shadow: #0f0d17;
 
-  --blueText:#94fff6;
+  --blueText:#92dcd5;
 
   --redText: #fcb4b4;
   --redBG: #9f3234;

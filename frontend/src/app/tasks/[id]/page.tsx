@@ -563,7 +563,7 @@ export default function TaskDetailPage() {
     const canDelete = currentUser?.role === "superadmin";
 
     return (
-        <div className="flex flex-col w-full min-h-screen px-4 py-6 sm:px-6 md:px-10 md:py-10 lg:px-16 lg:py-12 gap-6 lg:gap-8 overflow-x-hidden">
+        <div className="flex flex-col w-full min-h-screen px-4 py-6 sm:px-6 md:px-10 md:py-10 lg:px-16 lg:py-12 gap-4 lg:gap-6 overflow-x-hidden bg-(--wrapper)">
             {/* ---------- Top bar ---------- */}
             <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between gap-3">
@@ -575,19 +575,7 @@ export default function TaskDetailPage() {
                         <span className="hidden sm:inline">ย้อนกลับ</span>
                     </button>
 
-                    <button
-                        onClick={handleToggleUrgent}
-                        disabled={isEditing || !canEdit}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm transition-all border-2 disabled:opacity-40 disabled:cursor-not-allowed ${
-                            isUrgent
-                                ? "bg-(--redBG) text-(--redText) border-(--redBorder) hover:opacity-80 shadow-md"
-                                : "bg-(--wrapper) text-(--foreground) border-(--shadow) hover:bg-(--shadow) opacity-70 hover:opacity-100"
-                        }`}
-                    >
-                        <Flame size={16} className={isUrgent ? "animate-pulse" : ""} />
-                        <span className="hidden xs:inline">{isUrgent ? "งานด่วน" : "ตั้งเป็นงานด่วน"}</span>
-                    </button>
-                </div>
+                  </div>
 
                 <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                     <div className="flex flex-col gap-2 min-w-0">
@@ -681,7 +669,21 @@ export default function TaskDetailPage() {
             <SectionCard>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                     <span className="text-sm font-semibold opacity-60 shrink-0">สถานะงาน</span>
+                    
                     <div className="flex flex-wrap gap-2">
+                          <button
+                        onClick={handleToggleUrgent}
+                        disabled={isEditing || !canEdit}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm transition-all border-2 disabled:opacity-40 disabled:cursor-not-allowed ${
+                            isUrgent
+                                ? "bg-(--redBG) text-(--redText) border-(--redBorder) hover:opacity-80 shadow-md"
+                                : " text-(--foreground) border-(--shadow) hover:bg-(--shadow) opacity-70 hover:opacity-100"
+                        }`}
+                    >
+                        <Flame size={16} className={isUrgent ? "animate-pulse" : ""} />
+                        <span className="">{isUrgent ? "งานด่วน" : "ตั้งเป็นงานด่วน"}</span>
+                        </button>
+            
                         {(Object.keys(STATUS_CONFIG) as TaskStatus[]).map((s) => {
                             const meta = STATUS_CONFIG[s];
                             const active = taskData.status === s;
@@ -704,6 +706,8 @@ export default function TaskDetailPage() {
                         })}
                     </div>
                 </div>
+
+                
             </SectionCard>
 
             {/* ---------- Main grid ---------- */}

@@ -147,7 +147,8 @@ export default function Dashboard() {
     }
 
     return (
-        <div className="w-full max-w-7xl mx-auto px-4 py-8 flex flex-col gap-8">
+        <div className='w-full bg-(--wrapper)'>
+        <div className="w-full max-w-7xl mx-auto px-4 py-8 flex flex-col gap-6 ">
             <Header />
             
             <MetricCards metrics={globalMetrics} />
@@ -161,6 +162,7 @@ export default function Dashboard() {
                 onToggleExpand={toggleExpand}
                 maxTasks={maxTasks}
             />
+        </div>
         </div>
     );
 }
