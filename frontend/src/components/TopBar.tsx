@@ -93,15 +93,6 @@ export default function TopBar() {
                     <span className="font-medium hidden md:inline text-white">Dashboard</span>
                 </Link>
 
-                <Link
-                    href="/help"
-                    aria-label="ไปหน้าช่วยเหลือการใช้งาน"
-                    className="flex items-center gap-1 sm:gap-2 hover:bg-white/10 px-2 sm:px-4 py-2 rounded-lg transition-colors"
-                >
-                    <CircleQuestionMark></CircleQuestionMark>
-                    <span className="font-medium hidden md:inline text-white">ช่วยเหลือ</span>
-                </Link>
-
                 {user ? (
                     <div className="relative" ref={dropdownRef}>
                         <button 
