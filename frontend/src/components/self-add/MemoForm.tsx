@@ -18,9 +18,11 @@ export default function MemoForm() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   
   const [formData, setFormData] = useState({
-    title: "",
     memo_no: "",
     memo_date: new Date().toISOString().split('T')[0], // วันนี้
+    sender: "",
+    recipient_to: "",
+    title: "",
     due_date: getFutureDateStr(14), // ค่าเริ่มต้น 14 วันล่วงหน้า
     meeting_date: "",
     reply_due_date: "",
@@ -185,13 +187,8 @@ export default function MemoForm() {
         <div className={styles.ContentContainer}>
           <form onSubmit={handleSubmit} className="space-y-6">
             
-            {/* ข้อมูลหลักของฟอร์ม */}
+            {/* ข้อมูลหลักของฟอร์ม (เรียงตามลำดับ 1.ที่ -> 2.วันที่ -> 3.จาก -> 4.เรียน -> 5.เรื่อง) */}
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>หัวข้องาน (Title)</label>
-                <input type="text" name="title" value={formData.title} onChange={handleMainChange} placeholder="ระบุหัวข้องานติดตาม..." required className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
-              </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>เลขที่ Memo</label>
@@ -201,6 +198,22 @@ export default function MemoForm() {
                   <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>วันที่ Memo</label>
                   <input type="date" name="memo_date" value={formData.memo_date} onChange={handleMainChange} required className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>ส่วนราชการ (จาก)</label>
+                  <input type="text" name="sender" value={formData.sender} onChange={handleMainChange} placeholder="เช่น ศปนม.สพฐ.ตร." className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+                </div>
+                <div>
+                  <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>เรียน (ถึง)</label>
+                  <input type="text" name="recipient_to" value={formData.recipient_to} onChange={handleMainChange} placeholder="เช่น ผอ.ศปนม.ตร." className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>หัวข้องาน (Title)</label>
+                <input type="text" name="title" value={formData.title} onChange={handleMainChange} placeholder="ระบุหัวข้องานติดตาม..." required className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
               </div>
 
               <div>

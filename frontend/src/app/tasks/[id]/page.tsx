@@ -82,6 +82,7 @@ interface TaskData {
     urgency_level?: UrgencyLevel;
     secret_level?: SecretLevel;
     receive_no?: number | null;
+    receive_year?: number | null;
     createdAt?: string;
     sign_date?: string | null;
     meeting_date?: string | null;
@@ -195,6 +196,16 @@ function toDateTimeInputValue(value?: string | null) {
     const offset = d.getTimezoneOffset();
     const local = new Date(d.getTime() - offset * 60000);
     return local.toISOString().slice(0, 16);
+}
+
+function formatReceiveYear(year?: number | string | null) {
+    if (!year) return "";
+    const numYear = typeof year === "string" ? parseInt(year, 10) : year;
+    if (isNaN(numYear) || numYear === 0) return year.toString();
+    if (numYear < 2400) {
+        return (numYear + 543).toString();
+    }
+    return numYear.toString();
 }
 
 /* ------------------------------------------------------------------ */
@@ -708,11 +719,15 @@ export default function TaskDetailPage() {
                             </h1>
                         )}
                         <div className="flex flex-wrap items-center gap-2 mt-1">
-                            {taskData.memo_no && (
+                            {(taskData.receive_no || taskData.receive_year) ? (
+                                <span className="inline-flex items-center gap-1 text-sm font-medium rounded-full px-3 py-1 bg-(--wrapper)">
+                                    <Hash size={13} /> {String(taskData.receive_no ?? "").padStart(4, "0")}{taskData.receive_year ? `/${formatReceiveYear(taskData.receive_year)}` : ""}
+                                </span>
+                            ) : taskData.memo_no ? (
                                 <span className="inline-flex items-center gap-1 text-sm font-medium rounded-full px-3 py-1 bg-(--wrapper)">
                                     <Hash size={13} /> {taskData.memo_no}
                                 </span>
-                            )}
+                            ) : null}
                             <span
                                 className="inline-flex items-center gap-1 text-sm font-semibold rounded-full px-3 py-1 border"
                                 style={{ color: statusMeta.text, backgroundColor: statusMeta.bg, borderColor: statusMeta.border }}
@@ -826,13 +841,51 @@ export default function TaskDetailPage() {
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
                             <Field label="เลขที่หนังสือ">
                                 {isEditing && draft ? (
-                                    <ReadValue>{draft.memo_no || "-"}</ReadValue>
+                                    <input
+                                        type="text"
+                                        value={draft.memo_no || ""}
+                                        onChange={(e) => updateDraft({ memo_no: e.target.value })}
+                                        className={inputClass}
+                                    />
                                 ) : (
                                     <ReadValue>{taskData.memo_no || "-"}</ReadValue>
                                 )}
                             </Field>
                             <Field label="วันที่หนังสือ">
-                                <ReadValue>{formatThaiDate(taskData.memo_date)}</ReadValue>
+                                {isEditing && draft ? (
+                                    <input
+                                        type="date"
+                                        value={toDateInputValue(draft.memo_date)}
+                                        onChange={(e) => updateDraft({ memo_date: e.target.value })}
+                                        className={inputClass}
+                                    />
+                                ) : (
+                                    <ReadValue>{formatThaiDate(taskData.memo_date)}</ReadValue>
+                                )}
+                            </Field>
+                            <Field label="จาก (ส่วนราชการ)">
+                                {isEditing && draft ? (
+                                    <input
+                                        type="text"
+                                        value={draft.sender || ""}
+                                        onChange={(e) => updateDraft({ sender: e.target.value })}
+                                        className={inputClass}
+                                    />
+                                ) : (
+                                    <ReadValue>{taskData.sender || "-"}</ReadValue>
+                                )}
+                            </Field>
+                            <Field label="ถึง (เรียน)">
+                                {isEditing && draft ? (
+                                    <input
+                                        type="text"
+                                        value={draft.recipient_to || ""}
+                                        onChange={(e) => updateDraft({ recipient_to: e.target.value })}
+                                        className={inputClass}
+                                    />
+                                ) : (
+                                    <ReadValue>{taskData.recipient_to || "-"}</ReadValue>
+                                )}
                             </Field>
                             <Field label="เลขรับที่">
                                 {isEditing && draft ? (
@@ -907,30 +960,6 @@ export default function TaskDetailPage() {
                                         <Lock size={13} />
                                         {taskData.secret_level || "ปกติ"}
                                     </span>
-                                )}
-                            </Field>
-                            <Field label="จาก (ส่วนราชการ)">
-                                {isEditing && draft ? (
-                                    <input
-                                        type="text"
-                                        value={draft.sender || ""}
-                                        onChange={(e) => updateDraft({ sender: e.target.value })}
-                                        className={inputClass}
-                                    />
-                                ) : (
-                                    <ReadValue>{taskData.sender || "-"}</ReadValue>
-                                )}
-                            </Field>
-                            <Field label="ถึง (เรียน)">
-                                {isEditing && draft ? (
-                                    <input
-                                        type="text"
-                                        value={draft.recipient_to || ""}
-                                        onChange={(e) => updateDraft({ recipient_to: e.target.value })}
-                                        className={inputClass}
-                                    />
-                                ) : (
-                                    <ReadValue>{taskData.recipient_to || "-"}</ReadValue>
                                 )}
                             </Field>
                         </div>
