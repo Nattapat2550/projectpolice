@@ -113,7 +113,11 @@ export default function AllTask() {
             );
         } catch (error) {
             console.error("Failed to update task", error);
-            alert("เกิดข้อผิดพลาด ไม่สามารถอัปเดตสถานะได้");
+            Swal.fire({
+                icon: 'error',
+                title: 'เกิดข้อผิดพลาด',
+                text: 'ไม่สามารถอัปเดตสถานะได้'
+            });
         }
     };
 

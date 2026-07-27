@@ -98,20 +98,17 @@
     min-height: 44px;
     white-space: nowrap;
     flex-shrink: 0;
+    cursor: pointer;
 }
 
 .Clickable:hover{
     background-color: var(--wrapper);
-    cursor: pointer;
 }
 
 .SelectWrapper{
     flex: 1;
     flex-shrink: 0;
     width: 100%;
-}
-
-.SelectWrapper:hover{
     cursor: pointer;
 }
 

@@ -544,7 +544,7 @@ export default function TaskDetailPage() {
                 <p className="text-xl font-semibold">ไม่พบข้อมูลงานนี้</p>
                 <button
                     onClick={() => router.push("/")}
-                    className="rounded-full px-5 py-2.5 font-medium bg-(--wrapper) hover:bg-(--shadow) transition"
+                    className="rounded-full px-5 py-2.5 font-medium bg-(--wrapper) hover:bg-(--shadow) transition cursor-pointer select-none"
                 >
                     กลับหน้าหลัก
                 </button>
@@ -569,7 +569,7 @@ export default function TaskDetailPage() {
                 <div className="flex items-center justify-between gap-3">
                     <button
                         onClick={() => router.back()}
-                        className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium bg-(--wrapper) hover:bg-(--shadow) transition"
+                        className="flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium bg-(--wrapper) hover:bg-(--shadow) transition cursor-pointer select-none"
                     >
                         <ArrowLeft size={16} />
                         <span className="hidden sm:inline">ย้อนกลับ</span>
@@ -621,7 +621,7 @@ export default function TaskDetailPage() {
                                 {canEdit && (
                                     <button
                                         onClick={startEditing}
-                                        className="flex items-center gap-1.5 rounded-full px-4 py-2.5 font-medium text-sm text-(--button) transition hover:opacity-90"
+                                        className="flex items-center gap-1.5 rounded-full px-4 py-2.5 font-medium text-sm text-(--button) transition hover:opacity-90 cursor-pointer select-none"
                                         style={{ backgroundColor: "var(--header)" }}
                                     >
                                         <Pencil size={15} /> แก้ไข
@@ -630,7 +630,7 @@ export default function TaskDetailPage() {
                                 {canDelete && (
                                     <button
                                         onClick={handleDelete}
-                                        className="flex items-center gap-1.5 rounded-full px-4 py-2.5 font-medium text-sm border-2 transition hover:opacity-80 bg-(--redBG) text-(--redText) border-(--redBorder)"
+                                        className="flex items-center gap-1.5 rounded-full px-4 py-2.5 font-medium text-sm border-2 transition hover:opacity-80 bg-(--redBG) text-(--redText) border-(--redBorder) cursor-pointer select-none"
                                     >
                                         <Trash2 size={15} />
                                         <span className="hidden sm:inline">ลบ</span>
@@ -647,14 +647,14 @@ export default function TaskDetailPage() {
                                 <button
                                     onClick={cancelEditing}
                                     disabled={saving}
-                                    className="flex items-center gap-1.5 rounded-full px-4 py-2.5 font-medium text-sm bg-(--wrapper) hover:bg-(--shadow) transition disabled:opacity-50"
+                                    className="flex items-center gap-1.5 rounded-full px-4 py-2.5 font-medium text-sm bg-(--wrapper) hover:bg-(--shadow) transition disabled:opacity-50 cursor-pointer select-none"
                                 >
                                     <X size={15} /> ยกเลิก
                                 </button>
                                 <button
                                     onClick={handleSave}
                                     disabled={saving}
-                                    className="flex items-center gap-1.5 rounded-full px-4 py-2.5 font-medium text-sm text-white transition hover:opacity-90 disabled:opacity-60 bg-(--greenBorder)"
+                                    className="flex items-center gap-1.5 rounded-full px-4 py-2.5 font-medium text-sm text-white transition hover:opacity-90 disabled:opacity-60 bg-(--greenBorder) cursor-pointer select-none"
                                 >
                                     {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
                                     บันทึก
@@ -674,7 +674,7 @@ export default function TaskDetailPage() {
                           <button
                         onClick={handleToggleUrgent}
                         disabled={isEditing || !canEdit}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm transition-all border-2 disabled:opacity-40 disabled:cursor-not-allowed ${
+                        className={`flex items-center gap-2 px-4 py-2 rounded-full font-bold text-sm transition-all border-2 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer select-none ${
                             isUrgent
                                 ? "bg-(--redBG) text-(--redText) border-(--redBorder) hover:opacity-80 shadow-md"
                                 : " text-(--foreground) border-(--shadow) hover:bg-(--shadow) opacity-70 hover:opacity-100"
@@ -692,7 +692,7 @@ export default function TaskDetailPage() {
                                     key={s}
                                     onClick={() => handleStatusChange(taskData.id, s)}
                                     disabled={isEditing}
-                                    className="flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold border-2 transition disabled:opacity-40 disabled:cursor-not-allowed"
+                                    className="flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold border-2 transition disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer select-none"
                                     style={
                                         active
                                             ? { color: meta.text, backgroundColor: meta.bg, borderColor: meta.border }
@@ -808,7 +808,7 @@ export default function TaskDetailPage() {
                                 href={taskData.document_link}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="mt-5 inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium bg-(--wrapper) hover:bg-(--shadow) transition w-fit"
+                                className="mt-5 inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium bg-(--wrapper) hover:bg-(--shadow) transition w-fit cursor-pointer select-none"
                             >
                                 <LinkIcon size={15} />
                                 เปิดเอกสารต้นฉบับ
@@ -943,7 +943,7 @@ export default function TaskDetailPage() {
                                                     role_or_name: a.role_or_name || u?.name || "",
                                                 });
                                             }}
-                                            className={`${inputClass} sm:flex-1`}
+                                            className={`${inputClass} sm:flex-1 cursor-pointer`}
                                         >
                                             <option value="">— ไม่ผูกกับผู้ใช้ —</option>
                                             {users.map((u) => (
@@ -960,7 +960,7 @@ export default function TaskDetailPage() {
                                         />
                                         <button
                                             onClick={() => removeAssignment(i)}
-                                            className="flex items-center justify-center rounded-lg px-3 py-2 bg-(--redBG) text-(--redText) hover:opacity-80 transition shrink-0"
+                                            className="flex items-center justify-center rounded-lg px-3 py-2 bg-(--redBG) text-(--redText) hover:opacity-80 transition shrink-0 cursor-pointer select-none"
                                         >
                                             <Trash2 size={15} />
                                         </button>
@@ -968,7 +968,7 @@ export default function TaskDetailPage() {
                                 ))}
                                 <button
                                     onClick={addAssignment}
-                                    className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-medium border-2 border-dashed border-(--shadow) hover:bg-(--wrapper) transition"
+                                    className="flex items-center justify-center gap-1.5 rounded-lg px-3 py-2.5 text-sm font-medium border-2 border-dashed border-(--shadow) hover:bg-(--wrapper) transition cursor-pointer select-none"
                                 >
                                     <Plus size={15} /> เพิ่มผู้รับผิดชอบ
                                 </button>
@@ -983,7 +983,7 @@ export default function TaskDetailPage() {
                 <SectionCard className="mt-2">
                     <button
                         onClick={() => setShowLogs((v) => !v)}
-                        className="flex items-center justify-between w-full text-left"
+                        className="flex items-center justify-between w-full text-left cursor-pointer select-none"
                     >
                         <span className="flex items-center gap-2 font-bold text-lg" style={{ color: "var(--header)" }}>
                             <History size={19} />

@@ -4,7 +4,7 @@
 #define MyAppName "Police Project"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "Police Project Team"
-#define MyAppExeName "launcher.vbs"
+#define MyAppExeName "PoliceLauncher.exe"
 
 [Setup]
 AppId={{D9A83F12-87C2-4B6A-91E3-87B11F247A9B}
@@ -27,19 +27,17 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; Package Launcher, Backend (for Local OCR), and Frontend
+; Package Launcher Executable, Backend, and Frontend
+Source: "PoliceLauncher.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "start-app.bat"; DestDir: "{app}"; Flags: ignoreversion
 Source: "stop-app.bat"; DestDir: "{app}"; Flags: ignoreversion
-Source: "launcher.vbs"; DestDir: "{app}"; Flags: ignoreversion
 Source: "backend\*"; DestDir: "{app}\backend"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "node_modules, *.log"
 Source: "frontend\*"; DestDir: "{app}\frontend"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "node_modules, .next, *.log"
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\frontend\public\favicon.ico"
-Name: "{group}\ปิดโปรแกรม {#MyAppName}"; Filename: "{app}\stop-app.bat"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\frontend\public\favicon.ico"; Tasks: desktopicon
-Name: "{autodesktop}\ปิดโปรแกรม {#MyAppName}"; Filename: "{app}\stop-app.bat"; Tasks: desktopicon
 
 [Run]
-Filename: "wscript.exe"; Parameters: """{app}\launcher.vbs"""; Description: "เปิดใช้งาน {#MyAppName} ทันที"; Flags: postinstall shellexec skipifsilent
+Filename: "{app}\{#MyAppExeName}"; Description: "เปิดใช้งาน {#MyAppName} ทันที"; Flags: postinstall shellexec skipifsilent

@@ -111,19 +111,21 @@ export default function PersonMultiSelect({
                         {allDisplayPersons.map((person, idx) => {
                             const isChecked = personFilter.includes(person);
                             return (
-                                <label 
+                                <div 
                                     key={idx} 
                                     className={styles.CheckboxOption}
                                     style={{ backgroundColor: isChecked ? 'var(--greenBG, #e6f7ff)' : 'transparent' }}
+                                    onClick={() => handlePersonToggle(person)}
                                 >
                                     <input 
                                         type="checkbox" 
                                         checked={isChecked}
-                                        onChange={() => handlePersonToggle(person)}
+                                        readOnly
                                         className={styles.CheckboxInput}
+                                        style={{ pointerEvents: 'none' }}
                                     />
                                     <span>{person}</span>
-                                </label>
+                                </div>
                             );
                         })}
                     </div>

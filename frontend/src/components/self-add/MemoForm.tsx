@@ -18,14 +18,14 @@ export default function MemoForm() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   
   const [formData, setFormData] = useState({
-    title: "งานติดตามคีย์ด้วยมือ",
-    memo_no: "123/2567",
+    title: "",
+    memo_no: "",
     memo_date: new Date().toISOString().split('T')[0], // วันนี้
     due_date: getFutureDateStr(14), // ค่าเริ่มต้น 14 วันล่วงหน้า
     meeting_date: "",
     reply_due_date: "",
-    main_text: "รายละเอียดงานที่เพิ่มเข้ามาด้วยตนเอง...",
-    task_detail: "สิ่งที่ต้องดำเนินการทั้งหมด...",
+    main_text: "",
+    task_detail: "",
     is_urgent: true,
     receive_no: "",
     receive_date: "",
@@ -189,13 +189,13 @@ export default function MemoForm() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>หัวข้องาน (Title)</label>
-                <input type="text" name="title" value={formData.title} onChange={handleMainChange} required className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+                <input type="text" name="title" value={formData.title} onChange={handleMainChange} placeholder="ระบุหัวข้องานติดตาม..." required className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>เลขที่ Memo</label>
-                  <input type="text" name="memo_no" value={formData.memo_no} onChange={handleMainChange} required className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+                  <input type="text" name="memo_no" value={formData.memo_no} onChange={handleMainChange} placeholder="เช่น 123/2567" required className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>วันที่ Memo</label>
@@ -237,7 +237,7 @@ export default function MemoForm() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>ระดับความด่วน (Urgency Level)</label>
-                  <select name="urgency_level" value={formData.urgency_level} onChange={handleMainChange} className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}>
+                  <select name="urgency_level" value={formData.urgency_level} onChange={handleMainChange} className="mt-1 block w-full rounded-md p-2.5 outline-none cursor-pointer" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}>
                     <option value="ปกติ">ปกติ</option>
                     <option value="ด่วน">ด่วน</option>
                     <option value="ด่วนมาก">ด่วนมาก</option>
@@ -246,7 +246,7 @@ export default function MemoForm() {
                 </div>
                 <div>
                   <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>ระดับความลับ (Secret Level)</label>
-                  <select name="secret_level" value={formData.secret_level} onChange={handleMainChange} className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}>
+                  <select name="secret_level" value={formData.secret_level} onChange={handleMainChange} className="mt-1 block w-full rounded-md p-2.5 outline-none cursor-pointer" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}>
                     <option value="ปกติ">ปกติ</option>
                     <option value="ลับ">ลับ</option>
                     <option value="ลับมาก">ลับมาก</option>
@@ -257,12 +257,12 @@ export default function MemoForm() {
 
               <div>
                 <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>รายละเอียดเอกสาร (Main Text)</label>
-                <textarea name="main_text" value={formData.main_text} onChange={handleMainChange} rows={4} className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+                <textarea name="main_text" value={formData.main_text} onChange={handleMainChange} rows={4} placeholder="ระบุรายละเอียดสาระสำคัญของงานติดตาม..." className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
               </div>
 
               <div>
                 <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>สิ่งที่ต้องดำเนินการ (Task Detail)</label>
-                <textarea name="task_detail" value={formData.task_detail} onChange={handleMainChange} rows={3} className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--yellowBorder)", backgroundColor: "var(--yellowBG)", color: "var(--foreground)" }}/>
+                <textarea name="task_detail" value={formData.task_detail} onChange={handleMainChange} rows={3} placeholder="ระบุสิ่งที่ต้องดำเนินการและติดตามผล..." className="mt-1 block w-full rounded-md p-2.5 outline-none" style={{ border: "1px solid var(--yellowBorder)", backgroundColor: "var(--yellowBG)", color: "var(--foreground)" }}/>
               </div>
 
               <div>
@@ -288,14 +288,15 @@ export default function MemoForm() {
                         }
                     }}
                     placeholder="🔍 พิมพ์เพื่อค้นหาผู้รับผิดชอบ..."
-                    className="text-sm"
+                    className="text-sm cursor-pointer"
                     styles={{
                         control: (base) => ({
                             ...base,
                             backgroundColor: 'var(--wrapper)',
                             borderColor: 'var(--shadow)',
                             color: 'var(--foreground)',
-                            padding: '0.1rem'
+                            padding: '0.1rem',
+                            cursor: 'pointer'
                         }),
                         menu: (base) => ({
                             ...base,
@@ -332,11 +333,11 @@ export default function MemoForm() {
 
             <div className="flex flex-col sm:flex-row gap-4 w-full pt-4" style={{ borderTop: '1px solid var(--wrapper)' }}>
               <Link href={'/'} className="w-full sm:w-1/3">
-                <button type="button" className="w-full py-2.5 px-4 rounded-xl font-bold text-center transition-colors" style={{ backgroundColor: "var(--button)", color: "var(--header)", border: "1px solid var(--wrapper)" }}>
+                <button type="button" className="w-full py-2.5 px-4 rounded-xl font-bold text-center transition-colors cursor-pointer select-none" style={{ backgroundColor: "var(--button)", color: "var(--header)", border: "1px solid var(--wrapper)" }}>
                   กลับหน้าหลัก
                 </button>
               </Link>
-              <button type="submit" className="flex-1 py-2.5 px-4 rounded-xl font-bold text-lg shadow-sm transition-colors hover:opacity-90" style={{ backgroundColor: "var(--greenBG)", color: "var(--greenText)", border: "2px solid var(--greenBorder)" }}>
+              <button type="submit" className="flex-1 py-2.5 px-4 rounded-xl font-bold text-lg shadow-sm transition-colors hover:opacity-90 cursor-pointer select-none" style={{ backgroundColor: "var(--greenBG)", color: "var(--greenText)", border: "2px solid var(--greenBorder)" }}>
                 บันทึกและส่งข้อมูลการติดตาม
               </button>
             </div>

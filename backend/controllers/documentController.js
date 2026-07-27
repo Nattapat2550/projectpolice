@@ -3,6 +3,34 @@ const path = require('path');
 const { extractDataWithGemini } = require('../services/ocrService'); 
 const { parseFilenameInfo } = require('../utils/filenameParser');
 
+// 🧹 ฟังก์ชันอัตโนมัติสำหรับลบไฟล์สแกนชั่วคราวที่ตกค้างในโฟลเดอร์ uploads เกิน 15 นาที
+async function cleanStaleUploads() {
+  try {
+    const uploadsDir = path.join(process.cwd(), 'uploads');
+    const files = await fs.readdir(uploadsDir);
+    const now = Date.now();
+    const maxAgeMs = 15 * 60 * 1000; // 15 minutes
+
+    for (const file of files) {
+      if (file === '.gitkeep' || file === 'readme.txt') continue;
+      const fullPath = path.join(uploadsDir, file);
+      try {
+        const stats = await fs.stat(fullPath);
+        if (now - stats.mtimeMs > maxAgeMs) {
+          await fs.unlink(fullPath);
+          console.log(`[AutoClean] Deleted stale temp upload file: ${file}`);
+        }
+      } catch (e) {}
+    }
+  } catch (e) {
+    // ignore if uploads dir doesn't exist
+  }
+}
+
+// เรียกทำงานทำความสะอาดไฟล์ตกค้างทันทีเมื่อเริ่มเซิร์ฟเวอร์ และรันซ้ำทุกๆ 15 นาที
+cleanStaleUploads();
+setInterval(cleanStaleUploads, 15 * 60 * 1000);
+
 exports.processDocuments = async (req, res) => {
   const files = req.files;
   if (!files || files.length === 0) return res.status(400).json({ success: false, message: 'No files uploaded.' });
@@ -73,4 +101,30 @@ exports.processDocuments = async (req, res) => {
   }
   
   res.json({ total: files.length, results });
+};
+
+// 🗑️ API ลบไฟล์ชั่วคราวเมื่อผู้ใช้นำไฟล์ออก หรือกดยกเลิก/ย้ายหน้า
+exports.deleteTempFiles = async (req, res) => {
+  try {
+    const { paths, path: singlePath } = req.body;
+    const pathList = Array.isArray(paths) ? paths : singlePath ? [singlePath] : [];
+
+    for (const filePath of pathList) {
+      if (!filePath || typeof filePath !== 'string') continue;
+      const filename = path.basename(filePath);
+      const parentDir = path.dirname(filePath);
+      const safePath = path.join(parentDir, filename);
+
+      try {
+        await fs.unlink(safePath);
+        console.log(`[TempClean] Successfully deleted temp file: ${filename}`);
+      } catch (e) {
+        // ignore if already deleted
+      }
+    }
+
+    res.json({ success: true, message: 'Temp files cleaned successfully.' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 };

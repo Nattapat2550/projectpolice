@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Swal from "sweetalert2";
 
 interface User {
   id: string;
@@ -55,14 +56,27 @@ export default function UserManagementPage() {
       const data = await res.json();
       if (data.success) {
         setUsers(users.map(u => u.id === userId ? { ...u, role: newRole } : u));
-        // ถ้าโปรเจกต์มี SweetAlert2 แนะนำให้เปลี่ยน alert() เป็น Swal.fire() ครับ
-        alert("อัปเดตสิทธิ์ผู้ใช้งานสำเร็จ");
+        Swal.fire({
+          icon: 'success',
+          title: 'สำเร็จ!',
+          text: 'อัปเดตสิทธิ์ผู้ใช้งานสำเร็จ',
+          timer: 1500,
+          showConfirmButton: false
+        });
       } else {
-        alert("เกิดข้อผิดพลาด: " + data.message);
+        Swal.fire({
+          icon: 'error',
+          title: 'เกิดข้อผิดพลาด',
+          text: data.message || 'ไม่สามารถอัปเดตสิทธิ์ได้'
+        });
       }
     } catch (err) {
       console.error(err);
-      alert("เกิดข้อผิดพลาดในการอัปเดตสิทธิ์");
+      Swal.fire({
+        icon: 'error',
+        title: 'เกิดข้อผิดพลาด',
+        text: 'เกิดข้อผิดพลาดในการอัปเดตสิทธิ์'
+      });
     }
   };
 

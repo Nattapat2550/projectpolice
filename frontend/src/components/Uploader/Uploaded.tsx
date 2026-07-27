@@ -52,7 +52,8 @@ interface FileData {
 }
 
 interface UploadedProps {
-    extractedData: FileResult[] | null; 
+    extractedData: FileResult[] | null;
+    onClearExtractedData?: () => void;
 }
 
 const parseThaiDate = (dateStr: string | undefined): Date | null => {
@@ -75,7 +76,7 @@ const parseThaiDate = (dateStr: string | undefined): Date | null => {
     return monthIndex === -1 ? null : new Date(year, monthIndex, day);
 };
 
-export default function Uploaded({ extractedData }: UploadedProps) {
+export default function Uploaded({ extractedData, onClearExtractedData }: UploadedProps) {
     const router = useRouter();
 
     const [users, setUsers] = useState<any[]>([]);
@@ -249,6 +250,10 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                 if (!res.ok) throw new Error(`เกิดข้อผิดพลาดในการบันทึกข้อมูลไฟล์: ${file.filename}`);
             }
 
+            // 💡 ล้างไฟล์ที่ค้างอัปโหลดออกจากสเตตและหน่วยความจำ เพื่อไม่ให้ค้างหรือทำให้เครื่องช้า
+            setFilesData([]);
+            onClearExtractedData?.();
+
             // 💡 ใช้ SweetAlert2 แทน alert สำหรับความสำเร็จ
             Swal.fire({
                 icon: 'success',
@@ -281,9 +286,37 @@ export default function Uploaded({ extractedData }: UploadedProps) {
                         <div key={fileIdx} className={`${styles.ContentWrapper} flex flex-col shrink-0 shadow-md h-auto`}>
                             <div className="bg-(--container) shrink-0 border-b border-(--shadow) z-10 w-full rounded-t-sm relative">
                                 <div className="p-4 sm:px-6 py-3 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                                    <div className="text-base font-bold text-(--header) flex items-center gap-2">
-                                        <span className="text-xl">📁</span>
-                                        <span>สแกนจากไฟล์: <span className="text-blue-700 underline font-extrabold">{file.filename}</span></span>
+                                    <div className="text-base font-bold text-(--header) flex items-center justify-between w-full lg:w-auto gap-4">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xl">📁</span>
+                                            <span>สแกนจากไฟล์: <span className="text-blue-700 underline font-extrabold">{file.filename}</span></span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                if (file.fileInfo?.path) {
+                                                    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
+                                                    const token = typeof window !== 'undefined' ? localStorage.getItem("token") || "" : "";
+                                                    fetch(`${backendUrl}/api/v1/documents/clean-temp`, {
+                                                        method: "POST",
+                                                        headers: {
+                                                            "Content-Type": "application/json",
+                                                            ...(token ? { "Authorization": `Bearer ${token}` } : {})
+                                                        },
+                                                        body: JSON.stringify({ paths: [file.fileInfo.path] }),
+                                                        keepalive: true
+                                                    }).catch(() => {});
+                                                }
+                                                const remaining = filesData.filter((_, idx) => idx !== fileIdx);
+                                                setFilesData(remaining);
+                                                if (remaining.length === 0) {
+                                                    onClearExtractedData?.();
+                                                }
+                                            }}
+                                            className="text-xs text-red-500 font-bold hover:text-red-700 hover:bg-red-500/10 px-2.5 py-1 rounded border border-red-500/20 transition cursor-pointer select-none shrink-0"
+                                        >
+                                            ✕ ลบไฟล์นี้ออก
+                                        </button>
                                     </div>
                                     
                                     {file.memos.length > 0 && (

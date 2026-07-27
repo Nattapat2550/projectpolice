@@ -38,7 +38,12 @@ export default function FileUploader({ setExtractedData, progress, setProgress }
     const handleDrop = (e: DragEvent<HTMLDivElement>) => {
         e.preventDefault();
         if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            setFiles((prev) => [...prev, ...Array.from(e.dataTransfer.files as FileList)]);
+            const validFiles = Array.from(e.dataTransfer.files as FileList).filter(
+                (file) => file.name && file.name !== "folder.png"
+            );
+            if (validFiles.length > 0) {
+                setFiles((prev) => [...prev, ...validFiles]);
+            }
         }
     };
 
@@ -132,14 +137,15 @@ export default function FileUploader({ setExtractedData, progress, setProgress }
             >
                 <div className={styles.ContentContainer}>
                     {files.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center w-full h-full gap-4 text-foreground p-4 opacity-80 hover:opacity-100 transition-opacity">
-                            {/* เปลี่ยนมาใช้รูปภาพ folder.png จากโฟลเดอร์ public */}
+                        <div className="flex flex-col items-center justify-center w-full h-full gap-4 text-foreground p-4 opacity-80 hover:opacity-100 transition-opacity select-none">
+                            {/* รูปภาพ folder.png (ปิด draggable และ pointer-events ป้องกันการลากตัวรูป) */}
                             <img 
                                 src="/folder.png" 
                                 alt="Folder Upload" 
-                                className="w-full h-full max-h-48 object-contain drop-shadow-md"
+                                draggable={false}
+                                className="w-full h-full max-h-48 object-contain drop-shadow-md pointer-events-none select-none"
                             />
-                            <span className="font-medium text-lg">อัพโหลดหรือลากไฟล์เอกสารมาที่นี่</span>
+                            <span className="font-medium text-lg pointer-events-none">อัพโหลดหรือลากไฟล์เอกสารมาที่นี่</span>
                         </div>
                     ) : (
                         <ul className="flex flex-col gap-2 w-full max-w-sm px-4 text-sm text-foreground">
