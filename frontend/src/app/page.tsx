@@ -4,58 +4,67 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Header, SearchFilters, emptyFilters, UserOption } from '@/components/firstpage/Header';
 import { StatCard } from '@/components/firstpage/StatCard';
-import { TaskTable, Task, SortKey, SortConfig } from '@/components/firstpage/TaskTable';
+import { TaskTable, Task, SortKey, SortConfig, getAssigneeColor } from '@/components/firstpage/TaskTable';
 import Link from 'next/link';
 import Swal from 'sweetalert2';
 import { ChevronDown, CircleDashed, Flame, Hourglass, ListTodo, NotebookPen } from 'lucide-react';
 
 const PAGE_SIZE = 20;
 
-// resolve ชื่อผู้รับผิดชอบจริง: ถ้ามี user_id และหาเจอใน users map ให้ใช้ชื่อนั้นก่อนเสมอ
-// (ข้อมูลดิบจาก backend บางทีมีแค่ user_id โดยไม่มีชื่อติดมาด้วย)
-// 🐛 FIX: GET /api/v1/tasks (backend) รวม assignee มาเป็น `assigneesData: [{ name, color }]`
-// โดย "ไม่มี" user_id ติดมาด้วยเลย (ดู be.md — "Aggregates and yields assignees names and colors")
-// เดิมฟังก์ชันนี้เช็คแค่ personInCharge / role_or_name / responsible_person เลยไม่เจอ `name`
-// แล้ว fallback ไปเป็น 'ไม่ระบุชื่อ' ทุกครั้ง — นี่คือสาเหตุที่ตารางขึ้นชื่อผู้รับผิดชอบผิด
-function resolveAssigneeName(assign: any, usersMap: Map<string, string>): string {
-  if (assign?.user_id && usersMap.has(assign.user_id)) {
-    return usersMap.get(assign.user_id)!;
+interface UserMeta {
+  id?: string;
+  name: string;
+  color?: string;
+}
+
+function resolveAssigneeInfo(assign: any, usersMap: Map<string, UserMeta>, userByNameMap: Map<string, UserMeta>): { name: string; color?: string } {
+  const userIdStr = assign?.user_id ? String(assign.user_id) : null;
+  if (userIdStr && usersMap.has(userIdStr)) {
+    const matched = usersMap.get(userIdStr)!;
+    return { name: matched.name, color: assign?.color || matched.color };
   }
-  return (
+  const name =
     assign?.name ||
     assign?.personInCharge ||
     assign?.role_or_name ||
     assign?.responsible_person ||
-    'ไม่ระบุชื่อ'
-  );
+    'ไม่ระบุชื่อ';
+
+  const matchedByName = userByNameMap.get(name.trim());
+  const color = assign?.color || matchedByName?.color;
+  return { name, color };
 }
 
 // 💡 API ของ backend มีการส่งข้อมูลมาได้ 2 รูปแบบ (list แบบย่อ กับ detail แบบเต็ม)
 // ฟังก์ชันนี้ทำหน้าที่ normalize ให้กลายเป็นรูปแบบเดียวกันเสมอ ไม่ว่า backend จะส่ง
 // title/name, is_urgent/isUrgent, assignments/assigneesData แบบไหนมาก็ตาม
-function normalizeTask(raw: any, usersMap: Map<string, string>): Task {
+function normalizeTask(raw: any, usersMap: Map<string, UserMeta>, userByNameMap: Map<string, UserMeta>): Task {
   const rawAssignments: any[] = raw.assignments ?? raw.assigneesData ?? [];
 
   const assignments =
     Array.isArray(rawAssignments) && rawAssignments.length > 0
       ? rawAssignments.map((a, idx) => {
-          const name = resolveAssigneeName(a, usersMap);
+          const info = resolveAssigneeInfo(a, usersMap, userByNameMap);
           return {
             assignment_id: a.assignment_id || `${raw.id}-${a.user_id || idx}`,
             user_id: a.user_id ?? null,
-            role_or_name: a.role_or_name || name,
-            personInCharge: name,
+            role_or_name: a.role_or_name || info.name,
+            personInCharge: info.name,
+            color: info.color,
           };
         })
       : raw.personInCharge && raw.personInCharge !== 'ไม่ระบุ'
       ? [
-          {
-            assignment_id: `${raw.id}-person`,
-            user_id: raw.user_id ?? null,
-            role_or_name: raw.personInCharge,
-            personInCharge:
-              (raw.user_id && usersMap.get(raw.user_id)) || raw.personInCharge,
-          },
+          (() => {
+            const info = resolveAssigneeInfo({ user_id: raw.user_id, personInCharge: raw.personInCharge }, usersMap, userByNameMap);
+            return {
+              assignment_id: `${raw.id}-person`,
+              user_id: raw.user_id ?? null,
+              role_or_name: info.name,
+              personInCharge: info.name,
+              color: info.color,
+            };
+          })()
         ]
       : [];
 
@@ -237,9 +246,9 @@ export default function HomePage() {
       try {
         setLoading(true);
 
-        // 👥 ดึงรายชื่อ users ทั้งหมดมาก่อน เพื่อทำ map user_id -> name
-        // ใช้สำหรับ resolve ชื่อผู้รับผิดชอบที่ backend ส่งมาแค่ user_id
-        const usersMap = new Map<string, string>();
+        // 👥 ดึงรายชื่อ users ทั้งหมดมาก่อน เพื่อทำ map user_id -> name & color
+        const usersMap = new Map<string, UserMeta>();
+        const userByNameMap = new Map<string, UserMeta>();
         try {
           const usersRes = await fetch(`${backendUrl}/api/v1/users`, {
             method: 'GET',
@@ -257,15 +266,18 @@ export default function HomePage() {
               : [];
             const options: UserOption[] = [];
             rawUsers.forEach((u) => {
-              if (u?.id && u?.name) {
-                usersMap.set(u.id, u.name);
-                options.push({ id: u.id, name: u.name });
+              const uIdStr = u?.id || u?._id ? String(u.id || u._id) : null;
+              if (uIdStr && u?.name) {
+                const meta = { id: uIdStr, name: u.name, color: u.color };
+                usersMap.set(uIdStr, meta);
+                userByNameMap.set(u.name.trim(), meta);
+                options.push(meta);
               }
             });
             setUsersList(options.sort((a, b) => a.name.localeCompare(b.name, 'th')));
           }
         } catch {
-          // ถ้าดึง users ไม่ได้ ไม่ต้อง block การแสดง tasks แค่จะไม่มีชื่อ resolve ให้
+          // ถ้าดึง users ไม่ได้ ไม่ต้อง block การแสดง tasks
         }
 
         const response = await fetch(`${backendUrl}/api/v1/tasks`, {
@@ -296,7 +308,7 @@ export default function HomePage() {
           ? resData
           : [];
 
-        setTasks(rawList.map((raw) => normalizeTask(raw, usersMap)));
+        setTasks(rawList.map((raw) => normalizeTask(raw, usersMap, userByNameMap)));
       } catch (err: any) {
         setError(err.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์');
       } finally {
@@ -401,40 +413,37 @@ export default function HomePage() {
 
   // ↕️ เรียงข้อมูล: ถ้าไม่มีการเลือกคอลัมน์เอง ใช้ค่าเริ่มต้น receive_year -> receive_no
   const sortedTasks = useMemo(() => {
-    const arr = [...filteredTasks];
-    const dir = sortConfig.direction === 'asc' ? 1 : -1;
-
-    arr.sort((a, b) => {
-      // คอลัมน์ "เลขรับ / ปี" เรียงตามปีก่อนเสมอ แล้วค่อยตามด้วยเลขรับ (ทิศทางเดียวกัน)
-      if (sortConfig.key === 'receive_no') {
-        const yearDiff = (a.receive_year ?? 0) - (b.receive_year ?? 0);
-        if (yearDiff !== 0) return yearDiff * dir;
-        return ((a.receive_no ?? 0) - (b.receive_no ?? 0)) * dir;
+    const list = [...filteredTasks];
+    list.sort((a, b) => {
+      // 💡 เรียงตาม receive_year ก่อนเป็นอันดับแรกเสมอ
+      const yearA = a.receive_year || 0;
+      const yearB = b.receive_year || 0;
+      if (yearA !== yearB) {
+        return sortConfig.direction === 'asc' ? yearA - yearB : yearB - yearA;
       }
 
-      const av = getSortValue(a, sortConfig.key);
-      const bv = getSortValue(b, sortConfig.key);
+      const valA = getSortValue(a, sortConfig.key);
+      const valB = getSortValue(b, sortConfig.key);
 
-      if (typeof av === 'string' && typeof bv === 'string') {
-        return av.localeCompare(bv, 'th') * dir;
+      if (typeof valA === 'number' && typeof valB === 'number') {
+        return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
       }
-      return ((av as number) - (bv as number)) * dir;
+
+      const strA = String(valA);
+      const strB = String(valB);
+      const cmp = strA.localeCompare(strB, 'th');
+      return sortConfig.direction === 'asc' ? cmp : -cmp;
     });
-
-    return arr;
+    return list;
   }, [filteredTasks, sortConfig]);
 
-  // 📄 Pagination: 20 รายการต่อหน้า
   const totalPages = Math.max(1, Math.ceil(sortedTasks.length / PAGE_SIZE));
-  const paginatedTasks = useMemo(
-    () => sortedTasks.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
-    [sortedTasks, currentPage]
-  );
+  const currentPageClamped = Math.min(currentPage, totalPages);
 
-  // รีเซ็ตกลับหน้า 1 ทุกครั้งที่ filter หรือ sort เปลี่ยน
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filters, sortConfig]);
+  const displayTasks = useMemo(() => {
+    const start = (currentPageClamped - 1) * PAGE_SIZE;
+    return sortedTasks.slice(start, start + PAGE_SIZE);
+  }, [sortedTasks, currentPageClamped]);
 
   const handleSort = (key: SortKey) => {
     setSortConfig((prev) => {
@@ -460,9 +469,9 @@ export default function HomePage() {
   }, []);
 
   const selectedUserNames = useMemo(() => {
-  const userMap = new Map(usersList.map((u) => [u.id, u.name]));
-  return filters.assignees.map((id) => userMap.get(id)).filter(Boolean);
-}, [filters.assignees, usersList]);
+    const userMap = new Map(usersList.map((u) => [u.id, u.name]));
+    return filters.assignees.map((id) => userMap.get(id)).filter(Boolean);
+  }, [filters.assignees, usersList]);
 
   // Toggle user selection for multi-choice filtering
   const handleUserToggle = (userId: string) => {
@@ -486,116 +495,121 @@ export default function HomePage() {
     
       <main className="w-full max-w-[1920px] mx-auto p-4 sm:p-6 md:p-8 space-y-6">
 
-      <div className='bg-[var(--container)] p-4 rounded-lg border-2 border-(--shadow)/70'>
-        <div className="flex flex-col gap-4 mb-4 ">
-          
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            {/* Left side: Action Buttons */}
-            <div className="flex flex-row items-center w-full md:w-2/5 gap-4">
-              <button 
-                onClick={handleReserveTask}
-                style={{ 
-                  width: '100%',
-                  display: 'inline-flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
-                  minHeight: '48px', 
-                  padding: '10px 24px',
-                  backgroundColor: 'var(--button)',
-                  color: 'var(--blueText)',
-                  border: '1.5px solid var(--shadow)',
-                  borderRadius: '0.4rem',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                <NotebookPen className='size-5'></NotebookPen> &nbsp; จองเลขรับ
-              </button>
-              <Link 
-                href={'/addFile'} 
-                aria-label="ไปหน้าเพิ่มงานติดตามใหม่" 
-                style={{ 
-                  width: '100%',
-                  display: 'inline-flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center', 
-                  minHeight: '48px', 
-                  padding: '10px 24px',
-                  backgroundColor: 'var(--greenBG)',
-                  color: 'var(--greenText)',
-                  border: '1.5px solid var(--greenText)',
-                  borderRadius: '0.4rem',
-                  textDecoration: 'none',
-                  fontWeight: 'bold'
-                }}
-              >
-                + เพิ่มงานติดตาม
-              </Link>
-            </div>
+        <div className='bg-[var(--container)] p-4 rounded-lg border-2 border-(--shadow)/70'>
+          <div className="flex flex-col gap-4 mb-4 ">
+            
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              {/* Left side: Action Buttons */}
+              <div className="flex flex-row items-center w-full md:w-2/5 gap-4">
+                <button 
+                  onClick={handleReserveTask}
+                  style={{ 
+                    width: '100%',
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    minHeight: '48px', 
+                    padding: '10px 24px',
+                    backgroundColor: 'var(--button)',
+                    color: 'var(--blueText)',
+                    border: '1.5px solid var(--shadow)',
+                    borderRadius: '0.4rem',
+                    fontWeight: 'bold',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <NotebookPen className='size-5'></NotebookPen> &nbsp; จองเลขรับ
+                </button>
+                <Link 
+                  href={'/addFile'} 
+                  aria-label="ไปหน้าเพิ่มงานติดตามใหม่" 
+                  style={{ 
+                    width: '100%',
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    minHeight: '48px', 
+                    padding: '10px 24px',
+                    backgroundColor: 'var(--greenBG)',
+                    color: 'var(--greenText)',
+                    border: '1.5px solid var(--greenText)',
+                    borderRadius: '0.4rem',
+                    textDecoration: 'none',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  + เพิ่มงานติดตาม
+                </Link>
+              </div>
 
-            {/* Right side: Multi-Select Animated Dropdown */}
-            <div className="relative w-full sm:w-80 md:w-[360px] shrink-0" ref={dropdownRef}>
-              <button
-                type="button"
-                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                className="w-full h-[48px] px-4 py-2 border-2 rounded-md bg-[var(--button)] border-[var(--wrapper)] text-left flex items-center justify-between focus:outline-none transition-colors duration-150 cursor-pointer select-none"
-              >
-                <span className="truncate text-sm font-medium">
-                  {filters.assignees.length === 0
-                    ? '-- เลือกผู้รับผิดชอบ -- (กำลังแสดงทั้งหมด)'
-                    : `เลือกแล้ว (${filters.assignees.length} คน): ${selectedUserNames.join(', ')}`}
-                </span>
-                <span className={`transform transition-transform duration-200 ml-2 shrink-0 ${isDropdownOpen ? 'rotate-180' : 'rotate-0'}`}>
-                  <ChevronDown></ChevronDown>
-                </span>
-              </button>
+              {/* Right side: Multi-Select Animated Dropdown */}
+              <div className="relative w-full sm:w-80 md:w-[360px] shrink-0" ref={dropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                  className="w-full h-[48px] px-4 py-2 border-2 rounded-md bg-[var(--button)] border-[var(--wrapper)] text-left flex items-center justify-between focus:outline-none transition-colors duration-150 cursor-pointer select-none"
+                >
+                  <span className="truncate text-sm font-medium">
+                    {filters.assignees.length === 0
+                      ? '-- เลือกผู้รับผิดชอบ -- (กำลังแสดงทั้งหมด)'
+                      : `เลือกแล้ว (${filters.assignees.length} คน): ${selectedUserNames.join(', ')}`}
+                  </span>
+                  <span className={`transform transition-transform duration-200 ml-2 shrink-0 ${isDropdownOpen ? 'rotate-180' : 'rotate-0'}`}>
+                    <ChevronDown></ChevronDown>
+                  </span>
+                </button>
 
-              {/* Animated Dropdown Menu */}
-              <div
-                className={`absolute left-0 right-0 top-full mt-2 z-50 bg-[var(--container)] border-2 border-[var(--shadow)] rounded-xl shadow-xl max-h-60 overflow-y-auto transition-opacity duration-150 origin-top transform ${
-                  isDropdownOpen
-                    ? 'opacity-100 scale-y-100 translate-y-0 pointer-events-auto'
-                    : 'opacity-0 scale-y-95 -translate-y-2 pointer-events-none'
-                }`}
-              >
-                {/* Clear All Option inside dropdown */}
-                {filters.assignees.length > 0 && (
-                  <div
-                    onClick={() => setFilters((prev) => ({ ...prev, assignees: [] }))}
-                    className="px-4 py-2.5 text-xs text-red-500 hover:bg-red-500/10 cursor-pointer border-b border-[var(--shadow)] font-bold flex items-center justify-between transition-colors select-none"
-                  >
-                    <span>✕ ล้างการเลือกทั้งหมด</span>
-                  </div>
-                )}
+                {/* Animated Dropdown Menu */}
+                <div
+                  className={`absolute left-0 right-0 top-full mt-2 z-50 bg-[var(--container)] border-2 border-[var(--shadow)] rounded-xl shadow-xl max-h-60 overflow-y-auto transition-opacity duration-150 origin-top transform ${
+                    isDropdownOpen
+                      ? 'opacity-100 scale-y-100 translate-y-0 pointer-events-auto'
+                      : 'opacity-0 scale-y-95 -translate-y-2 pointer-events-none'
+                  }`}
+                >
+                  {/* Clear All Option inside dropdown */}
+                  {filters.assignees.length > 0 && (
+                    <div
+                      onClick={() => setFilters((prev) => ({ ...prev, assignees: [] }))}
+                      className="px-4 py-2.5 text-xs text-red-500 hover:bg-red-500/10 cursor-pointer border-b border-[var(--shadow)] font-bold flex items-center justify-between transition-colors select-none"
+                    >
+                      <span>✕ ล้างการเลือกทั้งหมด</span>
+                    </div>
+                  )}
 
-                {usersList.length === 0 ? (
-                  <div className="p-4 text-sm text-[var(--foreground)]/60 text-center">ไม่มีข้อมูลผู้ใช้งาน</div>
-                ) : (
-                  usersList.map((user) => {
-                    const isSelected = filters.assignees.includes(user.id);
-                    return (
-                      <div
-                        key={user.id}
-                        onClick={() => handleUserToggle(user.id)}
-                        className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer text-sm transition-colors duration-150 hover:bg-[var(--wrapper)] select-none border-b border-[var(--shadow)]/30 last:border-0 ${
-                          isSelected ? 'font-bold text-[var(--blueText)] bg-[var(--blueBG)]/30' : 'text-[var(--foreground)] font-medium'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          readOnly
-                          className="w-4 h-4 rounded border-gray-300 accent-[var(--blueText)] cursor-pointer shrink-0 pointer-events-none"
-                        />
-                        <span className="truncate">{user.name}</span>
-                      </div>
-                    );
-                  })
-                )}
+                  {usersList.length === 0 ? (
+                    <div className="p-4 text-sm text-[var(--foreground)]/60 text-center">ไม่มีข้อมูลผู้ใช้งาน</div>
+                  ) : (
+                    usersList.map((user) => {
+                      const isSelected = filters.assignees.includes(user.id);
+                      const userDotColor = getAssigneeColor(user.name, user.color);
+                      return (
+                        <div
+                          key={user.id}
+                          onClick={() => handleUserToggle(user.id)}
+                          className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer text-sm transition-colors duration-150 hover:bg-[var(--wrapper)] select-none border-b border-[var(--shadow)]/30 last:border-0 ${
+                            isSelected ? 'font-bold text-[var(--blueText)] bg-[var(--blueBG)]/30' : 'text-[var(--foreground)] font-medium'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            readOnly
+                            className="w-4 h-4 rounded border-gray-300 accent-[var(--blueText)] cursor-pointer shrink-0 pointer-events-none"
+                          />
+                          <span 
+                            className="w-2.5 h-2.5 rounded-full shrink-0" 
+                            style={{ backgroundColor: userDotColor }}
+                          />
+                          <span className="truncate">{user.name}</span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
               </div>
             </div>
           </div>
-        </div>
        
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <StatCard
@@ -634,7 +648,7 @@ export default function HomePage() {
 
         {!loading && !error && (
           <TaskTable
-            tasks={paginatedTasks}
+            tasks={displayTasks}
             getUrgencyBadgeStyle={getUrgencyBadgeStyle}
             getSecretBadgeStyle={getSecretBadgeStyle}
             formatDate={formatDate}

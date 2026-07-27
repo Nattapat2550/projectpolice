@@ -28,6 +28,7 @@ export const emptyFilters: SearchFilters = {
 export interface UserOption {
   id: string;
   name: string;
+  color?: string;
 }
 
 interface HeaderProps {

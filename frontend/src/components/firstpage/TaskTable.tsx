@@ -6,6 +6,19 @@ export interface Assignee {
   user_id: string | null;
   role_or_name: string;
   personInCharge?: string;
+  color?: string;
+}
+
+const USER_COLORS = [
+  "#3b82f6", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#14b8a6", "#6366f1", "#06b6d4", "#f97316"
+];
+
+export function getAssigneeColor(seed: string, color?: string): string {
+  if (color && color.startsWith('#')) return color;
+  if (!seed) return "#3b82f6";
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = seed.charCodeAt(i) + ((hash << 5) - hash);
+  return USER_COLORS[Math.abs(hash) % USER_COLORS.length];
 }
 
 // 💡 อัปเดตให้ตรงกับคอลัมน์จริงในตาราง `tasks` ของ DB
@@ -276,12 +289,16 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                     <td className="px-1.5 py-3">
                       <div className="flex flex-wrap gap-1 max-h-12 overflow-y-auto">
                         {task.assignments && task.assignments.length > 0 ? (
-                          task.assignments.map((assign, idx) => (
-                            <span key={assign.assignment_id || idx} className="assignee-badge inline-flex items-center px-2 py-0.5 rounded text-xs border border-[var(--shadow)] text-[var(--foreground)]/90 bg-[var(--wrapper)]/40">
-                              <span className="w-1.5 h-1.5 rounded-full mr-1.5 bg-[var(--blueText)] opacity-70"></span>
-                              {assign.personInCharge || assign.role_or_name}
-                            </span>
-                          ))
+                          task.assignments.map((assign, idx) => {
+                            const name = assign.personInCharge || assign.role_or_name;
+                            const dotColor = getAssigneeColor(name, assign.color);
+                            return (
+                              <span key={assign.assignment_id || idx} className="assignee-badge inline-flex items-center px-2 py-0.5 rounded text-xs border border-[var(--shadow)] text-[var(--foreground)]/90 bg-[var(--wrapper)]/40">
+                                <span className="w-2 h-2 rounded-full mr-1.5 shrink-0" style={{ backgroundColor: dotColor }}></span>
+                                {name}
+                              </span>
+                            );
+                          })
                         ) : (
                           <span className="text-xs text-[var(--foreground)]/40 italic">ยังไม่ได้มอบหมาย</span>
                         )}
