@@ -182,9 +182,9 @@ export default function AllTask() {
                 
                 const data = await response.json();
                 if (data.startNo === data.endNo) {
-                    Swal.fire('สำเร็จ', `จองเลขรับสำเร็จ! เลขรับที่ได้คือ: ${data.startNo}/${data.receive_year}`, 'success');
+                    Swal.fire('สำเร็จ', `จองเลขรับสำเร็จ! เลขรับที่ได้คือ: ${data.startNo}/${data.receive_year > 2400 ? data.receive_year : data.receive_year + 543}${data.round ? ` (รอบ ${data.round})` : ''}`, 'success');
                 } else {
-                    Swal.fire('สำเร็จ', `จองเลขรับสำเร็จจำนวน ${data.createdCount} รายการ!\nตั้งแต่ ${data.startNo}/${data.receive_year} ถึง ${data.endNo}/${data.receive_year}`, 'success');
+                    Swal.fire('สำเร็จ', `จองเลขรับสำเร็จจำนวน ${data.createdCount} รายการ!\nตั้งแต่ ${data.startNo}/${data.receive_year > 2400 ? data.receive_year : data.receive_year + 543}${data.round ? ` (รอบ ${data.round})` : ''} ถึง ${data.endNo}/${data.receive_year > 2400 ? data.receive_year : data.receive_year + 543}${data.round ? ` (รอบ ${data.round})` : ''}`, 'success');
                 }
                 
                 fetchTasks(); // Refresh tasks

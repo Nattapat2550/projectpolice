@@ -179,9 +179,9 @@ export default function UrgentTask() {
                 
                 const data = await response.json();
                 if (data.startNo === data.endNo) {
-                    Swal.fire('สำเร็จ', `จองเลขรับสำเร็จ! เลขรับที่ได้คือ: ${data.startNo}/${data.receive_year}`, 'success');
+                    Swal.fire('สำเร็จ', `จองเลขรับสำเร็จ! เลขรับที่ได้คือ: ${data.startNo}/${data.receive_year > 2400 ? data.receive_year : data.receive_year + 543}${data.round ? ` (รอบ ${data.round})` : ''}`, 'success');
                 } else {
-                    Swal.fire('สำเร็จ', `จองเลขรับจำนวน ${data.count} รายการ สำเร็จ! ตั้งแต่เลขที่: ${data.startNo}/${data.receive_year} ถึง ${data.endNo}/${data.receive_year}`, 'success');
+                    Swal.fire('สำเร็จ', `จองเลขรับจำนวน ${data.createdCount || data.count || 1} รายการ สำเร็จ! ตั้งแต่เลขที่: ${data.startNo}/${data.receive_year > 2400 ? data.receive_year : data.receive_year + 543}${data.round ? ` (รอบ ${data.round})` : ''} ถึง ${data.endNo}/${data.receive_year > 2400 ? data.receive_year : data.receive_year + 543}${data.round ? ` (รอบ ${data.round})` : ''}`, 'success');
                 }
                 
                 // รีเฟรชข้อมูลหน้าเว็บหลังจองสำเร็จ (ใช้ window.location.reload แทนเพื่อให้ UI รีเฟรชเต็มรูปแบบ)
