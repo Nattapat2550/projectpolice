@@ -417,9 +417,11 @@ exports.uploadExcelTasks = async (req, res) => {
             const getFullData = async (ids) => {
                 if (ids.length === 0) return [];
                 const query = `
-                    SELECT t.*, 
+                    SELECT t.*, d.drive_web_view_link as document_link,
                     (SELECT string_agg(role_or_name, ', ') FROM task_assignments ta WHERE ta.task_id = t.id) as "personInCharge"
-                    FROM tasks t WHERE t.id = ANY($1)
+                    FROM tasks t 
+                    LEFT JOIN documents d ON t.document_id = d.id
+                    WHERE t.id = ANY($1)
                 `;
                 const { rows } = await pool.query(query, [ids]);
                 return rows;

@@ -87,6 +87,44 @@ const handleReceiveNoAndYear = async (client, inputReceiveNo, parsedReceiveDate)
     return { receiveNo, receiveYear, round };
 };
 
+const fetchTaskDataForSheet = async (taskIdOrIds) => {
+  const isArray = Array.isArray(taskIdOrIds);
+  const ids = isArray ? taskIdOrIds : [taskIdOrIds];
+  if (ids.length === 0) return isArray ? [] : null;
+
+  const query = `
+    SELECT t.*, d.drive_web_view_link as document_link, d.filename, d.drive_file_id,
+    (SELECT string_agg(role_or_name, ', ') FROM task_assignments ta WHERE ta.task_id = t.id) as "personInCharge",
+    (SELECT string_agg(
+      CONCAT(
+        td.filename,
+        CASE WHEN td.notes IS NOT NULL AND td.notes != '' THEN CONCAT(' (', td.notes, ')') ELSE '' END,
+        CASE WHEN td.drive_web_view_link IS NOT NULL AND td.drive_web_view_link != '' THEN CONCAT(': ', td.drive_web_view_link) ELSE '' END
+      ),
+      ', '
+    ) FROM task_documents td WHERE td.task_id = t.id) as attachment_info
+    FROM tasks t 
+    LEFT JOIN documents d ON t.document_id = d.id
+    WHERE t.id = ANY($1)
+  `;
+  const { rows } = await pool.query(query, [ids]);
+
+  const processed = rows.map(row => {
+    if (row.attachment_info && row.attachment_info.trim()) {
+      row.additional_docs = row.attachment_info.trim();
+    } else {
+      let docs = (row.additional_docs || '').trim();
+      if (/^เอกสาร\s*[๑-๙1-9]/i.test(docs)) {
+        docs = '';
+      }
+      row.additional_docs = docs;
+    }
+    return row;
+  });
+
+  return isArray ? processed : (processed[0] || null);
+};
+
 exports.getAllTasks = async (req, res) => {
   try {
     const query = `
@@ -289,6 +327,7 @@ exports.confirmTasks = async (req, res) => {
           const memoSender = memo.sender || memo.จาก || null;
           const memoRecipient = memo.recipient_to || memo.ถึง || null;
           const memoAdditionalDocs = memo.additional_docs || memo.เอกสารข้อมูลเพิ่มเติม || null;
+          const memoNotes = memo.notes || memo.หมายเหตุ || null;
 
           const existingRes = await client.query('SELECT id, document_id FROM tasks WHERE receive_no = $1 AND receive_year = $2 AND COALESCE(round, 1) = $3', [receiveNo, receiveYear, round]);
           let taskId;
@@ -299,8 +338,8 @@ exports.confirmTasks = async (req, res) => {
 
               // 1. อัปเดตงานในตาราง tasks ก่อนเพื่อให้ document_id ชี้ไปที่เอกสารใหม่
               await client.query(
-                  `UPDATE tasks SET document_id = COALESCE($1, document_id), title = $2, memo_no = $3, memo_date = $4, main_text = $5, task_detail = $6, due_date = COALESCE($7, due_date), is_urgent = $8, urgency_level = $9, secret_level = $10, sign_date = $11, meeting_date = $13, reply_due_date = $14, sender = $16, recipient_to = $17, additional_docs = $18, round = $19, created_at = COALESCE(CAST($12 AS timestamp), created_at), updated_at = NOW() WHERE id = $15`,
-                  [documentId, memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', memo.ที่, parsedMemoDate, memo.main_text, memo.task_detail || null, finalDueDate, memo.isUrgent || false, memo.urgency_level || null, memo.secret_level || null, parsedSignDate, parsedReceiveDate, parsedMeetingDate, parsedReplyDueDate, taskId, memoSender, memoRecipient, memoAdditionalDocs, round]
+                  `UPDATE tasks SET document_id = COALESCE($1, document_id), title = $2, memo_no = $3, memo_date = $4, main_text = $5, task_detail = $6, due_date = COALESCE($7, due_date), is_urgent = $8, urgency_level = $9, secret_level = $10, sign_date = $11, meeting_date = $13, reply_due_date = $14, sender = $16, recipient_to = $17, additional_docs = $18, round = $19, notes = COALESCE($20, notes), created_at = COALESCE(CAST($12 AS timestamp), created_at), updated_at = NOW() WHERE id = $15`,
+                  [documentId, memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', memo.ที่, parsedMemoDate, memo.main_text, memo.task_detail || null, finalDueDate, memo.isUrgent || false, memo.urgency_level || null, memo.secret_level || null, parsedSignDate, parsedReceiveDate, parsedMeetingDate, parsedReplyDueDate, taskId, memoSender, memoRecipient, memoAdditionalDocs, round, memoNotes]
               );
 
               // 2. ลบเอกสารเก่าและไฟล์เก่าใน Drive หากไม่มีงานอื่นใช้อยู่
@@ -325,8 +364,8 @@ exports.confirmTasks = async (req, res) => {
               updatedTaskIds.push(taskId);
           } else {
               const taskRes = await client.query(
-                `INSERT INTO tasks (document_id, title, memo_no, memo_date, main_text, task_detail, due_date, is_urgent, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, round, sender, recipient_to, additional_docs, created_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $14, $15, $16, $17, $21, $18, $19, $20, COALESCE(CAST($13 AS timestamp), NOW())) RETURNING id`,
+                `INSERT INTO tasks (document_id, title, memo_no, memo_date, main_text, task_detail, due_date, is_urgent, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, round, sender, recipient_to, additional_docs, notes, created_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $14, $15, $16, $17, $21, $18, $19, $20, $22, COALESCE(CAST($13 AS timestamp), NOW())) RETURNING id`,
                 [ 
                   documentId, 
                   memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', 
@@ -348,7 +387,8 @@ exports.confirmTasks = async (req, res) => {
                   memoSender,
                   memoRecipient,
                   memoAdditionalDocs,
-                  round
+                  round,
+                  memoNotes
                 ]
               );
               taskId = taskRes.rows[0].id;
@@ -399,23 +439,12 @@ exports.confirmTasks = async (req, res) => {
 
     // Sync to Google Sheets
     try {
-        const getFullData = async (ids) => {
-            if (ids.length === 0) return [];
-            const query = `
-                SELECT t.*, 
-                (SELECT string_agg(role_or_name, ', ') FROM task_assignments ta WHERE ta.task_id = t.id) as "personInCharge"
-                FROM tasks t WHERE t.id = ANY($1)
-            `;
-            const { rows } = await pool.query(query, [ids]);
-            return rows;
-        };
-
         if (createdTaskIds.length > 0) {
-            const createdData = await getFullData(createdTaskIds);
+            const createdData = await fetchTaskDataForSheet(createdTaskIds);
             appendMultipleTasksToSheet(createdData).catch(e => console.error(e));
         }
         if (updatedTaskIds.length > 0) {
-            const updatedData = await getFullData(updatedTaskIds);
+            const updatedData = await fetchTaskDataForSheet(updatedTaskIds);
             for (const row of updatedData) {
                 updateTaskInSheet(row).catch(e => console.error(e));
             }
@@ -533,44 +562,23 @@ exports.updateTaskDetail = async (req, res) => {
 
     // Sync Update to Google Sheets & Rename file in Google Drive if needed
     try {
-      const getFresh = await pool.query(
-        `SELECT t.*, d.filename, d.drive_file_id,
-         (SELECT string_agg(role_or_name, ', ') FROM task_assignments ta WHERE ta.task_id = t.id) as "personInCharge"
-         FROM tasks t
-         LEFT JOIN documents d ON t.document_id = d.id
-         WHERE t.id = $1`,
-        [id]
-      );
+      const taskForSheet = await fetchTaskDataForSheet(id);
 
-      if (getFresh.rows.length > 0) {
-        const t = getFresh.rows[0];
-        const personInCharge = t.personInCharge || (Array.isArray(assignments) ? assignments.map(a => a.role_or_name || 'เพิ่มด้วยตนเอง').join(', ') : '');
+      if (taskForSheet) {
+        const personInCharge = taskForSheet.personInCharge || (Array.isArray(assignments) ? assignments.map(a => a.role_or_name || 'เพิ่มด้วยตนเอง').join(', ') : '');
         
         // 🏷️ เปลี่ยนชื่อไฟล์บน Google Drive และ DB ให้ตรงตามรูปแบบมาตรฐานล่าสุดเสมอ
-        if (t.document_id && t.filename) {
-          const newFilename = formatStandardFilename(t.receive_no, t.sender, personInCharge, t.filename);
-          if (newFilename && newFilename !== t.filename) {
-            if (t.drive_file_id) {
-              renameFileOnDrive(t.drive_file_id, newFilename).catch(e => console.error("Drive rename error:", e.message));
+        if (taskForSheet.document_id && taskForSheet.filename) {
+          const newFilename = formatStandardFilename(taskForSheet.receive_no, taskForSheet.sender, personInCharge, taskForSheet.filename);
+          if (newFilename && newFilename !== taskForSheet.filename) {
+            if (taskForSheet.drive_file_id) {
+              renameFileOnDrive(taskForSheet.drive_file_id, newFilename).catch(e => console.error("Drive rename error:", e.message));
             }
-            await pool.query('UPDATE documents SET filename = $1 WHERE id = $2', [newFilename, t.document_id]);
+            await pool.query('UPDATE documents SET filename = $1 WHERE id = $2', [newFilename, taskForSheet.document_id]);
           }
         }
 
-        updateTaskInSheet({
-          id: t.id,
-          receive_no: t.receive_no,
-          receive_year: t.receive_year,
-          created_at: t.created_at,
-          memo_no: t.memo_no,
-          memo_date: t.memo_date,
-          sender: t.sender,
-          title: t.title,
-          personInCharge,
-          due_date: t.due_date,
-          task_detail: t.task_detail,
-          sign_date: t.sign_date
-        }).catch(e => console.error("Sheet update error:", e.message));
+        updateTaskInSheet(taskForSheet).catch(e => console.error("Sheet update error:", e.message));
       }
     } catch (e) {
       console.error("Failed to prepare sheet/drive update", e);
@@ -703,7 +711,7 @@ exports.createTask = async (req, res) => {
   try {
     await client.query('BEGIN');
     
-    const { title, memo_no, memo_date, due_date, main_text, is_urgent, assignments, createdBy, created_by, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, sender, recipient_to, additional_docs } = req.body;
+    const { title, memo_no, memo_date, due_date, main_text, is_urgent, assignments, createdBy, created_by, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, sender, recipient_to, additional_docs, notes } = req.body;
     let validCreatorId = createdBy || created_by || null;
     validCreatorId = isValidUUID(validCreatorId) ? validCreatorId : null;
 
@@ -727,16 +735,16 @@ exports.createTask = async (req, res) => {
     if (existingRes.rows.length > 0) {
         taskId = existingRes.rows[0].id;
         await client.query(
-          `UPDATE tasks SET title = COALESCE($1, title), memo_no = $2, memo_date = $3, main_text = $4, due_date = COALESCE($5, due_date), is_urgent = COALESCE($6, is_urgent), urgency_level = $7, secret_level = $8, sign_date = $10, meeting_date = $11, reply_due_date = $12, sender = $14, recipient_to = $15, additional_docs = $16, round = $17, created_at = COALESCE(CAST($9 AS timestamp), created_at), updated_at = NOW() WHERE id = $13`,
-          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, taskId, sender, recipient_to, additional_docs, round]
+          `UPDATE tasks SET title = COALESCE($1, title), memo_no = $2, memo_date = $3, main_text = $4, due_date = COALESCE($5, due_date), is_urgent = COALESCE($6, is_urgent), urgency_level = $7, secret_level = $8, sign_date = $10, meeting_date = $11, reply_due_date = $12, sender = $14, recipient_to = $15, additional_docs = $16, round = $17, notes = COALESCE($18, notes), created_at = COALESCE(CAST($9 AS timestamp), created_at), updated_at = NOW() WHERE id = $13`,
+          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, taskId, sender, recipient_to, additional_docs, round, notes]
         );
         await logTaskAction(client, taskId, validCreatorId, 'updated_task', { source: 'manual_create_upsert' });
         await client.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
     } else {
         const taskRes = await client.query(
-          `INSERT INTO tasks (title, memo_no, memo_date, main_text, due_date, is_urgent, status, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, round, sender, recipient_to, additional_docs, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $12, $13, $14, $15, $16, $20, $17, $18, $19, COALESCE(CAST($11 AS timestamp), NOW())) RETURNING id`,
-          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent || false, 'following', validCreatorId, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, receiveNo, receiveYear, sender, recipient_to, additional_docs, round]
+          `INSERT INTO tasks (title, memo_no, memo_date, main_text, due_date, is_urgent, status, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, round, sender, recipient_to, additional_docs, notes, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $12, $13, $14, $15, $16, $20, $17, $18, $19, $21, COALESCE(CAST($11 AS timestamp), NOW())) RETURNING id`,
+          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent || false, 'following', validCreatorId, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, receiveNo, receiveYear, sender, recipient_to, additional_docs, round, notes]
         );
         taskId = taskRes.rows[0].id;
         await logTaskAction(client, taskId, validCreatorId, 'created_task', { source: 'manual_create' });
@@ -761,24 +769,13 @@ exports.createTask = async (req, res) => {
 
     // 🚀 ยิงข้อมูลขึ้น Google Sheets แบบไม่ต้องรอให้เสร็จ (Background task)
     try {
-        const fullTaskData = {
-            id: taskId,
-            receive_no: receiveNo,
-            receive_year: receiveYear,
-            created_at: parsedReceiveDate || new Date(),
-            memo_no: memo_no,
-            memo_date: parsedMemoDate,
-            sender: sender || '',
-            title: title || 'ไม่ระบุชื่อเรื่อง',
-            personInCharge: assignments ? assignments.map(a => a.role_or_name).join(', ') : '',
-            due_date: finalDueDate,
-            task_detail: main_text,
-            sign_date: parsedSignDate
-        };
-        if (existingRes.rows.length > 0) {
-            updateTaskInSheet(fullTaskData).catch(err => console.error("[Google Sheets Update Sync error]", err.message));
-        } else {
-            appendTaskToSheet(fullTaskData).catch(err => console.error("[Google Sheets Append Sync error]", err.message));
+        const fullTaskData = await fetchTaskDataForSheet(taskId);
+        if (fullTaskData) {
+            if (existingRes.rows.length > 0) {
+                updateTaskInSheet(fullTaskData).catch(err => console.error("[Google Sheets Update Sync error]", err.message));
+            } else {
+                appendTaskToSheet(fullTaskData).catch(err => console.error("[Google Sheets Append Sync error]", err.message));
+            }
         }
     } catch (e) {
         console.error("Failed to prepare sheet sync", e);
@@ -918,6 +915,17 @@ exports.overwriteTaskDocument = async (req, res) => {
     await logTaskAction(client, id, req.user ? req.user.id : null, 'overwrite_document', { filename: formattedFilename });
 
     await client.query('COMMIT');
+
+    // 🚀 Sync อัปเดตข้อมูลไป Google Sheets หลังอัปโหลดทับเอกสาร
+    try {
+      const row = await fetchTaskDataForSheet(id);
+      if (row) {
+        updateTaskInSheet(row).catch(e => console.error("[Overwrite Sheet Sync Error]", e.message));
+      }
+    } catch (e) {
+      console.error("[Overwrite Sheet Sync Error]", e.message);
+    }
+
     res.status(200).json({
       success: true,
       message: 'อัปโหลดเอกสารและอัปเดตข้อมูลทับสำเร็จเรียบร้อย!',
@@ -1022,6 +1030,17 @@ exports.attachTaskDocument = async (req, res) => {
     await logTaskAction(client, id, req.user ? req.user.id : null, 'attached_document', { count: files.length });
 
     await client.query('COMMIT');
+
+    // 🚀 Sync เอกสารแนบเพิ่มเติมไป Google Sheets
+    try {
+      const row = await fetchTaskDataForSheet(id);
+      if (row) {
+        updateTaskInSheet(row).catch(e => console.error("[Attach Sheet Sync Error]", e.message));
+      }
+    } catch (e) {
+      console.error("[Attach Sheet Sync Error]", e.message);
+    }
+
     res.status(200).json({ success: true, message: 'อัปโหลดเอกสารเพิ่มเติมสำเร็จ!', data: createdDocs });
   } catch (err) {
     await client.query('ROLLBACK');
@@ -1044,9 +1063,51 @@ exports.deleteTaskAttachment = async (req, res) => {
       deleteFromDrive(driveFileId).catch(e => console.error('[Drive Delete Error]:', e.message));
     }
     await pool.query('DELETE FROM task_documents WHERE id = $1', [docId]);
+
+    // 🚀 Sync Sheet หลังลบเอกสารแนบ
+    try {
+      const row = await fetchTaskDataForSheet(id);
+      if (row) {
+        updateTaskInSheet(row).catch(e => console.error("[Delete Attach Sheet Sync Error]", e.message));
+      }
+    } catch (e) {
+      console.error("[Delete Attach Sheet Sync Error]", e.message);
+    }
+
     res.status(200).json({ success: true, message: 'ลบเอกสารแนบเรียบร้อยแล้ว' });
   } catch (err) {
     console.error('Delete attachment error:', err.message);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
+};
+
+exports.updateTaskAttachmentNote = async (req, res) => {
+  try {
+    const { id, docId } = req.params;
+    const { notes } = req.body;
+
+    const docRes = await pool.query('SELECT id FROM task_documents WHERE id = $1 AND task_id = $2', [docId, id]);
+    if (docRes.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'ไม่พบเอกสารแนบนี้' });
+    }
+
+    await pool.query('UPDATE task_documents SET notes = $1 WHERE id = $2', [notes !== undefined ? notes : null, docId]);
+
+    await logTaskAction(pool, id, req.user ? req.user.id : null, 'updated_attachment_note', { docId, notes });
+
+    // 🚀 Sync ข้อมูลไป Google Sheets หลังแก้ไขหมายเหตุเอกสารแนบ
+    try {
+      const row = await fetchTaskDataForSheet(id);
+      if (row) {
+        updateTaskInSheet(row).catch(e => console.error("[Update Attach Note Sheet Sync Error]", e.message));
+      }
+    } catch (e) {
+      console.error("[Update Attach Note Sheet Sync Error]", e.message);
+    }
+
+    res.status(200).json({ success: true, message: 'อัปเดตหมายเหตุเอกสารแนบเรียบร้อยแล้ว' });
+  } catch (err) {
+    console.error('Update attachment note error:', err.message);
     res.status(500).json({ success: false, message: 'Server Error' });
   }
 };

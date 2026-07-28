@@ -23,7 +23,8 @@ const {
     getSuggestions,
     overwriteTaskDocument,
     attachTaskDocument,
-    deleteTaskAttachment
+    deleteTaskAttachment,
+    updateTaskAttachmentNote
 } = require('../controllers/taskController');
 const { upload } = require('../middleware/upload');
 
@@ -49,7 +50,10 @@ router.get('/:id/logs', protect, getTaskLogs);
 router.put('/:id', protect, updateTaskDetail);
 router.post('/:id/overwrite-doc', protect, upload.single('file'), overwriteTaskDocument);
 router.post('/:id/attach-doc', protect, upload.array('files', 10), attachTaskDocument);
+router.put('/:id/attach-doc/:docId/note', protect, updateTaskAttachmentNote);
+router.put('/:id/attachments/:docId/note', protect, updateTaskAttachmentNote);
 router.delete('/:id/attach-doc/:docId', protect, deleteTaskAttachment);
+router.delete('/:id/attachments/:docId', protect, deleteTaskAttachment);
 router.delete('/:id', protect, deleteTask);
 
 module.exports = router;

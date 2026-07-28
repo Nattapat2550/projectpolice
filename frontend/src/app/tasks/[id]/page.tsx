@@ -506,6 +506,42 @@ export default function TaskDetailPage() {
         }
     };
 
+    const handleEditAttachmentNote = (attachmentId: string | number, currentNote?: string, filename?: string) => {
+        Swal.fire({
+            title: "แก้ไขหมายเหตุเอกสารแนบ",
+            text: filename || "",
+            input: "text",
+            inputValue: currentNote || "",
+            inputPlaceholder: "ระบุหมายเหตุ เช่น สำเนาฉบับเต็ม...",
+            showCancelButton: true,
+            confirmButtonText: "บันทึก",
+            cancelButtonText: "ยกเลิก",
+            confirmButtonColor: "#3085d6",
+        }).then(async (result) => {
+            if (result.isConfirmed) {
+                try {
+                    const token = getToken();
+                    const res = await fetch(`${backendUrl}/api/v1/tasks/${id}/attachments/${attachmentId}/note`, {
+                        method: "PUT",
+                        headers: {
+                            "Content-Type": "application/json",
+                            ...(token ? { Authorization: `Bearer ${token}` } : {})
+                        },
+                        body: JSON.stringify({ notes: result.value || "" })
+                    });
+                    if (res.ok) {
+                        Swal.fire({ icon: "success", title: "แก้ไขหมายเหตุสำเร็จ", timer: 1500, showConfirmButton: false });
+                        fetchTask();
+                    } else {
+                        throw new Error("เกิดข้อผิดพลาดในการบันทึก");
+                    }
+                } catch (err: any) {
+                    Swal.fire({ icon: "error", title: "เกิดข้อผิดพลาดในการแก้ไขหมายเหตุ", text: err.message });
+                }
+            }
+        });
+    };
+
     function buildUpdateBody(source: TaskData) {
         return {
             name: source.name,
@@ -1172,14 +1208,24 @@ export default function TaskDetailPage() {
                                                 <span className="text-xs opacity-40">ไม่มีลิงก์</span>
                                             )}
                                             {canEdit && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDeleteAttachment(doc.id, doc.filename)}
-                                                    className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 transition cursor-pointer"
-                                                    title="ลบเอกสารแนบ"
-                                                >
-                                                    <Trash2 size={15} />
-                                                </button>
+                                                <>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleEditAttachmentNote(doc.id, doc.notes, doc.filename)}
+                                                        className="p-1.5 rounded-lg text-amber-500 hover:bg-amber-500/10 transition cursor-pointer"
+                                                        title="แก้ไขหมายเหตุเอกสารแนบ"
+                                                    >
+                                                        <Pencil size={15} />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeleteAttachment(doc.id, doc.filename)}
+                                                        className="p-1.5 rounded-lg text-red-500 hover:bg-red-500/10 transition cursor-pointer"
+                                                        title="ลบเอกสารแนบ"
+                                                    >
+                                                        <Trash2 size={15} />
+                                                    </button>
+                                                </>
                                             )}
                                         </div>
                                     </div>

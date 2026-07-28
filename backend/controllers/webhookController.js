@@ -17,11 +17,14 @@ exports.handleSheetUpdate = async (req, res) => {
   const memo_no = data.memo_no;
   const memo_date = data.memo_date;
   const sender = data.sender;
+  const recipient_to = data.recipient_to;
   const title = data.title;
   const due_date = data.due_date;
   const task_detail = data.task_detail;
   const sign_date = data.sign_date;
   const notes = data.notes;
+  const additional_docs = data.additional_docs;
+  const document_link = data.document_link || data.drive_web_view_link;
 
   const parseDate = (d) => {
     if (!d) return null;
@@ -42,13 +45,15 @@ exports.handleSheetUpdate = async (req, res) => {
           memo_no = COALESCE($3, memo_no),
           memo_date = COALESCE($4, memo_date),
           sender = COALESCE($5, sender),
-          title = COALESCE($6, title),
-          due_date = COALESCE($7, due_date),
-          task_detail = COALESCE($8, task_detail),
-          sign_date = COALESCE($9, sign_date),
-          notes = COALESCE($10, notes),
+          recipient_to = COALESCE($6, recipient_to),
+          title = COALESCE($7, title),
+          due_date = COALESCE($8, due_date),
+          task_detail = COALESCE($9, task_detail),
+          sign_date = COALESCE($10, sign_date),
+          notes = COALESCE($11, notes),
+          additional_docs = COALESCE($12, additional_docs),
           updated_at = NOW()
-        WHERE id = $11
+        WHERE id = $13
       `;
 
       await client.query(updateQuery, [
@@ -57,13 +62,32 @@ exports.handleSheetUpdate = async (req, res) => {
         memo_no,
         parseDate(memo_date),
         sender,
+        recipient_to,
         title,
         parseDate(due_date),
         task_detail,
         parseDate(sign_date),
         notes,
+        additional_docs,
         taskId
       ]);
+
+      // 📄 หากมีการส่ง document_link (ลิงก์ไฟล์ต้นฉบับ / Column P) มาจาก Google Sheets
+      if (document_link) {
+        const taskRes = await client.query('SELECT document_id FROM tasks WHERE id = $1', [taskId]);
+        if (taskRes.rows.length > 0) {
+          const docId = taskRes.rows[0].document_id;
+          if (docId) {
+            await client.query('UPDATE documents SET drive_web_view_link = $1 WHERE id = $2', [document_link, docId]);
+          } else {
+            const newDocRes = await client.query(
+              `INSERT INTO documents (drive_web_view_link, filename) VALUES ($1, $2) RETURNING id`,
+              [document_link, 'ไฟล์ต้นฉบับ (จาก Sheet)']
+            );
+            await client.query('UPDATE tasks SET document_id = $1 WHERE id = $2', [newDocRes.rows[0].id, taskId]);
+          }
+        }
+      }
             // 👥 หากมีการส่งข้อมูลผู้รับผิดชอบ (personInCharge / Column I) มาจาก Google Sheets
       const personInCharge = data.personInCharge !== undefined ? data.personInCharge 
         : (data.person_in_charge !== undefined ? data.person_in_charge 

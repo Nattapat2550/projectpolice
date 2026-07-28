@@ -31,6 +31,8 @@ interface MemoData {
     sign_date?: string;
     recipient_to?: string;
     additional_docs?: string;
+    notes?: string;
+    หมายเหตุ?: string;
     assignments?: ResponsibilityAssignment[];
     due_date?: string; 
     isUrgent?: boolean;
@@ -456,7 +458,8 @@ export default function Uploaded({ extractedData, onClearExtractedData }: Upload
                                                         <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.additional_docs || ''} onChange={(e) => handleMemoChange(fileIdx, index, "additional_docs", e.target.value)} />
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 font-bold text-(--blueText) focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.วันที่ || ''} onChange={(e) => handleMemoChange(fileIdx, index, "วันที่", e.target.value)} />
+                                                        <strong className="w-28 shrink-0">หมายเหตุ:</strong>
+                                                        <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.notes || memo.หมายเหตุ || ''} onChange={(e) => { handleMemoChange(fileIdx, index, "notes", e.target.value); handleMemoChange(fileIdx, index, "หมายเหตุ", e.target.value); }} />
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <strong className="w-28 shrink-0">เวลา:</strong>
