@@ -7,6 +7,7 @@ const { generateHash } = require('../utils/duplicateChecker');
 const { formatStandardFilename } = require('../utils/filenameParser');
 const { extractDataWithGemini } = require('../services/ocrService');
 const { calculateFiscalRoundAndYear } = require('../utils/fiscalYearHelper');
+const { syncTaskDocumentNotesFromText } = require('../utils/attachmentSync');
 
 const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID; 
 // กำหนดโฟลเดอร์สำหรับเก็บไฟล์ชั่วคราวให้ชัดเจน (แก้ไข path ให้ตรงกับที่ตั้งโฟลเดอร์ uploads ของคุณ)
@@ -507,6 +508,11 @@ exports.updateTaskDetail = async (req, res) => {
           recipient_to, additional_docs
         ]
       );
+
+    // 📌 Sync หมายเหตุเอกสารแนบ เมื่อ additional_docs ถูกแก้ไข
+    if (additional_docs !== undefined) {
+      await syncTaskDocumentNotesFromText(client, id, additional_docs);
+    }
 
     if (Array.isArray(assignments)) {
       const keepAssignmentIds = assignments

@@ -2,6 +2,7 @@ const xlsx = require("xlsx");
 const pool = require("../config/db");
 const { appendMultipleTasksToSheet, appendTaskToSheet } = require('../services/googleSheetsService');
 const { calculateFiscalRoundAndYear } = require("../utils/fiscalYearHelper");
+const { syncTaskDocumentNotesFromText } = require("../utils/attachmentSync");
 
 // สร้างตัวแปร Global สำหรับเก็บ Progress 
 if (!global.uploadProgress) { 
@@ -390,6 +391,9 @@ exports.uploadExcelTasks = async (req, res) => {
                                 `UPDATE tasks SET title = COALESCE($1, title), memo_no = COALESCE($2, memo_no), memo_date = COALESCE($3, memo_date), main_text = COALESCE($4, main_text), notes = COALESCE($5, notes), sender = COALESCE($6, sender), due_date = COALESCE($7, due_date), task_detail = COALESCE($8, task_detail), is_urgent = $9, sign_date = COALESCE($10, sign_date), meeting_date = COALESCE($11, meeting_date), reply_due_date = COALESCE($12, reply_due_date), urgency_level = COALESCE($13, urgency_level), secret_level = COALESCE($14, secret_level), recipient_to = COALESCE($15, recipient_to), additional_docs = COALESCE($16, additional_docs), round = COALESCE($17, round), updated_at = NOW() WHERE id = $18`,
                                 [safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, safeSender, parsedDueDate, safeTaskDetail, item.is_urgent, item.signed_date, item.meeting_date || null, item.reply_due_date || null, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ', safeRecipientTo, safeAdditionalDocs, item.round || 1, taskId]
                             );
+                            if (safeAdditionalDocs !== null) {
+                                await syncTaskDocumentNotesFromText(pool, taskId, safeAdditionalDocs);
+                            }
                             updatedTaskIds.push(taskId);
                             await pool.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
                             if (item.assignee_name) {

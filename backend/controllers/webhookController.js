@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const { cleanToOnlyName, formatStandardFilename } = require('../utils/filenameParser');
 const { renameFileOnDrive } = require('../services/googleDriveService');
+const { syncTaskDocumentNotesFromText } = require('../utils/attachmentSync');
 
 exports.handleSheetUpdate = async (req, res) => {
   console.log("\n================ WEBHOOK RECEIVED ================");
@@ -71,6 +72,10 @@ exports.handleSheetUpdate = async (req, res) => {
         additional_docs,
         taskId
       ]);
+
+      if (additional_docs !== undefined) {
+        await syncTaskDocumentNotesFromText(client, taskId, additional_docs);
+      }
 
       // 📄 หากมีการส่ง document_link (ลิงก์ไฟล์ต้นฉบับ / Column P) มาจาก Google Sheets
       if (document_link) {
