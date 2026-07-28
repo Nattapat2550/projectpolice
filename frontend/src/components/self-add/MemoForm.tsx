@@ -5,6 +5,7 @@ import Link from "next/link";
 import styles from "./SelfAdd.module.css"; 
 import Swal from "sweetalert2";
 import Select from "react-select";
+import { CreatableCombobox } from "../CreatableCombobox";
 
 // ฟังก์ชันหาเวลาอนาคตเพื่อตั้งเป็น default
 const getFutureDateStr = (daysToAdd: number) => {
@@ -38,6 +39,7 @@ export default function MemoForm() {
 
   // ใช้ Checklist แทน Dropdown
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<{ senders: string[]; recipients: string[] }>({ senders: [], recipients: [] });
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -60,6 +62,17 @@ export default function MemoForm() {
       }
     };
 
+    const fetchSuggestions = async () => {
+      try {
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
+        const res = await fetch(`${backendUrl}/api/v1/tasks/suggestions`);
+        if (res.ok) {
+          const data = await res.json();
+          setSuggestions({ senders: data.senders || [], recipients: data.recipients || [] });
+        }
+      } catch (err) {}
+    };
+
     const fetchMe = async () => {
       try {
         const token = typeof window !== 'undefined' ? localStorage.getItem("token") : "";
@@ -76,6 +89,7 @@ export default function MemoForm() {
     };
 
     fetchUsers();
+    fetchSuggestions();
     fetchMe();
 
     // ตั้งค่าคน Login เป็น Default Checklist
@@ -205,11 +219,21 @@ export default function MemoForm() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>ส่วนราชการ (จาก)</label>
-              <input type="text" name="sender" value={formData.sender} onChange={handleMainChange} placeholder="เช่น ศปนม.สพฐ.ตร." className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+              <CreatableCombobox
+                value={formData.sender}
+                onChange={(val) => setFormData(prev => ({ ...prev, sender: val }))}
+                options={suggestions.senders}
+                placeholder="เช่น ศปนม.สพฐ.ตร."
+              />
             </div>
             <div>
               <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>เรียน (ถึง)</label>
-              <input type="text" name="recipient_to" value={formData.recipient_to} onChange={handleMainChange} placeholder="เช่น ผอ.ศปนม.ตร." className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+              <CreatableCombobox
+                value={formData.recipient_to}
+                onChange={(val) => setFormData(prev => ({ ...prev, recipient_to: val }))}
+                options={suggestions.recipients}
+                placeholder="เช่น ผอ.ศปนม.ตร."
+              />
             </div>
           </div>
 

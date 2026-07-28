@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Swal from "sweetalert2";
+import { CreatableCombobox } from "../CreatableCombobox";
 
 type TaskStatus = "following" | "problem" | "completed";
 
@@ -38,6 +39,19 @@ export default function DetailsPanel({
     const [isLoggedIn, setIsLoggedIn] = useState(false);
     const [currentUser, setCurrentUser] = useState<any>(null);
     const [users, setUsers] = useState<any[]>([]);
+    const [suggestions, setSuggestions] = useState<{ senders: string[]; recipients: string[] }>({ senders: [], recipients: [] });
+
+    useEffect(() => {
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
+        fetch(`${backendUrl}/api/v1/tasks/suggestions`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    setSuggestions({ senders: data.senders || [], recipients: data.recipients || [] });
+                }
+            })
+            .catch(() => {});
+    }, []);
 
     
     // 💡 ฟังก์ชันตรวจสอบสถานะ Login ที่ถูกต้องแม่นยำ
@@ -379,14 +393,6 @@ export default function DetailsPanel({
                                                     />
                                                 </div>
                                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
-                                                    <strong>จาก (ส่วนราชการ): </strong>
-                                                    <input 
-                                                        type="text" 
-                                                        className={styles.CustomSelect}
-                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
-                                                        value={taskData?.sender || ""} 
-                                                        onChange={(e) => setTaskData({ ...taskData, sender: e.target.value })} 
-                                                    />
                                                 </div>
                                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
                                                     <strong>ถึง (เรียน): </strong>

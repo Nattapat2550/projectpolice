@@ -642,7 +642,7 @@ exports.getTaskById = async (req, res) => {
     task.personInCharge = task.assignments.map(a => a.personInCharge).join(', ') || 'ไม่ระบุ';
 
     const docsRes = await pool.query(
-      `SELECT d.id, d.filename, d.drive_file_id, d.drive_web_view_link, d.doc_type, d.created_at, d.created_by,
+      `SELECT d.id, d.filename, d.drive_file_id, d.drive_web_view_link, d.doc_type, d.notes, d.created_at, d.created_by,
               u.name AS uploader_name
        FROM task_documents d
        LEFT JOIN users u ON d.created_by = u.id
@@ -935,6 +935,26 @@ exports.overwriteTaskDocument = async (req, res) => {
   }
 };
 
+exports.getSuggestions = async (req, res) => {
+  try {
+    const sendersRes = await pool.query(
+      `SELECT DISTINCT TRIM(sender) as value FROM tasks WHERE sender IS NOT NULL AND TRIM(sender) != '' ORDER BY value ASC LIMIT 100`
+    );
+    const recipientsRes = await pool.query(
+      `SELECT DISTINCT TRIM(recipient_to) as value FROM tasks WHERE recipient_to IS NOT NULL AND TRIM(recipient_to) != '' ORDER BY value ASC LIMIT 100`
+    );
+
+    res.status(200).json({
+      success: true,
+      senders: sendersRes.rows.map(r => r.value),
+      recipients: recipientsRes.rows.map(r => r.value)
+    });
+  } catch (err) {
+    console.error("Get suggestions error:", err.message);
+    res.status(500).json({ success: false, message: "Server Error", senders: [], recipients: [] });
+  }
+};
+
 exports.attachTaskDocument = async (req, res) => {
   const client = await pool.connect();
   try {
@@ -953,10 +973,27 @@ exports.attachTaskDocument = async (req, res) => {
       return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลงานนี้' });
     }
 
+    let fileNotes = [];
+    if (req.body.notes) {
+      if (Array.isArray(req.body.notes)) {
+        fileNotes = req.body.notes;
+      } else if (typeof req.body.notes === 'string') {
+        try {
+          const parsed = JSON.parse(req.body.notes);
+          if (Array.isArray(parsed)) fileNotes = parsed;
+          else fileNotes = [req.body.notes];
+        } catch (e) {
+          fileNotes = [req.body.notes];
+        }
+      }
+    }
+
     const createdDocs = [];
-    for (const file of files) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       const safeFileName = path.basename(file.path);
       const safePath = path.join(path.dirname(file.path), safeFileName);
+      const noteForFile = fileNotes[i] ? String(fileNotes[i]).trim() : null;
 
       let driveData = null;
       try {
@@ -969,9 +1006,9 @@ exports.attachTaskDocument = async (req, res) => {
       }
 
       const docRes = await client.query(
-        `INSERT INTO task_documents (task_id, filename, drive_file_id, drive_web_view_link, doc_type, created_by)
-         VALUES ($1, $2, $3, $4, 'attachment', $5) RETURNING id, filename, drive_web_view_link, created_at, created_by`,
-        [id, file.originalname, driveData ? driveData.id : null, driveData ? driveData.webViewLink : null, req.user ? req.user.id : null]
+        `INSERT INTO task_documents (task_id, filename, drive_file_id, drive_web_view_link, doc_type, notes, created_by)
+         VALUES ($1, $2, $3, $4, 'attachment', $5, $6) RETURNING id, filename, drive_web_view_link, notes, created_at, created_by`,
+        [id, file.originalname, driveData ? driveData.id : null, driveData ? driveData.webViewLink : null, noteForFile, req.user ? req.user.id : null]
       );
       const insertedDoc = docRes.rows[0];
       if (req.user && req.user.name) {

@@ -20,6 +20,7 @@ const {
     getTaskLogs,
     reserveTask,
     getNextReserveNo,
+    getSuggestions,
     overwriteTaskDocument,
     attachTaskDocument,
     deleteTaskAttachment
@@ -30,6 +31,7 @@ const router = express.Router();
 
 router.get('/', getAllTasks);
 router.get('/urgent', getUrgentTasks);
+router.get('/suggestions', getSuggestions);
 router.post('/', protect, createTask);
 router.get('/next-reserve-no', protect, getNextReserveNo);
 router.post('/reserve', protect, reserveTask);

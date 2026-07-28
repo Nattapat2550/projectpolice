@@ -78,7 +78,7 @@ CREATE TABLE task_documents (
   drive_file_id VARCHAR(255),
   drive_web_view_link TEXT,
   doc_type VARCHAR(50) DEFAULT 'attachment',
+  notes TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   created_by UUID REFERENCES users(id) ON DELETE SET NULL
 );
-

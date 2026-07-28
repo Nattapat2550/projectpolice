@@ -35,10 +35,13 @@ type TaskStatus = "following" | "problem" | "completed";
 type UrgencyLevel = "ปกติ" | "ด่วน" | "ด่วนมาก" | "ด่วนที่สุด";
 type SecretLevel = "ปกติ" | "ลับ" | "ลับมาก" | "ลับที่สุด";
 
+import { CreatableCombobox } from "@/components/CreatableCombobox";
+
 interface AttachmentDoc {
     id: string;
     filename: string;
     drive_web_view_link?: string;
+    notes?: string;
     created_at?: string;
     created_by?: string;
     uploader_name?: string;
@@ -395,12 +398,66 @@ export default function TaskDetailPage() {
     };
 
     const onAttachDocSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const files = e.target.files;
-        if (!files || files.length === 0 || !id) return;
+        const fileList = e.target.files;
+        if (!fileList || fileList.length === 0 || !id) return;
+        const files = Array.from(fileList);
+
+        let htmlContent = `
+            <div style="text-align: left; font-size: 0.88rem; max-height: 350px; overflow-y: auto; padding: 4px;">
+                <p style="margin-bottom: 12px; opacity: 0.8; font-weight: 500;">
+                    โปรดตรวจสอบรายการไฟล์แนบที่ต้องการอัปโหลด และสามารถระบุ <b>หมายเหตุประจำไฟล์</b> เพิ่มเติมได้:
+                </p>
+        `;
+
+        files.forEach((f, idx) => {
+            const sizeMb = (f.size / (1024 * 1024)).toFixed(2);
+            htmlContent += `
+                <div style="background: rgba(125,125,125,0.08); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; border: 1px solid rgba(125,125,125,0.2);">
+                    <div style="font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.88rem; margin-bottom: 4px;">
+                        📄 ${idx + 1}. ${f.name} <span style="opacity: 0.6; font-size: 0.75rem; font-weight: normal;">(${sizeMb} MB)</span>
+                    </div>
+                    <input 
+                        type="text" 
+                        id="attach-note-input-${idx}" 
+                        placeholder="ระบุหมายเหตุประจำไฟล์นี้ (ถ้ามี)..." 
+                        style="width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; font-size: 0.82rem; margin-top: 4px; box-sizing: border-box; outline: none; background: var(--button, #ffffff); color: var(--foreground, #000000);"
+                    />
+                </div>
+            `;
+        });
+        htmlContent += `</div>`;
+
+        const confirm = await Swal.fire({
+            title: `ยืนยันการอัปโหลดเอกสารแนบเพิ่มเติม (${files.length} รายการ)?`,
+            html: htmlContent,
+            icon: "info",
+            showCancelButton: true,
+            confirmButtonText: "ยืนยันการอัปโหลด",
+            cancelButtonText: "ยกเลิก",
+            confirmButtonColor: "#2563eb",
+            cancelButtonColor: "#6e7881",
+            preConfirm: () => {
+                const notes = files.map((_, idx) => {
+                    const inputEl = document.getElementById(`attach-note-input-${idx}`) as HTMLInputElement;
+                    return inputEl ? inputEl.value.trim() : "";
+                });
+                return notes;
+            }
+        });
+
+        if (!confirm.isConfirmed || !confirm.value) {
+            if (e.target) e.target.value = "";
+            return;
+        }
+
+        const notesArray = confirm.value as string[];
+
         setUploadingDoc(true);
         try {
             const formData = new FormData();
-            Array.from(files).forEach((f) => formData.append("files", f));
+            files.forEach((f) => formData.append("files", f));
+            formData.append("notes", JSON.stringify(notesArray));
+
             const token = getToken();
             const res = await fetch(`${backendUrl}/api/v1/tasks/${id}/attach-doc`, {
                 method: "POST",
@@ -532,10 +589,23 @@ export default function TaskDetailPage() {
         [backendUrl, id]
     );
 
+    const [suggestions, setSuggestions] = useState<{ senders: string[]; recipients: string[] }>({ senders: [], recipients: [] });
+
+    const fetchSuggestions = useCallback(async () => {
+        try {
+            const res = await fetch(`${backendUrl}/api/v1/tasks/suggestions`);
+            if (res.ok) {
+                const data = await res.json();
+                setSuggestions({ senders: data.senders || [], recipients: data.recipients || [] });
+            }
+        } catch {}
+    }, [backendUrl]);
+
     useEffect(() => {
         if (!id) return;
         fetchTask();
         fetchUsers();
+        fetchSuggestions();
         fetchMe().then((user) => {
             if (user?.role === "superadmin") {
                 const token = getToken();
@@ -914,11 +984,11 @@ export default function TaskDetailPage() {
                             </Field>
                             <Field label="จาก (ส่วนราชการ)">
                                 {isEditing && draft ? (
-                                    <input
-                                        type="text"
+                                    <CreatableCombobox
                                         value={draft.sender || ""}
-                                        onChange={(e) => updateDraft({ sender: e.target.value })}
-                                        className={inputClass}
+                                        onChange={(val) => updateDraft({ sender: val })}
+                                        options={suggestions.senders}
+                                        placeholder="พิมพ์หรือเลือกส่วนราชการ..."
                                     />
                                 ) : (
                                     <ReadValue>{taskData.sender || "-"}</ReadValue>
@@ -926,11 +996,11 @@ export default function TaskDetailPage() {
                             </Field>
                             <Field label="ถึง (เรียน)">
                                 {isEditing && draft ? (
-                                    <input
-                                        type="text"
+                                    <CreatableCombobox
                                         value={draft.recipient_to || ""}
-                                        onChange={(e) => updateDraft({ recipient_to: e.target.value })}
-                                        className={inputClass}
+                                        onChange={(val) => updateDraft({ recipient_to: val })}
+                                        options={suggestions.recipients}
+                                        placeholder="พิมพ์หรือเลือกเรียน..."
                                     />
                                 ) : (
                                     <ReadValue>{taskData.recipient_to || "-"}</ReadValue>
@@ -1068,6 +1138,11 @@ export default function TaskDetailPage() {
                                             </div>
                                             <div className="min-w-0">
                                                 <p className="text-sm font-medium truncate text-(--foreground)">{doc.filename}</p>
+                                                {doc.notes && (
+                                                    <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-0.5">
+                                                        📌 หมายเหตุ: {doc.notes}
+                                                    </p>
+                                                )}
                                                 <div className="flex flex-wrap items-center gap-1.5 text-xs opacity-70 mt-0.5">
                                                     {doc.uploader_name && (
                                                         <span className="flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400">
