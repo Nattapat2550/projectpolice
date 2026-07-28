@@ -514,6 +514,8 @@ export default function DetailsPanel({
                                                     <p className="flex flex-row mt-2" style={{ color: 'var(--foreground)' }}>
                                                         <strong>📝 เลขรับ: &nbsp; </strong> 
                                                         {taskData.receive_no}
+                                                        {taskData.receive_year ? `/${taskData.receive_year > 2400 ? taskData.receive_year : taskData.receive_year + 543}` : ''}
+                                                        {taskData.round ? ` (รอบ ${taskData.round})` : ''}
                                                     </p>
                                                 )}
                                                 {taskData?.createdAt && (

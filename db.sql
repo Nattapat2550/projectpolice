@@ -21,8 +21,7 @@ CREATE TABLE documents (
   created_by          UUID REFERENCES users(id) ON DELETE SET NULL
 );
 
-
--- 2. ตารางเก็บงานติดตาม (Tasks) -- [ส่วนที่เพิ่มใหม่]
+-- 2. ตารางเก็บงานติดตาม (Tasks)
 CREATE TABLE tasks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   document_id UUID REFERENCES documents(id) ON DELETE CASCADE,
@@ -30,7 +29,8 @@ CREATE TABLE tasks (
   memo_no TEXT,     -- เลขที่เอกสาร
   memo_date DATE,   -- วันที่บนเอกสาร
   receive_no INT,   -- เลขรับ
-  receive_year INT, -- ปีของเลขรับ
+  receive_year INT, -- ปีงบประมาณของเลขรับ
+  round INT DEFAULT 1, -- รอบการตัดยอด (1 = 1 ต.ค.-31 ธ.ค., 2 = 1 ม.ค.-30 ก.ย.)
   sign_date DATE,   -- วันที่ลงนาม
   urgency_level VARCHAR(50), -- ระดับความด่วน
   secret_level VARCHAR(50),  -- ระดับความลับ
@@ -55,23 +55,23 @@ CREATE TABLE tasks (
 CREATE TABLE task_assignments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
-  user_id UUID REFERENCES users(id) ON DELETE SET NULL, -- เชื่อมโยงดึงข้อมูลมาจากตารางผู้ใช้งาน
-  role_or_name TEXT, -- เก็บชื่อดิบที่แสกนได้ (เผื่อกรณีระบบหาตัว User ในตารางไม่เจอ)
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  role_or_name TEXT,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- 4. ตาราง "Log การทำงาน" (เชื่อมกับ Tasks และ Users)
-CREATE TABLE IF NOT EXISTS task_logs (
+CREATE TABLE task_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
   user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-  action VARCHAR(100) NOT NULL, -- e.g. 'created_task', 'assigned_user', 'updated_status'
-  details TEXT, -- JSON or text format detailing the change
+  action VARCHAR(100) NOT NULL,
+  details TEXT,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
 -- 5. ตาราง "เอกสารประกอบเพิ่มเติม" (Attached Documents)
-CREATE TABLE IF NOT EXISTS task_documents (
+CREATE TABLE task_documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,
   filename VARCHAR(255) NOT NULL,
@@ -82,6 +82,3 @@ CREATE TABLE IF NOT EXISTS task_documents (
   created_by UUID REFERENCES users(id) ON DELETE SET NULL
 );
 
--- 6. คำสั่งอัปเดตโครงสร้างตารางเดิม (สำหรับฐานข้อมูลที่มีตารางอยู่แล้ว)
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recipient_to TEXT;
-ALTER TABLE tasks ADD COLUMN IF NOT EXISTS additional_docs TEXT;

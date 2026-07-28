@@ -6,6 +6,7 @@ const { appendTaskToSheet, appendMultipleTasksToSheet, updateTaskInSheet } = req
 const { generateHash } = require('../utils/duplicateChecker');
 const { formatStandardFilename } = require('../utils/filenameParser');
 const { extractDataWithGemini } = require('../services/ocrService');
+const { calculateFiscalRoundAndYear } = require('../utils/fiscalYearHelper');
 
 const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID; 
 // กำหนดโฟลเดอร์สำหรับเก็บไฟล์ชั่วคราวให้ชัดเจน (แก้ไข path ให้ตรงกับที่ตั้งโฟลเดอร์ uploads ของคุณ)
@@ -66,7 +67,7 @@ const logTaskAction = async (clientOrPool, taskId, userId, action, details) => {
   }
 };
 
-// Helper function to handle receive_no and receive_year logic
+// Helper function to handle receive_no, receive_year and round logic
 const handleReceiveNoAndYear = async (client, inputReceiveNo, parsedReceiveDate) => {
     let receiveNoInput = inputReceiveNo;
     if (typeof receiveNoInput === 'string') {
@@ -75,14 +76,15 @@ const handleReceiveNoAndYear = async (client, inputReceiveNo, parsedReceiveDate)
     }
     
     let receiveNo = parseInt(receiveNoInput, 10) || null;
-    let receiveYear = parsedReceiveDate ? new Date(parsedReceiveDate).getFullYear() : new Date().getFullYear();
+    const { round, fiscalYear } = calculateFiscalRoundAndYear(parsedReceiveDate);
+    let receiveYear = fiscalYear;
 
     if (!receiveNo) {
-        // Generate new sequential number for this year
-        const res = await client.query('SELECT MAX(receive_no) as max_no FROM tasks WHERE receive_year = $1', [receiveYear]);
+        // Generate new sequential number for this fiscal year and round
+        const res = await client.query('SELECT MAX(receive_no) as max_no FROM tasks WHERE receive_year = $1 AND COALESCE(round, 1) = $2', [receiveYear, round]);
         receiveNo = (res.rows[0].max_no || 0) + 1;
     }
-    return { receiveNo, receiveYear };
+    return { receiveNo, receiveYear, round };
 };
 
 exports.getAllTasks = async (req, res) => {
@@ -120,6 +122,7 @@ exports.getAllTasks = async (req, res) => {
         t.reply_due_date,
         t.receive_no,
         t.receive_year,
+        COALESCE(t.round, 1) AS round,
         t.memo_no,
         t.memo_date,
         t.sender,
@@ -172,6 +175,7 @@ exports.getUrgentTasks = async (req, res) => {
         t.reply_due_date,
         t.receive_no,
         t.receive_year,
+        COALESCE(t.round, 1) AS round,
         t.memo_no,
         t.memo_date,
         t.sender,
@@ -280,13 +284,13 @@ exports.confirmTasks = async (req, res) => {
               finalDueDate = parsedMeetingDate;
           }
 
-          const { receiveNo, receiveYear } = await handleReceiveNoAndYear(client, memo.receive_no, parsedReceiveDate);
+          const { receiveNo, receiveYear, round } = await handleReceiveNoAndYear(client, memo.receive_no, parsedReceiveDate);
 
           const memoSender = memo.sender || memo.จาก || null;
           const memoRecipient = memo.recipient_to || memo.ถึง || null;
           const memoAdditionalDocs = memo.additional_docs || memo.เอกสารข้อมูลเพิ่มเติม || null;
 
-          const existingRes = await client.query('SELECT id, document_id FROM tasks WHERE receive_no = $1 AND receive_year = $2', [receiveNo, receiveYear]);
+          const existingRes = await client.query('SELECT id, document_id FROM tasks WHERE receive_no = $1 AND receive_year = $2 AND COALESCE(round, 1) = $3', [receiveNo, receiveYear, round]);
           let taskId;
           
           if (existingRes.rows.length > 0) {
@@ -295,8 +299,8 @@ exports.confirmTasks = async (req, res) => {
 
               // 1. อัปเดตงานในตาราง tasks ก่อนเพื่อให้ document_id ชี้ไปที่เอกสารใหม่
               await client.query(
-                  `UPDATE tasks SET document_id = COALESCE($1, document_id), title = $2, memo_no = $3, memo_date = $4, main_text = $5, task_detail = $6, due_date = COALESCE($7, due_date), is_urgent = $8, urgency_level = $9, secret_level = $10, sign_date = $11, meeting_date = $13, reply_due_date = $14, sender = $16, recipient_to = $17, additional_docs = $18, created_at = COALESCE(CAST($12 AS timestamp), created_at), updated_at = NOW() WHERE id = $15`,
-                  [documentId, memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', memo.ที่, parsedMemoDate, memo.main_text, memo.task_detail || null, finalDueDate, memo.isUrgent || false, memo.urgency_level || null, memo.secret_level || null, parsedSignDate, parsedReceiveDate, parsedMeetingDate, parsedReplyDueDate, taskId, memoSender, memoRecipient, memoAdditionalDocs]
+                  `UPDATE tasks SET document_id = COALESCE($1, document_id), title = $2, memo_no = $3, memo_date = $4, main_text = $5, task_detail = $6, due_date = COALESCE($7, due_date), is_urgent = $8, urgency_level = $9, secret_level = $10, sign_date = $11, meeting_date = $13, reply_due_date = $14, sender = $16, recipient_to = $17, additional_docs = $18, round = $19, created_at = COALESCE(CAST($12 AS timestamp), created_at), updated_at = NOW() WHERE id = $15`,
+                  [documentId, memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', memo.ที่, parsedMemoDate, memo.main_text, memo.task_detail || null, finalDueDate, memo.isUrgent || false, memo.urgency_level || null, memo.secret_level || null, parsedSignDate, parsedReceiveDate, parsedMeetingDate, parsedReplyDueDate, taskId, memoSender, memoRecipient, memoAdditionalDocs, round]
               );
 
               // 2. ลบเอกสารเก่าและไฟล์เก่าใน Drive หากไม่มีงานอื่นใช้อยู่
@@ -321,8 +325,8 @@ exports.confirmTasks = async (req, res) => {
               updatedTaskIds.push(taskId);
           } else {
               const taskRes = await client.query(
-                `INSERT INTO tasks (document_id, title, memo_no, memo_date, main_text, task_detail, due_date, is_urgent, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, sender, recipient_to, additional_docs, created_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $14, $15, $16, $17, $18, $19, $20, COALESCE(CAST($13 AS timestamp), NOW())) RETURNING id`,
+                `INSERT INTO tasks (document_id, title, memo_no, memo_date, main_text, task_detail, due_date, is_urgent, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, round, sender, recipient_to, additional_docs, created_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $14, $15, $16, $17, $21, $18, $19, $20, COALESCE(CAST($13 AS timestamp), NOW())) RETURNING id`,
                 [ 
                   documentId, 
                   memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', 
@@ -343,7 +347,8 @@ exports.confirmTasks = async (req, res) => {
                   receiveYear,
                   memoSender,
                   memoRecipient,
-                  memoAdditionalDocs
+                  memoAdditionalDocs,
+                  round
                 ]
               );
               taskId = taskRes.rows[0].id;
@@ -355,7 +360,7 @@ exports.confirmTasks = async (req, res) => {
         if (Array.isArray(memo.assignments) && memo.assignments.length > 0) {
           for (const assign of memo.assignments) {
             const userId = isValidUUID(assign.user_id) ? assign.user_id : null; 
-            const personStr = assign.responsible_person || '';
+            const personStr = assign.role_or_name || assign.responsible_person || assign.name || '';
 
             const assignRes = await client.query(
               `INSERT INTO task_assignments (task_id, user_id, role_or_name)
@@ -714,24 +719,24 @@ exports.createTask = async (req, res) => {
         finalDueDate = parsedMeetingDate;
     }
 
-    const { receiveNo, receiveYear } = await handleReceiveNoAndYear(client, req.body.receive_no, parsedReceiveDate);
+    const { receiveNo, receiveYear, round } = await handleReceiveNoAndYear(client, req.body.receive_no, parsedReceiveDate);
 
-    const existingRes = await client.query('SELECT id FROM tasks WHERE receive_no = $1 AND receive_year = $2', [receiveNo, receiveYear]);
+    const existingRes = await client.query('SELECT id FROM tasks WHERE receive_no = $1 AND receive_year = $2 AND COALESCE(round, 1) = $3', [receiveNo, receiveYear, round]);
     let taskId;
 
     if (existingRes.rows.length > 0) {
         taskId = existingRes.rows[0].id;
         await client.query(
-          `UPDATE tasks SET title = COALESCE($1, title), memo_no = $2, memo_date = $3, main_text = $4, due_date = COALESCE($5, due_date), is_urgent = COALESCE($6, is_urgent), urgency_level = $7, secret_level = $8, sign_date = $10, meeting_date = $11, reply_due_date = $12, sender = $14, recipient_to = $15, additional_docs = $16, created_at = COALESCE(CAST($9 AS timestamp), created_at), updated_at = NOW() WHERE id = $13`,
-          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, taskId, sender, recipient_to, additional_docs]
+          `UPDATE tasks SET title = COALESCE($1, title), memo_no = $2, memo_date = $3, main_text = $4, due_date = COALESCE($5, due_date), is_urgent = COALESCE($6, is_urgent), urgency_level = $7, secret_level = $8, sign_date = $10, meeting_date = $11, reply_due_date = $12, sender = $14, recipient_to = $15, additional_docs = $16, round = $17, created_at = COALESCE(CAST($9 AS timestamp), created_at), updated_at = NOW() WHERE id = $13`,
+          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, taskId, sender, recipient_to, additional_docs, round]
         );
         await logTaskAction(client, taskId, validCreatorId, 'updated_task', { source: 'manual_create_upsert' });
         await client.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
     } else {
         const taskRes = await client.query(
-          `INSERT INTO tasks (title, memo_no, memo_date, main_text, due_date, is_urgent, status, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, sender, recipient_to, additional_docs, created_at)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $12, $13, $14, $15, $16, $17, $18, $19, COALESCE(CAST($11 AS timestamp), NOW())) RETURNING id`,
-          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent || false, 'following', validCreatorId, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, receiveNo, receiveYear, sender, recipient_to, additional_docs]
+          `INSERT INTO tasks (title, memo_no, memo_date, main_text, due_date, is_urgent, status, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, round, sender, recipient_to, additional_docs, created_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $12, $13, $14, $15, $16, $20, $17, $18, $19, COALESCE(CAST($11 AS timestamp), NOW())) RETURNING id`,
+          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent || false, 'following', validCreatorId, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, receiveNo, receiveYear, sender, recipient_to, additional_docs, round]
         );
         taskId = taskRes.rows[0].id;
         await logTaskAction(client, taskId, validCreatorId, 'created_task', { source: 'manual_create' });
@@ -1012,10 +1017,11 @@ exports.deleteTaskAttachment = async (req, res) => {
 exports.getNextReserveNo = async (req, res) => {
   const client = await pool.connect();
   try {
-    const currentYear = new Date().getFullYear();
-    const resCount = await client.query('SELECT MAX(receive_no) as max_no FROM tasks WHERE receive_year = $1', [currentYear]);
+    const dateInput = req.query.date ? parseThaiDateToIso(req.query.date) : new Date();
+    const { round, fiscalYear } = calculateFiscalRoundAndYear(dateInput);
+    const resCount = await client.query('SELECT MAX(receive_no) as max_no FROM tasks WHERE receive_year = $1 AND COALESCE(round, 1) = $2', [fiscalYear, round]);
     const nextReceiveNo = (resCount.rows[0].max_no || 0) + 1;
-    res.status(200).json({ success: true, nextReceiveNo, currentYear });
+    res.status(200).json({ success: true, nextReceiveNo, currentYear: fiscalYear, round });
   } catch (err) {
     res.status(500).json({ success: false, message: 'Server Error', error: err.message });
   } finally {
@@ -1029,7 +1035,8 @@ exports.reserveTask = async (req, res) => {
     await client.query('BEGIN');
     
     let validCreatorId = req.user?.id || null;
-    const currentYear = new Date().getFullYear();
+    const dateInput = req.body.date ? parseThaiDateToIso(req.body.date) : new Date();
+    const { round, fiscalYear } = calculateFiscalRoundAndYear(dateInput);
     
     let { range } = req.body; 
     
@@ -1047,7 +1054,7 @@ exports.reserveTask = async (req, res) => {
         endNo = startNo;
       }
     } else {
-      const resCount = await client.query('SELECT MAX(receive_no) as max_no FROM tasks WHERE receive_year = $1', [currentYear]);
+      const resCount = await client.query('SELECT MAX(receive_no) as max_no FROM tasks WHERE receive_year = $1 AND COALESCE(round, 1) = $2', [fiscalYear, round]);
       startNo = (resCount.rows[0].max_no || 0) + 1;
       endNo = startNo;
     }
@@ -1062,20 +1069,21 @@ exports.reserveTask = async (req, res) => {
 
     for (let i = startNo; i <= endNo; i++) {
       const taskRes = await client.query(
-        `INSERT INTO tasks (title, status, created_by, receive_no, receive_year, due_date)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-        ['กันเลขลงรับ', 'following', validCreatorId, i, currentYear, dueDate]
+        `INSERT INTO tasks (title, status, created_by, receive_no, receive_year, round, due_date)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+        ['กันเลขลงรับ', 'following', validCreatorId, i, fiscalYear, round, dueDate]
       );
       const taskId = taskRes.rows[0].id;
       createdIds.push({
         id: taskId,
         receive_no: i,
-        receive_year: currentYear,
+        receive_year: fiscalYear,
+        round: round,
         created_at: new Date(),
         title: 'กันเลขลงรับ',
         due_date: dueDate
       });
-      await logTaskAction(client, taskId, validCreatorId, 'created_task', { source: 'reserve_number', no: i });
+      await logTaskAction(client, taskId, validCreatorId, 'created_task', { source: 'reserve_number', no: i, round });
     }
     
     await client.query('COMMIT');
@@ -1093,7 +1101,8 @@ exports.reserveTask = async (req, res) => {
       createdCount: createdIds.length,
       startNo, 
       endNo, 
-      receive_year: currentYear 
+      receive_year: fiscalYear,
+      round
     });
   } catch (err) {
     await client.query('ROLLBACK');

@@ -228,12 +228,31 @@ export default function Uploaded({ extractedData, onClearExtractedData }: Upload
 
         try {
             for (const file of validFiles) {
+                const isAllSelected = file.selectedAssignees.includes("all");
+                let mappedAssignments: any[] = [];
+                if (isAllSelected) {
+                    mappedAssignments = [{ user_id: null, role_or_name: "all", responsible_person: "all" }];
+                } else {
+                    mappedAssignments = (file.selectedAssignees || []).map(uid => {
+                        const u = users.find(x => String(x.id || x._id) === uid);
+                        return {
+                            user_id: u ? (u.id || u._id) : (uid !== "all" ? uid : null),
+                            role_or_name: u ? u.name : uid,
+                            responsible_person: u ? u.name : uid
+                        };
+                    });
+                }
+
                 const memosWithDueDate = file.memos.map(memo => {
                     let baseDate = parseThaiDate(memo.วันที่);
                     if (!baseDate || isNaN(baseDate.getTime())) baseDate = new Date();
                     baseDate.setDate(baseDate.getDate() + parseInt(file.deadline));
                     
-                    return { ...memo, assignments: [], due_date: baseDate.toISOString().split('T')[0] };
+                    return { 
+                        ...memo, 
+                        assignments: mappedAssignments.length > 0 ? mappedAssignments : (memo.assignments || []), 
+                        due_date: baseDate.toISOString().split('T')[0] 
+                    };
                 });
 
                 const token = typeof window !== 'undefined' ? localStorage.getItem("token") || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1] : null;

@@ -31,6 +31,7 @@ pool.connect()
       await client.query(`
         ALTER TABLE tasks ADD COLUMN IF NOT EXISTS recipient_to TEXT;
         ALTER TABLE tasks ADD COLUMN IF NOT EXISTS additional_docs TEXT;
+        ALTER TABLE tasks ADD COLUMN IF NOT EXISTS round INT DEFAULT 1;
         CREATE TABLE IF NOT EXISTS task_documents (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           task_id UUID REFERENCES tasks(id) ON DELETE CASCADE,

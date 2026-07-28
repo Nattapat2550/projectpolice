@@ -37,6 +37,7 @@ export interface Task {
   secret_level: string;
   receive_no: number;
   receive_year: number;
+  round?: number;
   meeting_date: string | null;
   reply_due_date: string | null;
   due_date?: string | null;
@@ -278,6 +279,11 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                     <td className={`px-1.5 py-3 font-medium ${flagged ? 'text-[var(--redText)]' : ''}`}>
                       {task.receive_no ?? '-'}
                       <span className={flagged ? 'font-normal opacity-70' : 'text-[var(--foreground)]/40 font-normal'}>/{formatReceiveYear(task.receive_year)}</span>
+                      {task.round && (
+                        <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-[var(--blueText)]/10 text-[var(--blueText)] font-medium border border-[var(--blueText)]/20">
+                          ร.{task.round}
+                        </span>
+                      )}
                     </td>
                     <td className={`px-1.5 py-3 font-mono text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>
                       {task.memo_no || '-'}
@@ -393,6 +399,7 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                   <span className={`text-xs font-semibold px-3 py-1 rounded-sm bg-[var(--button)] ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>
                     เลขรับ {task.receive_no ?? '-'}
                     <span className={flagged ? 'font-normal opacity-70' : 'text-[var(--foreground)]/40 font-normal'}>/{formatReceiveYear(task.receive_year)}</span>
+                    {task.round && <span className="ml-1 opacity-80 text-[10px]"> (ร.{task.round})</span>}
                   </span>
                   <span className={`font-mono text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/50'}`}>
                     {task.memo_no || '-'}

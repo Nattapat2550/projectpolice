@@ -1,6 +1,7 @@
 const xlsx = require("xlsx");
 const pool = require("../config/db");
 const { appendMultipleTasksToSheet, appendTaskToSheet } = require('../services/googleSheetsService');
+const { calculateFiscalRoundAndYear } = require("../utils/fiscalYearHelper");
 
 // สร้างตัวแปร Global สำหรับเก็บ Progress 
 if (!global.uploadProgress) { 
@@ -185,8 +186,10 @@ exports.uploadExcelTasks = async (req, res) => {
                     const parsedNum = matchNum ? parseInt(matchNum[0], 10) : NaN;
                     receiveNo = isNaN(parsedNum) ? null : parsedNum;
                 }
+
+                const { round, fiscalYear } = calculateFiscalRoundAndYear(receivedDate);
                 if (receiveNo) {
-                    receiveYear = receivedDate ? new Date(receivedDate).getFullYear() : new Date().getFullYear();
+                    receiveYear = fiscalYear;
                 }
 
                 // ถ้าไม่มีข้อมูลช่อง วันที่ (due date) ให้บวกเพิ่ม 14 วันจาก วันที่รับ (received date) หรือวันที่ปัจจุบัน
@@ -223,6 +226,7 @@ exports.uploadExcelTasks = async (req, res) => {
                     received_date: receivedDate,
                     receive_no: receiveNo,
                     receive_year: receiveYear,
+                    round: round,
                     memo_no: excelMemoNo || (row["ที่หนังสือ"] ? String(row["ที่หนังสือ"]).trim() : null),
                     memo_date: parseDateSafe(row["ลงวันที่"]),
                     sender: excelSender || (row["จาก"] ? String(row["จาก"]).trim() : null),
@@ -282,17 +286,17 @@ exports.uploadExcelTasks = async (req, res) => {
                 
                 chunk.forEach(item => {
                     if (item.receive_no && item.receive_year) {
-                        conditions.push(`(receive_no = $${paramIdx++} AND receive_year = $${paramIdx++})`);
-                        params.push(item.receive_no, item.receive_year);
+                        conditions.push(`(receive_no = $${paramIdx++} AND receive_year = $${paramIdx++} AND COALESCE(round, 1) = $${paramIdx++})`);
+                        params.push(item.receive_no, item.receive_year, item.round || 1);
                     }
                 });
                 
                 let existingMap = {};
                 if (conditions.length > 0) {
-                    const query = `SELECT id, receive_no, receive_year FROM tasks WHERE ${conditions.join(' OR ')}`;
+                    const query = `SELECT id, receive_no, receive_year, COALESCE(round, 1) as round FROM tasks WHERE ${conditions.join(' OR ')}`;
                     const { rows } = await pool.query(query, params);
                     rows.forEach(r => {
-                        existingMap[`${r.receive_no}_${r.receive_year}`] = r.id;
+                        existingMap[`${r.receive_no}_${r.receive_year}_${r.round}`] = r.id;
                     });
                 }
 
@@ -301,7 +305,7 @@ exports.uploadExcelTasks = async (req, res) => {
                 const toUpdate = [];
 
                 chunk.forEach(item => {
-                    const key = `${item.receive_no}_${item.receive_year}`;
+                    const key = `${item.receive_no}_${item.receive_year}_${item.round || 1}`;
                     if (existingMap[key]) {
                         toUpdate.push({ ...item, id: existingMap[key] });
                     } else {
@@ -328,13 +332,13 @@ exports.uploadExcelTasks = async (req, res) => {
                         let safeAdditionalDocs = item.additional_docs ? String(item.additional_docs) : null;
 
                         let rowPlaceholders = [];
-                        for(let j = 0; j < 20; j++) rowPlaceholders.push(`$${counter++}`);
+                        for(let j = 0; j < 21; j++) rowPlaceholders.push(`$${counter++}`);
                         valuesPlaceholders.push(`(${rowPlaceholders.join(', ')})`);
                         
                         flatValues.push(
                             safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, 
                             safeSender, parsedDueDate, created_by, parsedCreatedAt, safeTaskDetail, item.is_urgent,
-                            item.receive_no, item.receive_year, item.signed_date, 
+                            item.receive_no, item.receive_year, item.round || 1, item.signed_date, 
                             item.meeting_date || null, item.reply_due_date || null, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ',
                             safeRecipientTo, safeAdditionalDocs
                         );
@@ -342,7 +346,7 @@ exports.uploadExcelTasks = async (req, res) => {
 
                     const taskQuery = `
                         INSERT INTO tasks 
-                        (title, memo_no, memo_date, main_text, notes, sender, due_date, created_by, created_at, task_detail, is_urgent, receive_no, receive_year, sign_date, meeting_date, reply_due_date, urgency_level, secret_level, recipient_to, additional_docs) 
+                        (title, memo_no, memo_date, main_text, notes, sender, due_date, created_by, created_at, task_detail, is_urgent, receive_no, receive_year, round, sign_date, meeting_date, reply_due_date, urgency_level, secret_level, recipient_to, additional_docs) 
                         VALUES ${valuesPlaceholders.join(', ')} 
                         RETURNING id
                     `;
@@ -383,8 +387,8 @@ exports.uploadExcelTasks = async (req, res) => {
                             let safeAdditionalDocs = item.additional_docs ? String(item.additional_docs) : null;
 
                             await pool.query(
-                                `UPDATE tasks SET title = COALESCE($1, title), memo_no = COALESCE($2, memo_no), memo_date = COALESCE($3, memo_date), main_text = COALESCE($4, main_text), notes = COALESCE($5, notes), sender = COALESCE($6, sender), due_date = COALESCE($7, due_date), task_detail = COALESCE($8, task_detail), is_urgent = $9, sign_date = COALESCE($10, sign_date), meeting_date = COALESCE($11, meeting_date), reply_due_date = COALESCE($12, reply_due_date), urgency_level = COALESCE($13, urgency_level), secret_level = COALESCE($14, secret_level), recipient_to = COALESCE($15, recipient_to), additional_docs = COALESCE($16, additional_docs), updated_at = NOW() WHERE id = $17`,
-                                [safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, safeSender, parsedDueDate, safeTaskDetail, item.is_urgent, item.signed_date, item.meeting_date || null, item.reply_due_date || null, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ', safeRecipientTo, safeAdditionalDocs, taskId]
+                                `UPDATE tasks SET title = COALESCE($1, title), memo_no = COALESCE($2, memo_no), memo_date = COALESCE($3, memo_date), main_text = COALESCE($4, main_text), notes = COALESCE($5, notes), sender = COALESCE($6, sender), due_date = COALESCE($7, due_date), task_detail = COALESCE($8, task_detail), is_urgent = $9, sign_date = COALESCE($10, sign_date), meeting_date = COALESCE($11, meeting_date), reply_due_date = COALESCE($12, reply_due_date), urgency_level = COALESCE($13, urgency_level), secret_level = COALESCE($14, secret_level), recipient_to = COALESCE($15, recipient_to), additional_docs = COALESCE($16, additional_docs), round = COALESCE($17, round), updated_at = NOW() WHERE id = $18`,
+                                [safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, safeSender, parsedDueDate, safeTaskDetail, item.is_urgent, item.signed_date, item.meeting_date || null, item.reply_due_date || null, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ', safeRecipientTo, safeAdditionalDocs, item.round || 1, taskId]
                             );
                             updatedTaskIds.push(taskId);
                             await pool.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
