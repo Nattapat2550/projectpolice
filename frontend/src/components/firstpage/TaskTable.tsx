@@ -96,21 +96,21 @@ const formatReceiveYear = (year?: number | string | null) => {
 const isKanLekLongRub = (title?: string | null) => !!title && title.includes('กันเลขลงรับ');
 
 const COLUMNS: { key: SortKey; label: string; className?: string }[] = [
-  { key: 'receive_no', label: 'เลขรับ / ปี', className: 'w-20' },
-  { key: 'memo_no', label: 'เลขที่หนังสือ', className: 'w-24' },
-  { key: 'title', label: 'ชื่อเรื่อง / รายละเอียด', className: 'w-auto min-w-[250px] max-w-[400px]' },
+  { key: 'receive_no', label: 'เลขรับ / ปี', className: 'w-[80px]' },
+  { key: 'memo_no', label: 'เลขที่หนังสือ', className: 'w-[95px]' },
+  { key: 'title', label: 'ชื่อเรื่อง / รายละเอียด', className: 'w-auto min-w-[150px]' },
 ];
 
 const COLUMNS_AFTER_ASSIGNEE: { key: SortKey; label: string; className?: string }[] = [
-  { key: 'sender', label: 'จาก (หน่วยงาน)', className: 'w-auto' },
-  { key: 'recipient_to', label: 'ถึง', className: 'w-auto' },
-  { key: 'urgency_level', label: 'ความเร่งด่วน', className: 'w-auto' },
-  { key: 'status', label: 'สถานะ', className: 'w-auto' },
-  { key: 'secret_level', label: 'ชั้นความลับ', className: 'w-auto' },
-  { key: 'memo_date', label: 'วันที่หนังสือ', className: 'w-auto' },
-  { key: 'meeting_date', label: 'วันประชุม', className: 'w-auto' },
-  { key: 'reply_due_date', label: 'กำหนดตอบกลับ', className: 'w-auto' },
-  { key: 'due_date', label: 'วันกำหนดส่ง', className: 'w-auto' },
+  { key: 'sender', label: 'จาก (หน่วยงาน)', className: 'w-[95px]' },
+  { key: 'recipient_to', label: 'ถึง', className: 'w-[80px]' },
+  { key: 'urgency_level', label: 'ความเร่งด่วน', className: 'w-[80px] text-center' },
+  { key: 'status', label: 'สถานะ', className: 'w-[95px] text-center' },
+  { key: 'secret_level', label: 'ชั้นความลับ', className: 'w-[75px] text-center' },
+  { key: 'memo_date', label: 'วันที่หนังสือ', className: 'w-[78px]' },
+  { key: 'meeting_date', label: 'วันประชุม', className: 'w-[78px]' },
+  { key: 'reply_due_date', label: 'กำหนดตอบกลับ', className: 'w-[82px]' },
+  { key: 'due_date', label: 'วันกำหนดส่ง', className: 'w-[82px]' },
 ];
 
 const SortIcon: React.FC<{ active: boolean; direction: 'asc' | 'desc' }> = ({ active, direction }) => (
@@ -221,10 +221,10 @@ export const TaskTable: React.FC<TaskTableProps> = ({
     <div className="space-y-4">
       {/* 🖥️ [1] Desktop & iPad แนวนอน (ตารางเต็มรูปแบบ พร้อม sort) */}
       <div className="hidden xl:block bg-[var(--container)] rounded-lg overflow-hidden transition-all p-4 border-2 border-(--shadow)/70">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse xl:min-w-0 ">
+        <div className="overflow-x-auto border border-[var(--shadow)]/30 rounded-lg">
+          <table className="w-full min-w-full table-fixed text-left border-collapse">
             <thead>
-              <tr className="border-b border-[var(--shadow)]/30 bg-[var(--wrapper)]/30 text-xs font-semibold uppercase tracking-wider text-[var(--foreground)]/70">
+              <tr className="border-b border-[var(--shadow)]/30 bg-[var(--wrapper)]/30 text-[11px] font-semibold uppercase tracking-wider text-[var(--foreground)]/70">
                 {COLUMNS.map((col) => {
                   const isActive = sortConfig.key === col.key;
                   return (
@@ -243,14 +243,14 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                   );
                 })}
                 {/* 👤 ผู้รับผิดชอบ วางไว้ใกล้ชื่อเรื่อง ให้เห็นได้เลยโดยไม่ต้อง scroll ขวา */}
-                <th className="w-auto px-1.5 py-3">ผู้รับผิดชอบ</th>
+                <th className="w-[105px] px-1.5 py-3 select-none">ผู้รับผิดชอบ</th>
                 {COLUMNS_AFTER_ASSIGNEE.map((col) => {
                   const isActive = sortConfig.key === col.key;
                   return (
-                    <th key={col.key} className={`${col.className || ''} px-3 py-4 select-none`}>
+                    <th key={col.key} className={`${col.className || ''} px-1.5 py-3 select-none`}>
                       <button
                         onClick={() => onSort(col.key)}
-                        className={`flex items-center gap-1 hover:text-[var(--blueText)] transition-colors cursor-pointer select-none ${
+                        className={`flex items-center justify-center gap-1 hover:text-[var(--blueText)] transition-colors cursor-pointer select-none ${
                           isActive ? 'text-[var(--blueText)]' : ''
                         }`}
                         title={`เรียงตาม${col.label}`}
@@ -276,21 +276,28 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                         : 'hover:bg-[var(--wrapper)]/20'
                     }`}
                   >
-                    <td className={`px-1.5 py-3 font-medium ${flagged ? 'text-[var(--redText)]' : ''}`}>
-                      {task.receive_no ?? '-'}
-                      <span className={flagged ? 'font-normal opacity-70' : 'text-[var(--foreground)]/40 font-normal'}>/{formatReceiveYear(task.receive_year)}</span>
-                      {task.round && (
-                        <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-[var(--blueText)]/10 text-[var(--blueText)] font-medium border border-[var(--blueText)]/20">
-                          ร.{task.round}
-                        </span>
-                      )}
+                    <td className={`px-2 py-3 font-medium whitespace-nowrap overflow-hidden ${flagged ? 'text-[var(--redText)]' : ''}`}>
+                      <div className="truncate">
+                        {task.receive_no ?? '-'}
+                        <span className={flagged ? 'font-normal opacity-70' : 'text-[var(--foreground)]/40 font-normal'}>/{formatReceiveYear(task.receive_year)}</span>
+                        {task.round && (
+                          <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-[var(--blueText)]/10 text-[var(--blueText)] font-medium border border-[var(--blueText)]/20">
+                            ร.{task.round}
+                          </span>
+                        )}
+                      </div>
                     </td>
-                    <td className={`px-1.5 py-3 font-mono text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>
-                      {task.memo_no || '-'}
+
+                    <td className={`px-2 py-3 font-mono text-xs overflow-hidden ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>
+                      <div className="truncate" title={task.memo_no || '-'}>
+                        {task.memo_no || '-'}
+                      </div>
                     </td>
-                    <td className="px-1.5 py-3 align-top">
+
+                    <td className="px-2 py-3 align-middle overflow-hidden">
                       <div
-                        className={`font-medium whitespace-normal break-words leading-snug transition-colors ${
+                        title={task.title || 'ไม่มีชื่อเรื่อง'}
+                        className={`font-medium truncate transition-colors ${
                           flagged
                             ? 'text-[var(--redText)] font-semibold'
                             : 'text-[var(--foreground)] group-hover:text-[var(--blueText)]'
@@ -306,16 +313,16 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                     </td>
 
                     {/* 👤 ผู้รับผิดชอบ */}
-                    <td className="px-1.5 py-3">
+                    <td className="px-2 py-3 overflow-hidden">
                       <div className="flex flex-wrap gap-1 max-h-12 overflow-y-auto">
                         {task.assignments && task.assignments.length > 0 ? (
                           task.assignments.map((assign, idx) => {
                             const name = assign.personInCharge || assign.role_or_name;
                             const dotColor = getAssigneeColor(name, assign.color);
                             return (
-                              <span key={assign.assignment_id || idx} className="assignee-badge inline-flex items-center px-2 py-0.5 rounded text-xs border border-[var(--shadow)] text-[var(--foreground)]/90 bg-[var(--wrapper)]/40">
-                                <span className="w-2 h-2 rounded-full mr-1.5 shrink-0" style={{ backgroundColor: dotColor }}></span>
-                                {name}
+                              <span key={assign.assignment_id || idx} className="assignee-badge inline-flex items-center px-1.5 py-0.5 rounded text-[11px] border border-[var(--shadow)] text-[var(--foreground)]/90 bg-[var(--wrapper)]/40 truncate max-w-[130px]" title={name}>
+                                <span className="w-2 h-2 rounded-full mr-1 shrink-0" style={{ backgroundColor: dotColor }}></span>
+                                <span className="truncate">{name}</span>
                               </span>
                             );
                           })
@@ -325,19 +332,30 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                       </div>
                     </td>
 
-                    <td className={`px-1.5 py-3 truncate ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>{task.sender || '-'}</td>
-                    <td className={`px-1.5 py-3 truncate ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>{task.recipient_to || '-'}</td>
-                    <td className="px-1.5 py-3 text-center">
-                      <span className={`inline-block px-2.5 py-1 text-xs font-semibold rounded-full border ${getUrgencyBadgeStyle(task.urgency_level)}`}>
+                    <td className={`px-2 py-3 overflow-hidden ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>
+                      <div className="truncate" title={task.sender || '-'}>
+                        {task.sender || '-'}
+                      </div>
+                    </td>
+
+                    <td className={`px-2 py-3 overflow-hidden ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/80'}`}>
+                      <div className="truncate" title={task.recipient_to || '-'}>
+                        {task.recipient_to || '-'}
+                      </div>
+                    </td>
+
+                    <td className="px-2 py-3 text-center overflow-hidden">
+                      <span className={`inline-block px-2 py-0.5 text-xs font-semibold rounded-full border truncate max-w-[95px] ${getUrgencyBadgeStyle(task.urgency_level)}`}>
                         {task.urgency_level || 'ปกติ'}
                       </span>
                     </td>
-                    <td className="px-1.5 py-3 text-center">
+
+                    <td className="px-2 py-3 text-center overflow-hidden">
                       <select
                         value={task.status === 'completed' || task.status === 'success' ? 'completed' : 'following'}
                         onChange={(e) => onStatusChange?.(task.id, e.target.value)}
                         onClick={(e) => e.stopPropagation()}
-                        className={`appearance-none cursor-pointer inline-block px-2.5 py-0.5 text-xs rounded-md text-center focus:outline-none focus:ring-1 focus:ring-[var(--blueText)] ${
+                        className={`appearance-none cursor-pointer inline-block px-2 py-0.5 text-xs rounded-md text-center focus:outline-none focus:ring-1 focus:ring-[var(--blueText)] ${
                           task.status === 'completed' || task.status === 'success'
                             ? 'bg-[var(--greenBG)]/30 text-[var(--greenText)] border border-[var(--greenBorder)]/30'
                             : 'bg-[var(--wrapper)]/60 text-[var(--foreground)]/70 border border-[var(--shadow)]/40'
@@ -347,22 +365,35 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                         <option value="completed">เสร็จสิ้น</option>
                       </select>
                     </td>
-                    <td className="px-1.5 py-3 text-center">
-                      <span className={`inline-block px-2 py-1 text-xs rounded-full border ${getSecretBadgeStyle(task.secret_level)}`}>
+
+                    <td className="px-2 py-3 text-center overflow-hidden">
+                      <span className={`inline-block px-2 py-0.5 text-xs rounded-full border truncate max-w-[85px] ${getSecretBadgeStyle(task.secret_level)}`}>
                         {task.secret_level || 'ปกติ'}
                       </span>
                     </td>
-                    <td className={`px-1.5 py-3 text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
-                      {formatDate(task.memo_date)}
+
+                    <td className={`px-2 py-3 text-xs whitespace-nowrap overflow-hidden ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
+                      <div className="truncate">
+                        {formatDate(task.memo_date)}
+                      </div>
                     </td>
-                    <td className={`px-1.5 py-3 text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
-                      {task.meeting_date ? formatDate(task.meeting_date) : '-'}
+
+                    <td className={`px-2 py-3 text-xs whitespace-nowrap overflow-hidden ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
+                      <div className="truncate">
+                        {task.meeting_date ? formatDate(task.meeting_date) : '-'}
+                      </div>
                     </td>
-                    <td className={`px-1.5 py-3 text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
-                      {task.reply_due_date ? formatDate(task.reply_due_date) : '-'}
+
+                    <td className={`px-2 py-3 text-xs whitespace-nowrap overflow-hidden ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
+                      <div className="truncate">
+                        {task.reply_due_date ? formatDate(task.reply_due_date) : '-'}
+                      </div>
                     </td>
-                    <td className={`px-1.5 py-3 text-xs ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
-                      {task.due_date ? formatDate(task.due_date) : '-'}
+
+                    <td className={`px-2 py-3 text-xs whitespace-nowrap overflow-hidden ${flagged ? 'text-[var(--redText)]' : 'text-[var(--foreground)]/70'}`}>
+                      <div className="truncate">
+                        {task.due_date ? formatDate(task.due_date) : '-'}
+                      </div>
                     </td>
                   </tr>
                 );
