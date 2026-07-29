@@ -624,6 +624,8 @@ export default function TaskDetailPage() {
         return {
             name: source.name,
             date: source.date,
+            memo_no: source.memo_no ? convertThaiDigits(source.memo_no) : source.memo_no,
+            memo_date: source.memo_date,
             sender: source.sender,
             recipient_to: source.recipient_to,
             notes: source.notes,

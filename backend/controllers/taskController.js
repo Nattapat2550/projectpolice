@@ -509,15 +509,16 @@ exports.updateTaskDetail = async (req, res) => {
              recipient_to = COALESCE($18, recipient_to),
              additional_docs = COALESCE($19, additional_docs),
              sender = COALESCE($20, sender),
-             memo_no = COALESCE($21, memo_no),
-             memo_date = COALESCE($22, memo_date),
+             memo_no = CASE WHEN $23::boolean THEN $21 ELSE memo_no END,
+             memo_date = CASE WHEN $24::boolean THEN $22 ELSE memo_date END,
              updated_at = NOW() 
          WHERE id = $14`,
         [
           name, validDate, notes, urgentValue, main_text, task_detail, urgency_level, secret_level, 
           receive_date, sDate, mDate, rDate, receive_no, id,
           req.body.hasOwnProperty('sign_date'), req.body.hasOwnProperty('meeting_date'), req.body.hasOwnProperty('reply_due_date'),
-          recipient_to, additional_docs, sender, cleanMemoNo, memoDate
+          recipient_to, additional_docs, sender, cleanMemoNo, memoDate,
+          req.body.hasOwnProperty('memo_no'), req.body.hasOwnProperty('memo_date')
         ]
       );
 
