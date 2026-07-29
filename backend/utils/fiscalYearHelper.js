@@ -7,12 +7,16 @@
 
 function calculateFiscalRoundAndYear(dateInput) {
     let d = dateInput;
-    if (!(d instanceof Date)) {
-        if (!d) {
-            d = new Date();
-        } else {
-            d = new Date(d);
+    if (typeof d === 'string' && d.trim()) {
+        const match = d.trim().match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+        if (match) {
+            let y = parseInt(match[1], 10);
+            if (y > 2400) y -= 543;
+            d = `${y}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}${d.slice(match[0].length)}`;
         }
+    }
+    if (!(d instanceof Date)) {
+        d = d ? new Date(d) : new Date();
     }
 
     if (isNaN(d.getTime())) {
@@ -20,7 +24,10 @@ function calculateFiscalRoundAndYear(dateInput) {
     }
 
     const month = d.getMonth() + 1; // 1 - 12
-    const calendarYear = d.getFullYear(); // e.g. 2026
+    let calendarYear = d.getFullYear(); // e.g. 2026
+    if (calendarYear > 2400) {
+        calendarYear -= 543;
+    }
 
     let round = 2;
     let fiscalYear = calendarYear;

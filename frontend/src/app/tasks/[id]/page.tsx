@@ -171,9 +171,25 @@ function avatarColorFor(seed: string) {
 /*  Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
+function normalizeToCE(value?: string | null): string | null {
+    if (!value) return null;
+    let str = value.trim();
+    const match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (match) {
+        let year = parseInt(match[1], 10);
+        if (year > 2400) {
+            year -= 543;
+            str = `${year}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}${str.slice(match[0].length)}`;
+        }
+    }
+    return str;
+}
+
 function formatThaiDate(value?: string | null, withTime = false) {
     if (!value) return "-";
-    const d = new Date(value);
+    const cleanValue = normalizeToCE(value);
+    if (!cleanValue) return "-";
+    const d = new Date(cleanValue);
     if (isNaN(d.getTime())) return "-";
     try {
         return new Intl.DateTimeFormat("th-TH-u-ca-buddhist", {
@@ -189,17 +205,39 @@ function formatThaiDate(value?: string | null, withTime = false) {
 
 function toDateInputValue(value?: string | null) {
     if (!value) return "";
+    let str = value.trim();
+    const match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+    if (match) {
+        let year = parseInt(match[1], 10);
+        if (year < 2400) year += 543;
+        return `${year}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+    }
     const d = new Date(value);
     if (isNaN(d.getTime())) return "";
-    return d.toISOString().slice(0, 10);
+    let year = d.getFullYear();
+    if (year < 2400) year += 543;
+    const m = (d.getMonth() + 1).toString().padStart(2, "0");
+    const day = d.getDate().toString().padStart(2, "0");
+    return `${year}-${m}-${day}`;
 }
 
 function toDateTimeInputValue(value?: string | null) {
     if (!value) return "";
+    let str = value.trim();
+    const match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2}))?/);
+    if (match) {
+        let year = parseInt(match[1], 10);
+        if (year < 2400) year += 543;
+        const timePart = match[4] ? `T${match[4].padStart(2, "0")}:${match[5].padStart(2, "0")}` : "";
+        return `${year}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}${timePart}`;
+    }
     const d = new Date(value);
     if (isNaN(d.getTime())) return "";
+    let year = d.getFullYear();
+    if (year < 2400) year += 543;
     const offset = d.getTimezoneOffset();
     const local = new Date(d.getTime() - offset * 60000);
+    local.setFullYear(year);
     return local.toISOString().slice(0, 16);
 }
 
@@ -623,9 +661,9 @@ export default function TaskDetailPage() {
     function buildUpdateBody(source: TaskData) {
         return {
             name: source.name,
-            date: source.date,
+            date: normalizeToCE(source.date),
             memo_no: source.memo_no ? convertThaiDigits(source.memo_no) : source.memo_no,
-            memo_date: source.memo_date,
+            memo_date: normalizeToCE(source.memo_date),
             sender: source.sender,
             recipient_to: source.recipient_to,
             notes: source.notes,
@@ -635,11 +673,11 @@ export default function TaskDetailPage() {
             task_detail: source.task_detail,
             urgency_level: source.urgency_level,
             secret_level: source.secret_level,
-            meeting_date: source.meeting_date,
-            reply_due_date: source.reply_due_date,
+            meeting_date: normalizeToCE(source.meeting_date),
+            reply_due_date: normalizeToCE(source.reply_due_date),
             receive_no: source.receive_no,
-            receive_date: source.date,
-            sign_date: source.sign_date,
+            receive_date: normalizeToCE(source.date),
+            sign_date: normalizeToCE(source.sign_date),
         };
     }
 
@@ -1080,6 +1118,7 @@ export default function TaskDetailPage() {
                                         type="text"
                                         value={draft.memo_no || ""}
                                         onChange={(e) => updateDraft({ memo_no: e.target.value })}
+                                        autoComplete="off"
                                         className={inputClass}
                                     />
                                 ) : (
@@ -1092,6 +1131,7 @@ export default function TaskDetailPage() {
                                         type="date"
                                         value={toDateInputValue(draft.memo_date)}
                                         onChange={(e) => updateDraft({ memo_date: e.target.value })}
+                                        autoComplete="off"
                                         className={inputClass}
                                     />
                                 ) : (
@@ -1128,6 +1168,7 @@ export default function TaskDetailPage() {
                                         type="number"
                                         value={draft.receive_no ?? ""}
                                         onChange={(e) => updateDraft({ receive_no: e.target.value ? Number(e.target.value) : null })}
+                                        autoComplete="off"
                                         className={inputClass}
                                     />
                                 ) : (
@@ -1145,6 +1186,7 @@ export default function TaskDetailPage() {
                                         type="date"
                                         value={toDateInputValue(draft.sign_date)}
                                         onChange={(e) => updateDraft({ sign_date: e.target.value })}
+                                        autoComplete="off"
                                         className={inputClass}
                                     />
                                 ) : (
@@ -1340,6 +1382,7 @@ export default function TaskDetailPage() {
                                         type="datetime-local"
                                         value={toDateTimeInputValue(draft.meeting_date)}
                                         onChange={(e) => updateDraft({ meeting_date: e.target.value })}
+                                        autoComplete="off"
                                         className={inputClass}
                                     />
                                 ) : (
@@ -1352,6 +1395,7 @@ export default function TaskDetailPage() {
                                         type="datetime-local"
                                         value={toDateTimeInputValue(draft.reply_due_date)}
                                         onChange={(e) => updateDraft({ reply_due_date: e.target.value })}
+                                        autoComplete="off"
                                         className={inputClass}
                                     />
                                 ) : (

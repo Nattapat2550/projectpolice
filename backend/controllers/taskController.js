@@ -27,32 +27,62 @@ const isValidUUID = (uuid) => {
 
 // Helper function to parse Thai date string into YYYY-MM-DD
 const parseThaiDateToIso = (dateStr) => {
-  if (!dateStr || typeof dateStr !== 'string') return null;
+  if (!dateStr) return null;
+  if (typeof dateStr !== 'string') {
+    if (dateStr instanceof Date && !isNaN(dateStr.getTime())) {
+      let y = dateStr.getFullYear();
+      if (y > 2400) y -= 543;
+      const m = (dateStr.getMonth() + 1).toString().padStart(2, '0');
+      const d = dateStr.getDate().toString().padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    return null;
+  }
   
-  // If it's already in YYYY-MM-DD format, return it
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr.trim())) return dateStr.trim();
-  
+  const trimmed = dateStr.trim();
+  if (!trimmed) return null;
+
   // Convert Thai numerals to Arabic numerals
   const thaiNumerals = { '๐':'0', '๑':'1', '๒':'2', '๓':'3', '๔':'4', '๕':'5', '๖':'6', '๗':'7', '๘':'8', '๙':'9' };
-  let normalizedStr = dateStr.replace(/[๐-๙]/g, match => thaiNumerals[match]);
-  
+  let normalizedStr = trimmed.replace(/[๐-๙]/g, match => thaiNumerals[match]);
+
+  // Check ISO format YYYY-MM-DD or YYYY-MM-DDTHH:mm / YYYY-MM-DD HH:mm:ss
+  const isoMatch = normalizedStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (isoMatch) {
+    let y = parseInt(isoMatch[1], 10);
+    if (y > 2400) y -= 543;
+    const m = isoMatch[2].padStart(2, '0');
+    const d = isoMatch[3].padStart(2, '0');
+    const datePart = `${y}-${m}-${d}`;
+    if (isoMatch[4] !== undefined && isoMatch[5] !== undefined) {
+      const hh = isoMatch[4].padStart(2, '0');
+      const mm = isoMatch[5].padStart(2, '0');
+      const ss = isoMatch[6] ? isoMatch[6].padStart(2, '0') : null;
+      return `${datePart} ${hh}:${mm}${ss ? `:${ss}` : ''}`;
+    }
+    return datePart;
+  }
+
+  // Check Thai text date format
   const thaiMonths = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
   const thaiMonthsAbbr = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
   
-  const regex = /(\d{1,2})\s*(.+?)\s*(\d{4})/;
+  const regex = /(\d{1,2})\s*(.+?)\s*(\d{2,4})/;
   const match = normalizedStr.match(regex);
   
   if (!match) return null;
   
-  const day = parseInt(match[1]).toString().padStart(2, '0');
+  const day = parseInt(match[1], 10).toString().padStart(2, '0');
   const monthStr = match[2].trim();
-  let year = parseInt(match[3]);
-  
+  let year = parseInt(match[3], 10);
+
+  if (year < 100) year += 2500;
   if (year > 2400) year -= 543;
   
   let monthIndex = thaiMonths.findIndex(m => m === monthStr);
   if (monthIndex === -1) monthIndex = thaiMonthsAbbr.findIndex(m => m === monthStr);
   if (monthIndex === -1) monthIndex = thaiMonths.findIndex(m => monthStr.includes(m));
+  if (monthIndex === -1) monthIndex = thaiMonthsAbbr.findIndex(m => monthStr.includes(m.replace('.', '')));
   
   if (monthIndex === -1) return null;
   
@@ -481,12 +511,12 @@ exports.updateTaskDetail = async (req, res) => {
       const { id } = req.params;
       const { name, date, notes, assignments, isUrgent, main_text, task_detail, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, receive_no, recipient_to, additional_docs, sender, memo_no, memo_date } = req.body;
   
-      const validDate = (date === "" || !date) ? null : date;
+      const validDate = (date === "" || !date) ? null : parseThaiDateToIso(date) || date;
       const urgentValue = isUrgent !== undefined ? isUrgent : null; 
       
-      const mDate = (meeting_date === "" || !meeting_date) ? null : meeting_date;
-      const rDate = (reply_due_date === "" || !reply_due_date) ? null : reply_due_date;
-      const sDate = (sign_date === "" || !sign_date) ? null : sign_date;
+      const mDate = (meeting_date === "" || !meeting_date) ? null : parseThaiDateToIso(meeting_date) || meeting_date;
+      const rDate = (reply_due_date === "" || !reply_due_date) ? null : parseThaiDateToIso(reply_due_date) || reply_due_date;
+      const sDate = (sign_date === "" || !sign_date) ? null : parseThaiDateToIso(sign_date) || sign_date;
       const memoDate = (memo_date === "" || !memo_date) ? null : parseThaiDateToIso(memo_date) || memo_date;
 
       const cleanMemoNo = memo_no ? convertThaiDigits(memo_no) : memo_no;

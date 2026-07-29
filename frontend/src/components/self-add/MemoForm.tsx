@@ -141,13 +141,29 @@ export default function MemoForm() {
         });
     }
 
-    // 💡 ดึง ID ของคนที่กำลังล็อกอินอยู่
     const currentUserId = typeof window !== 'undefined' ? String(localStorage.getItem("user_id") || localStorage.getItem("userId") || "") : "";
+
+    const normalizeFormDateStr = (dateStr: string) => {
+      if (!dateStr) return dateStr;
+      const match = dateStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+      if (match) {
+        let year = parseInt(match[1], 10);
+        if (year > 2400) {
+          year -= 543;
+          return `${year}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}${dateStr.slice(match[0].length)}`;
+        }
+      }
+      return dateStr;
+    };
 
     const payload = {
       ...formData,
+      memo_date: normalizeFormDateStr(formData.memo_date),
+      due_date: normalizeFormDateStr(formData.due_date.length === 16 ? `${formData.due_date}:00` : formData.due_date),
+      sign_date: normalizeFormDateStr(formData.sign_date),
+      meeting_date: normalizeFormDateStr(formData.meeting_date),
+      reply_due_date: normalizeFormDateStr(formData.reply_due_date),
       document_id: null,
-      due_date: formData.due_date.length === 16 ? `${formData.due_date}:00` : formData.due_date,
       assignments: validAssignments,
       created_by: currentUserId, // 💡 เพิ่มบรรทัดนี้: ส่ง ID ไปบันทึกลง Database
       createdBy: currentUserId   // 💡 เพิ่มเผื่อไว้ในกรณีที่ Backend รับเป็นชื่อนี้
@@ -207,11 +223,11 @@ export default function MemoForm() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>เลขที่ Memo</label>
-              <input type="text" name="memo_no" value={formData.memo_no} onChange={handleMainChange} placeholder="เช่น 123/2567" required className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+              <input type="text" name="memo_no" value={formData.memo_no} onChange={handleMainChange} placeholder="เช่น 123/2567" autoComplete="off" required className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
             </div>
             <div>
               <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>วันที่ Memo</label>
-              <input type="date" name="memo_date" value={formData.memo_date} onChange={handleMainChange} required className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+              <input type="date" name="memo_date" value={formData.memo_date} onChange={handleMainChange} autoComplete="off" required className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
             </div>
           </div>
 
@@ -300,11 +316,11 @@ export default function MemoForm() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>วันครบกำหนด (Due Date)</label>
-              <input type="datetime-local" name="due_date" value={formData.due_date} onChange={handleMainChange} required className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+              <input type="datetime-local" name="due_date" value={formData.due_date} onChange={handleMainChange} autoComplete="off" required className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
             </div>
             <div>
               <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>วันที่ลงนาม (Sign Date)</label>
-              <input type="date" name="sign_date" value={formData.sign_date} onChange={handleMainChange} className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+              <input type="date" name="sign_date" value={formData.sign_date} onChange={handleMainChange} autoComplete="off" className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
             </div>
           </div>
 
@@ -312,11 +328,11 @@ export default function MemoForm() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>วันประชุม (Meeting Date)</label>
-              <input type="datetime-local" name="meeting_date" value={formData.meeting_date} onChange={handleMainChange} className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+              <input type="datetime-local" name="meeting_date" value={formData.meeting_date} onChange={handleMainChange} autoComplete="off" className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
             </div>
             <div>
               <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>วันส่งแบบตอบรับ (Reply Due Date)</label>
-              <input type="datetime-local" name="reply_due_date" value={formData.reply_due_date} onChange={handleMainChange} className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+              <input type="datetime-local" name="reply_due_date" value={formData.reply_due_date} onChange={handleMainChange} autoComplete="off" className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
             </div>
           </div>
 
