@@ -13,6 +13,38 @@ interface MonthlyProgressChartProps {
     availableYears: number[];
 }
 
+function getTaskYearCE(task: TaskFromAPI): number | null {
+    if (task.receive_year && Number(task.receive_year) > 0) {
+        const rYear = Number(task.receive_year);
+        return rYear > 2400 ? rYear - 543 : rYear;
+    }
+    const dateStr = task.memo_date || task.date || task.createdAt;
+    if (dateStr) {
+        const match = String(dateStr).match(/^(\d{4})/);
+        if (match) {
+            let y = parseInt(match[1], 10);
+            return y > 2400 ? y - 543 : y;
+        }
+        const d = new Date(dateStr);
+        if (!isNaN(d.getTime())) {
+            let y = d.getFullYear();
+            return y > 2400 ? y - 543 : y;
+        }
+    }
+    return null;
+}
+
+function getTaskMonth(task: TaskFromAPI): number | null {
+    const dateStr = task.memo_date || task.date || task.createdAt;
+    if (dateStr) {
+        const d = new Date(dateStr);
+        if (!isNaN(d.getTime())) {
+            return d.getMonth();
+        }
+    }
+    return null;
+}
+
 export default function MonthlyProgressChart({
     rawTasks,
     selectedYear,
@@ -33,15 +65,12 @@ export default function MonthlyProgressChart({
         let following = 0;
 
         rawTasks.forEach(task => {
-            const dateStr = task.date || task.createdAt;
-            if (!dateStr) return;
+            const taskYearCE = getTaskYearCE(task);
+            const taskMonth = getTaskMonth(task);
 
-            const taskDate = new Date(dateStr);
-            if (isNaN(taskDate.getTime())) return;
+            if (selectedYear !== 'all' && taskYearCE !== selectedYear) return;
 
-            if (selectedYear !== 'all' && taskDate.getFullYear() !== selectedYear) return;
-
-            if (taskDate.getMonth() === monthIndex) {
+            if (taskMonth === monthIndex) {
                 total += 1;
                 if (task.status === 'completed') {
                     completed += 1;

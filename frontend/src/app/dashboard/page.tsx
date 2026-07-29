@@ -12,6 +12,38 @@ import MonthlyProgressChart from '@/components/dashboard/MonthlyProgressChart';
 // นำเข้า Types
 import { UserStat, TaskFromAPI, SortKey } from '@/components/dashboard/Types';
 
+function getTaskYearCE(task: TaskFromAPI): number | null {
+    if (task.receive_year && Number(task.receive_year) > 0) {
+        const rYear = Number(task.receive_year);
+        return rYear > 2400 ? rYear - 543 : rYear;
+    }
+    const dateStr = task.memo_date || task.date || task.createdAt;
+    if (dateStr) {
+        const match = String(dateStr).match(/^(\d{4})/);
+        if (match) {
+            let y = parseInt(match[1], 10);
+            return y > 2400 ? y - 543 : y;
+        }
+        const d = new Date(dateStr);
+        if (!isNaN(d.getTime())) {
+            let y = d.getFullYear();
+            return y > 2400 ? y - 543 : y;
+        }
+    }
+    return null;
+}
+
+function getTaskMonth(task: TaskFromAPI): number | null {
+    const dateStr = task.memo_date || task.date || task.createdAt;
+    if (dateStr) {
+        const d = new Date(dateStr);
+        if (!isNaN(d.getTime())) {
+            return d.getMonth();
+        }
+    }
+    return null;
+}
+
 export default function Dashboard() {
     const [rawTasks, setRawTasks] = useState<TaskFromAPI[]>([]);
     const [loading, setLoading] = useState(true);
@@ -58,16 +90,14 @@ export default function Dashboard() {
         fetchDashboardData();
     }, []);
 
-    // รายชื่อปีทั้งหมดที่มีในข้อมูล
+    // รายชื่อปีทะเบียนทั้งหมดที่มีในข้อมูล
     const availableYears = useMemo(() => {
         const yearsSet = new Set<number>();
         yearsSet.add(new Date().getFullYear());
         rawTasks.forEach(task => {
-            const dateStr = task.date || task.createdAt;
-            if (!dateStr) return;
-            const taskDate = new Date(dateStr);
-            if (!isNaN(taskDate.getTime())) {
-                yearsSet.add(taskDate.getFullYear());
+            const yearCE = getTaskYearCE(task);
+            if (yearCE) {
+                yearsSet.add(yearCE);
             }
         });
         return Array.from(yearsSet).sort((a, b) => b - a);
@@ -78,16 +108,11 @@ export default function Dashboard() {
         const userStatsObj: Record<string, UserStat> = {};
 
         rawTasks.forEach(task => {
-            const dateStr = task.date || task.createdAt;
-            if (dateStr) {
-                const taskDate = new Date(dateStr);
-                if (!isNaN(taskDate.getTime())) {
-                    if (selectedYear !== 'all' && taskDate.getFullYear() !== selectedYear) return;
-                    if (selectedMonth !== null && taskDate.getMonth() !== selectedMonth) return;
-                }
-            } else if (selectedMonth !== null) {
-                return;
-            }
+            const taskYearCE = getTaskYearCE(task);
+            const taskMonth = getTaskMonth(task);
+
+            if (selectedYear !== 'all' && taskYearCE !== selectedYear) return;
+            if (selectedMonth !== null && taskMonth !== selectedMonth) return;
 
             const assignees = Array.isArray(task.assigneesData) ? task.assigneesData : [];
             if (assignees.length === 0) {

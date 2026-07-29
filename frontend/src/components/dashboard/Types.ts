@@ -12,6 +12,9 @@ export interface TaskFromAPI {
     createdAt: string;
     status: string; 
     isUrgent: boolean;
+    receive_year?: number | string;
+    memo_date?: string;
+    receive_no?: number | string;
 }
 
 export interface TaskDetail {
