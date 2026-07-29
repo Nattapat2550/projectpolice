@@ -454,10 +454,6 @@ export default function Uploaded({ extractedData, onClearExtractedData }: Upload
                                                         <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.เรื่อง || ''} onChange={(e) => handleMemoChange(fileIdx, index, "เรื่อง", e.target.value)} />
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <strong className="w-28 shrink-0">เอกสารแนบเพิ่มเติม:</strong>
-                                                        <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.additional_docs || ''} onChange={(e) => handleMemoChange(fileIdx, index, "additional_docs", e.target.value)} />
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
                                                         <strong className="w-28 shrink-0">หมายเหตุ:</strong>
                                                         <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.notes || memo.หมายเหตุ || ''} onChange={(e) => { handleMemoChange(fileIdx, index, "notes", e.target.value); handleMemoChange(fileIdx, index, "หมายเหตุ", e.target.value); }} />
                                                     </div>

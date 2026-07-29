@@ -17,10 +17,10 @@ const getTextColor = (bgColor: string) => {
 
 const formatText = (text: string) => {
     if (!text) return "ไม่พบข้อความเนื้อหาในเอกสาร";
-    const parts = text.split(/(\*\*.*?\*\*)/g);
+    const parts = text.split(/(\*\*[\s\S]*?\*\*)/g);
     return parts.map((part, index) => {
-        if (part.startsWith("**") && part.endsWith("**")) {
-            return <strong key={index}>{part.slice(2, -2)}</strong>;
+        if (part.startsWith("**") && part.endsWith("**") && part.length >= 4) {
+            return <strong key={index} className="font-bold text-[1rem] block my-1" style={{ color: "var(--header)" }}>{part.slice(2, -2)}</strong>;
         }
         return part;
     });

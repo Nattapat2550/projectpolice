@@ -48,6 +48,7 @@ router.put('/:id/status', protect, updateTaskStatus);
 router.get('/:id', getTaskById);
 router.get('/:id/logs', protect, getTaskLogs);
 router.put('/:id', protect, updateTaskDetail);
+router.put('/:id/details', protect, updateTaskDetail);
 router.post('/:id/overwrite-doc', protect, upload.single('file'), overwriteTaskDocument);
 router.post('/:id/attach-doc', protect, upload.array('files', 10), attachTaskDocument);
 router.put('/:id/attach-doc/:docId/note', protect, updateTaskAttachmentNote);

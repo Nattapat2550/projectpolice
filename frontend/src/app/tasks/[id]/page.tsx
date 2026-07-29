@@ -266,6 +266,28 @@ function ReadValue({ children }: { children: React.ReactNode }) {
     return <div className="text-[1.05rem] break-words">{children}</div>;
 }
 
+function renderFormattedText(text: string | null | undefined) {
+    if (!text) return null;
+    const parts = text.split(/(\*\*[\s\S]*?\*\*)/g);
+    return parts.map((part, index) => {
+        if (part.startsWith("**") && part.endsWith("**") && part.length >= 4) {
+            const content = part.slice(2, -2);
+            return (
+                <strong key={index} className="font-bold text-[1rem] block my-1" style={{ color: "var(--header)" }}>
+                    {content}
+                </strong>
+            );
+        }
+        return part;
+    });
+}
+
+function convertThaiDigits(str?: string | null): string {
+    if (!str) return "";
+    const thaiDigits = ['๐', '๑', '๒', '๓', '๔', '๕', '๖', '๗', '๘', '๙'];
+    return String(str).replace(/[๐-๙]/g, (m) => thaiDigits.indexOf(m).toString());
+}
+
 const inputClass =
     "w-full rounded-lg border border-(--shadow) bg-(--button) px-3 py-2.5 text-base outline-none transition focus:border-(--header) focus:ring-2 focus:ring-(--header)/20";
 
@@ -289,10 +311,60 @@ export default function TaskDetailPage() {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const [showLogs, setShowLogs] = useState(false);
     const [uploadingDoc, setUploadingDoc] = useState(false);
+    const [reviewModalData, setReviewModalData] = useState<any | null>(null);
     const overwriteInputRef = useRef<HTMLInputElement>(null);
     const attachInputRef = useRef<HTMLInputElement>(null);
     const titleRef = useRef<HTMLTextAreaElement>(null);
     const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+    const handleConfirmReviewSave = async () => {
+        if (!reviewModalData || !id) return;
+        try {
+            setSaving(true);
+            const payload: Record<string, any> = {};
+            if (reviewModalData.title?.apply) payload.name = reviewModalData.title.newVal;
+            if (reviewModalData.memo_no?.apply) payload.memo_no = convertThaiDigits(reviewModalData.memo_no.newVal);
+            if (reviewModalData.sender?.apply) payload.sender = reviewModalData.sender.newVal;
+            if (reviewModalData.recipient_to?.apply) payload.recipient_to = reviewModalData.recipient_to.newVal;
+            if (reviewModalData.memo_date?.apply) payload.memo_date = reviewModalData.memo_date.newVal;
+            if (reviewModalData.urgency_level?.apply) {
+                payload.urgency_level = reviewModalData.urgency_level.newVal;
+                payload.is_urgent = reviewModalData.urgency_level.newVal !== "ปกติ";
+            }
+            if (reviewModalData.secret_level?.apply) payload.secret_level = reviewModalData.secret_level.newVal;
+            if (reviewModalData.assignments?.apply) payload.assignments = reviewModalData.assignments.newVal;
+            if (reviewModalData.main_text?.apply) payload.main_text = reviewModalData.main_text.newVal;
+            if (reviewModalData.task_detail?.apply) payload.task_detail = reviewModalData.task_detail.newVal;
+
+            const token = getToken();
+            const res = await fetch(`${backendUrl}/api/v1/tasks/${id}`, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (res.ok) {
+                setReviewModalData(null);
+                Swal.fire({
+                    icon: "success",
+                    title: "บันทึกข้อมูลสำเร็จ!",
+                    text: "อัปเดตข้อมูลที่เลือกเรียบร้อยแล้ว",
+                    timer: 2000,
+                    showConfirmButton: false,
+                });
+                fetchTask();
+            } else {
+                throw new Error("ไม่สามารถอัปเดตข้อมูลได้");
+            }
+        } catch (err: any) {
+            Swal.fire({ icon: "error", title: "เกิดข้อผิดพลาด", text: err.message || "ไม่สามารถอัปเดตข้อมูลได้" });
+        } finally {
+            setSaving(false);
+        }
+    };
 
     useIsoLayoutEffect(() => {
         if (!titleRef.current) return;
@@ -363,22 +435,28 @@ export default function TaskDetailPage() {
             });
             const data = await res.json();
             if (res.ok && data.success) {
-                const memo = data.data?.extractedMemo;
-                let summaryHtml = `<div style="text-align: left; font-size: 0.9rem; margin-top: 0.5rem; line-height: 1.6;">`;
-                summaryHtml += `<p style="color: #059669; font-weight: bold; margin-bottom: 0.5rem;">✓ อัปเดตข้อมูลเอกสารสำเร็จเรียบร้อยแล้ว</p>`;
-                if (memo) {
-                    if (memo.ที่) summaryHtml += `<p><b>• เลขที่ Memo:</b> ${memo.ที่}</p>`;
-                    if (memo.เรื่อง) summaryHtml += `<p><b>• เรื่อง:</b> ${memo.เรื่อง}</p>`;
-                    if (memo.จาก) summaryHtml += `<p><b>• ส่วนราชการ (จาก):</b> ${memo.จาก}</p>`;
-                }
-                summaryHtml += `</div>`;
+                const memo = data.data?.extractedMemo || {};
+                Swal.close();
+                const memoNoClean = convertThaiDigits(memo.ที่);
+                const assignStr = Array.isArray(memo.assignments)
+                    ? memo.assignments.map((a: any) => typeof a === 'string' ? a : a.responsible_person || a.role_or_name || "").filter(Boolean).join(", ")
+                    : (memo.assignments || "");
 
-                await Swal.fire({
-                    icon: "success",
-                    title: "อัปโหลดข้อมูลทับสำเร็จ!",
-                    html: summaryHtml,
-                    confirmButtonText: "ตกลง",
-                    confirmButtonColor: "#059669"
+                const currentAssignStr = Array.isArray(taskData?.assignments)
+                    ? taskData.assignments.map((a: any) => a.user_name || a.role_or_name || "").filter(Boolean).join(", ")
+                    : "";
+
+                setReviewModalData({
+                    title: { oldVal: taskData?.name || "", newVal: memo.เรื่อง || "", apply: Boolean(memo.เรื่อง) },
+                    memo_no: { oldVal: convertThaiDigits(taskData?.memo_no) || "", newVal: memoNoClean || "", apply: Boolean(memoNoClean) },
+                    sender: { oldVal: taskData?.sender || "", newVal: memo.จาก || memo.sender || "", apply: Boolean(memo.จาก || memo.sender) },
+                    recipient_to: { oldVal: taskData?.recipient_to || "", newVal: memo.เรียน || memo.recipient_to || "", apply: Boolean(memo.เรียน || memo.recipient_to) },
+                    memo_date: { oldVal: taskData?.memo_date ? String(taskData.memo_date).split("T")[0] : "", newVal: memo.วันที่ || "", apply: Boolean(memo.วันที่) },
+                    urgency_level: { oldVal: taskData?.urgency_level || "ปกติ", newVal: memo.urgency_level || "ปกติ", apply: Boolean(memo.urgency_level && memo.urgency_level !== "ปกติ") },
+                    secret_level: { oldVal: taskData?.secret_level || "ปกติ", newVal: memo.secret_level || "ปกติ", apply: Boolean(memo.secret_level && memo.secret_level !== "ปกติ") },
+                    assignments: { oldVal: currentAssignStr || "", newVal: assignStr || "", apply: Boolean(assignStr) },
+                    main_text: { oldVal: taskData?.main_text || "", newVal: memo.main_text || "", apply: Boolean(memo.main_text) },
+                    task_detail: { oldVal: taskData?.task_detail || "", newVal: memo.task_detail || "", apply: Boolean(memo.task_detail) },
                 });
                 fetchTask();
             } else {
@@ -1129,7 +1207,7 @@ export default function TaskDetailPage() {
                                 className={`${inputClass} resize-y leading-relaxed`}
                             />
                         ) : (
-                            <p className="whitespace-pre-wrap leading-relaxed">{taskData.main_text || "-"}</p>
+                            <div className="whitespace-pre-wrap leading-relaxed">{renderFormattedText(taskData.main_text) || "-"}</div>
                         )}
                     </SectionCard>
 
@@ -1142,7 +1220,7 @@ export default function TaskDetailPage() {
                                 className={`${inputClass} resize-y leading-relaxed`}
                             />
                         ) : (
-                            <p className="whitespace-pre-wrap leading-relaxed">{taskData.task_detail || "-"}</p>
+                            <div className="whitespace-pre-wrap leading-relaxed">{renderFormattedText(taskData.task_detail) || "-"}</div>
                         )}
                     </SectionCard>
 
@@ -1514,6 +1592,137 @@ export default function TaskDetailPage() {
                         </div>
                     )}
                 </SectionCard>
+            )}
+
+            {/* Overwrite Review Modal */}
+            {reviewModalData && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs overflow-y-auto">
+                    <div className="bg-(--button) border border-(--shadow) text-(--foreground) w-full max-w-3xl rounded-2xl p-6 shadow-2xl space-y-5 my-8 max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between border-b border-(--shadow) pb-3">
+                            <h3 className="text-xl font-bold flex items-center gap-2" style={{ color: "var(--header)" }}>
+                                <FileText size={22} />
+                                ตรวจสอบและเลือกข้อมูลหลังสแกนเอกสาร
+                            </h3>
+                            <button
+                                onClick={() => setReviewModalData(null)}
+                                className="p-1.5 rounded-full hover:bg-(--wrapper) transition cursor-pointer"
+                            >
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <p className="text-sm opacity-80">
+                            ระบบได้ทำการสแกนข้อมูลจากไฟล์ใหม่เรียบร้อยแล้ว โปรดเลือกและตรวจสอบข้อมูลที่ต้องการอัปเดตทับข้อมูลเดิม:
+                        </p>
+
+                        <div className="space-y-4">
+                            {[
+                                { key: "title", label: "ชื่อเรื่อง", type: "text" },
+                                { key: "memo_no", label: "เลขที่หนังสือ (เลขอารบิก)", type: "text" },
+                                { key: "sender", label: "จาก (ส่วนราชการ)", type: "text" },
+                                { key: "recipient_to", label: "เรียน (ถึง)", type: "text" },
+                                { key: "memo_date", label: "วันที่หนังสือ", type: "text" },
+                                { key: "urgency_level", label: "ระดับความเร่งด่วน", type: "select", options: URGENCY_LEVELS },
+                                { key: "secret_level", label: "ชั้นความลับ", type: "select", options: SECRET_LEVELS },
+                                { key: "assignments", label: "ผู้รับผิดชอบ / มอบหมายงาน", type: "text" },
+                                { key: "main_text", label: "เนื้อหาเรื่อง / สาระสำคัญ", type: "textarea" },
+                                { key: "task_detail", label: "รายละเอียดการมอบหมายงาน", type: "textarea" },
+                            ].map((field) => {
+                                const item = reviewModalData[field.key];
+                                if (!item) return null;
+                                return (
+                                    <div key={field.key} className="p-3.5 rounded-xl border border-(--shadow)/60 bg-(--container)/50 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <label className="flex items-center gap-2 font-bold text-sm cursor-pointer" style={{ color: "var(--header)" }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={item.apply}
+                                                    onChange={(e) =>
+                                                        setReviewModalData((prev: any) => ({
+                                                            ...prev,
+                                                            [field.key]: { ...prev[field.key], apply: e.target.checked },
+                                                        }))
+                                                    }
+                                                    className="w-4 h-4 rounded accent-blue-600 cursor-pointer"
+                                                />
+                                                อัปเดต {field.label}
+                                            </label>
+                                            {item.oldVal && (
+                                                <span className="text-xs opacity-60 truncate max-w-xs">
+                                                    เดิม: {item.oldVal}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {field.type === "textarea" ? (
+                                            <textarea
+                                                value={item.newVal}
+                                                disabled={!item.apply}
+                                                onChange={(e) =>
+                                                    setReviewModalData((prev: any) => ({
+                                                        ...prev,
+                                                        [field.key]: { ...prev[field.key], newVal: e.target.value },
+                                                    }))
+                                                }
+                                                rows={3}
+                                                className={`${inputClass} text-sm resize-y leading-relaxed disabled:opacity-40`}
+                                            />
+                                        ) : field.type === "select" ? (
+                                            <select
+                                                value={item.newVal}
+                                                disabled={!item.apply}
+                                                onChange={(e) =>
+                                                    setReviewModalData((prev: any) => ({
+                                                        ...prev,
+                                                        [field.key]: { ...prev[field.key], newVal: e.target.value },
+                                                    }))
+                                                }
+                                                className={`${inputClass} text-sm disabled:opacity-40`}
+                                            >
+                                                {field.options?.map((opt: string) => (
+                                                    <option key={opt} value={opt}>
+                                                        {opt}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                value={item.newVal}
+                                                disabled={!item.apply}
+                                                onChange={(e) =>
+                                                    setReviewModalData((prev: any) => ({
+                                                        ...prev,
+                                                        [field.key]: { ...prev[field.key], newVal: e.target.value },
+                                                    }))
+                                                }
+                                                className={`${inputClass} text-sm disabled:opacity-40`}
+                                            />
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        <div className="flex items-center justify-end gap-3 pt-3 border-t border-(--shadow)">
+                            <button
+                                type="button"
+                                onClick={() => setReviewModalData(null)}
+                                className="px-4 py-2 rounded-xl text-sm font-medium bg-(--wrapper) hover:bg-(--shadow) transition cursor-pointer"
+                            >
+                                ยกเลิก (คงข้อมูลเดิม)
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleConfirmReviewSave}
+                                disabled={saving}
+                                className="px-5 py-2 rounded-xl text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-700 transition cursor-pointer shadow-sm disabled:opacity-50"
+                            >
+                                {saving ? "กำลังบันทึก..." : "ยืนยันบันทึกข้อมูลที่เลือก"}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

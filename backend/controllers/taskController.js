@@ -13,6 +13,12 @@ const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID;
 // กำหนดโฟลเดอร์สำหรับเก็บไฟล์ชั่วคราวให้ชัดเจน (แก้ไข path ให้ตรงกับที่ตั้งโฟลเดอร์ uploads ของคุณ)
 const UPLOADS_DIR = path.resolve(__dirname, '../../uploads'); 
 
+const convertThaiDigits = (str) => {
+  if (!str) return str;
+  const thaiDigits = ['๐', '๑', '๒', '๓', '๔', '๕', '๖', '๗', '๘', '๙'];
+  return String(str).replace(/[๐-๙]/g, (m) => thaiDigits.indexOf(m).toString());
+};
+
 // Helper function to validate UUID
 const isValidUUID = (uuid) => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -473,7 +479,7 @@ exports.updateTaskDetail = async (req, res) => {
     try {
       await client.query('BEGIN');
       const { id } = req.params;
-      const { name, date, notes, assignments, isUrgent, main_text, task_detail, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, receive_no, recipient_to, additional_docs } = req.body;
+      const { name, date, notes, assignments, isUrgent, main_text, task_detail, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, receive_no, recipient_to, additional_docs, sender, memo_no, memo_date } = req.body;
   
       const validDate = (date === "" || !date) ? null : date;
       const urgentValue = isUrgent !== undefined ? isUrgent : null; 
@@ -481,6 +487,9 @@ exports.updateTaskDetail = async (req, res) => {
       const mDate = (meeting_date === "" || !meeting_date) ? null : meeting_date;
       const rDate = (reply_due_date === "" || !reply_due_date) ? null : reply_due_date;
       const sDate = (sign_date === "" || !sign_date) ? null : sign_date;
+      const memoDate = (memo_date === "" || !memo_date) ? null : parseThaiDateToIso(memo_date) || memo_date;
+
+      const cleanMemoNo = memo_no ? convertThaiDigits(memo_no) : memo_no;
 
       await client.query(
         `UPDATE tasks 
@@ -499,13 +508,16 @@ exports.updateTaskDetail = async (req, res) => {
              receive_no = COALESCE($13, receive_no),
              recipient_to = COALESCE($18, recipient_to),
              additional_docs = COALESCE($19, additional_docs),
+             sender = COALESCE($20, sender),
+             memo_no = COALESCE($21, memo_no),
+             memo_date = COALESCE($22, memo_date),
              updated_at = NOW() 
          WHERE id = $14`,
         [
           name, validDate, notes, urgentValue, main_text, task_detail, urgency_level, secret_level, 
           receive_date, sDate, mDate, rDate, receive_no, id,
           req.body.hasOwnProperty('sign_date'), req.body.hasOwnProperty('meeting_date'), req.body.hasOwnProperty('reply_due_date'),
-          recipient_to, additional_docs
+          recipient_to, additional_docs, sender, cleanMemoNo, memoDate
         ]
       );
 
@@ -514,52 +526,23 @@ exports.updateTaskDetail = async (req, res) => {
       await syncTaskDocumentNotesFromText(client, id, additional_docs);
     }
 
-    if (Array.isArray(assignments)) {
-      const keepAssignmentIds = assignments
-        .map(a => a.assignment_id)
-        .filter(id => id != null && id !== '');
+    if (req.body.hasOwnProperty('assignments') && assignments !== undefined) {
+      let assignList = [];
+      if (typeof assignments === 'string') {
+        assignList = assignments.split(/[,;\n]/).map(s => s.trim()).filter(Boolean).map(role => ({ role_or_name: role }));
+      } else if (Array.isArray(assignments)) {
+        assignList = assignments;
+      }
 
-      if (keepAssignmentIds.length > 0) {
-        const deletedAssigns = await client.query(
-          `SELECT id FROM task_assignments WHERE task_id = $1 AND NOT (id = ANY($2::uuid[]))`,
-          [id, keepAssignmentIds]
+      await client.query(`DELETE FROM task_assignments WHERE task_id = $1`, [id]);
+      for (const assign of assignList) {
+        const roleName = typeof assign === 'string' ? assign : (assign.role_or_name || assign.responsible_person || 'เพิ่มด้วยตนเอง');
+        const userId = (typeof assign === 'object' && isValidUUID(assign.user_id)) ? assign.user_id : null;
+        await client.query(
+          `INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ($1, $2, $3)`,
+          [id, userId, roleName]
         );
-        const delIds = deletedAssigns.rows.map(r => r.id);
-        
-        if (delIds.length > 0) {
-          await client.query(`DELETE FROM task_assignments WHERE task_id = $1 AND NOT (id = ANY($2::uuid[]))`, [id, keepAssignmentIds]);
-        }
-      } else {
-        const allAssigns = await client.query(`SELECT id FROM task_assignments WHERE task_id = $1`, [id]);
-        const allIds = allAssigns.rows.map(r => r.id);
-        if (allIds.length > 0) {
-          await client.query(`DELETE FROM task_assignments WHERE task_id = $1`, [id]);
-        }
       }
-
-      for (const assign of assignments) {
-        let currentAssignmentId = isValidUUID(assign.assignment_id) ? assign.assignment_id : null;
-        const userId = isValidUUID(assign.user_id) ? assign.user_id : null;
-        
-        if (!currentAssignmentId) {
-          const newAssignRes = await client.query(
-            `INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ($1, $2, $3) RETURNING id`,
-            [id, userId, assign.role_or_name || 'เพิ่มด้วยตนเอง']
-          );
-          currentAssignmentId = newAssignRes.rows[0].id;
-        } else {
-          await client.query(
-            `UPDATE task_assignments SET user_id = $1 WHERE id = $2 AND task_id = $3`,
-            [userId, currentAssignmentId, id]
-          );
-        }
-      }
-    } else {
-        const allAssigns = await client.query(`SELECT id FROM task_assignments WHERE task_id = $1`, [id]);
-        const allIds = allAssigns.rows.map(r => r.id);
-        if (allIds.length > 0) {
-          await client.query(`DELETE FROM task_assignments WHERE task_id = $1`, [id]);
-        }
     }
 
     await logTaskAction(client, id, req.user?.id, 'updated_details', { name, date, main_text, urgency_level, secret_level });
@@ -861,6 +844,15 @@ exports.overwriteTaskDocument = async (req, res) => {
         { path: safePath, originalname: formattedFilename, mimetype: file.mimetype },
         DRIVE_FOLDER_ID
       );
+
+      // ลบไฟล์เก่าออกจาก Google Drive หากมีอยู่เดิม
+      if (oldTask.document_id) {
+        const oldDocRes = await client.query('SELECT drive_file_id FROM documents WHERE id = $1', [oldTask.document_id]);
+        if (oldDocRes.rows.length > 0 && oldDocRes.rows[0].drive_file_id) {
+          const oldDriveFileId = oldDocRes.rows[0].drive_file_id;
+          deleteFromDrive(oldDriveFileId).catch(err => console.error('[Overwrite Drive Delete Warning]:', err.message));
+        }
+      }
     } catch (driveErr) {
       console.error('[Overwrite Drive Error]:', driveErr.message);
     }
@@ -881,8 +873,12 @@ exports.overwriteTaskDocument = async (req, res) => {
     );
     const newDocId = docRes.rows[0].id;
 
+    if (primaryMemo.ที่) {
+      primaryMemo.ที่ = convertThaiDigits(primaryMemo.ที่);
+    }
+
     const newTitle = primaryMemo.เรื่อง || null;
-    const newMemoNo = primaryMemo.ที่ || null;
+    const newMemoNo = primaryMemo.ที่ ? convertThaiDigits(primaryMemo.ที่) : null;
     const newMemoDate = parseThaiDateToIso(primaryMemo.วันที่) || null;
     const newSender = primaryMemo.sender || primaryMemo.จาก || null;
     const newRecipientTo = primaryMemo.recipient_to || primaryMemo.เรียน || null;
@@ -892,6 +888,8 @@ exports.overwriteTaskDocument = async (req, res) => {
     const newSignDate = parseThaiDateToIso(primaryMemo.sign_date) || null;
     const newMeetingDate = parseThaiDateToIso(primaryMemo.meeting_date) || null;
     const newReplyDueDate = parseThaiDateToIso(primaryMemo.reply_due_date) || null;
+    const newUrgencyLevel = primaryMemo.urgency_level || null;
+    const newSecretLevel = primaryMemo.secret_level || null;
 
     await client.query(
       `UPDATE tasks SET 
@@ -907,12 +905,14 @@ exports.overwriteTaskDocument = async (req, res) => {
         sign_date = COALESCE($10, sign_date),
         meeting_date = COALESCE($11, meeting_date),
         reply_due_date = COALESCE($12, reply_due_date),
+        urgency_level = COALESCE($14, urgency_level),
+        secret_level = COALESCE($15, secret_level),
         updated_at = NOW()
        WHERE id = $13`,
       [
         newDocId, newTitle, newMemoNo, newMemoDate, newSender, newRecipientTo,
         newAdditionalDocs, newMainText, newTaskDetail, newSignDate, newMeetingDate,
-        newReplyDueDate, id
+        newReplyDueDate, id, newUrgencyLevel, newSecretLevel
       ]
     );
 
@@ -934,10 +934,11 @@ exports.overwriteTaskDocument = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'อัปโหลดเอกสารและอัปเดตข้อมูลทับสำเร็จเรียบร้อย!',
+      message: 'อัปโหลดเอกสารและสกัดข้อมูลสำเร็จ!',
       data: {
         filename: formattedFilename,
-        extractedMemo: primaryMemo
+        extractedMemo: primaryMemo,
+        currentTask: oldTask
       }
     });
   } catch (err) {

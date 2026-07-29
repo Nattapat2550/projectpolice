@@ -548,7 +548,7 @@ exports.parseOcrTextToMemos = function(text) {
     "full_text": text,
     "memos": [
       {
-        "ที่": doc_id,
+        "ที่": convertThaiDigits(doc_id),
         "จาก": sender_from,
         "sender": sender_from,
         "วันที่": doc_date,
@@ -754,6 +754,12 @@ exports.extractDataWithGemini = async (filePath, mimeType, engine = 'gemini') =>
             throw innerError;
           }
         }
+      }
+
+      if (parsedData && Array.isArray(parsedData.memos)) {
+        parsedData.memos.forEach(m => {
+          if (m["ที่"]) m["ที่"] = convertThaiDigits(m["ที่"]);
+        });
       }
 
       return {
