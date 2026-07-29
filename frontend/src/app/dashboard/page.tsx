@@ -71,6 +71,14 @@ export default function Dashboard() {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
+                if (response.status === 401 || response.status === 403) {
+                    localStorage.removeItem("token");
+                    localStorage.removeItem("user_id");
+                    document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                    window.location.href = '/login';
+                    return;
+                }
+
                 if (!response.ok) throw new Error('ไม่สามารถดึงข้อมูลได้');
 
                 const tasksArray: TaskFromAPI[] = await response.json();

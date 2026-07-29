@@ -18,6 +18,17 @@ export default function UserManagementPage() {
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
 
   useEffect(() => {
+    const role = typeof window !== 'undefined' ? localStorage.getItem("user_role") : null;
+    if (role && role !== "superadmin") {
+      Swal.fire({
+        icon: "error",
+        title: "ไม่มีสิทธิ์เข้าถึง",
+        text: "เฉพาะ Superadmin เท่านั้นที่มีสิทธิ์จัดการ Role ได้",
+      }).then(() => {
+        router.replace("/");
+      });
+      return;
+    }
     fetchUsers();
   }, []);
 
@@ -31,6 +42,13 @@ export default function UserManagementPage() {
       const res = await fetch(`${backendUrl}/api/v1/users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      if (res.status === 401 || res.status === 403) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user_id");
+        document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        router.push("/login");
+        return;
+      }
       const data = await res.json();
       if (data.success) {
         setUsers(data.data);

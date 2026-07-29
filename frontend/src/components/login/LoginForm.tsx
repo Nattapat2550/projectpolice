@@ -28,8 +28,9 @@ const LoginForm = () => {
             const data = await response.json();
 
             if (response.ok) {
-                document.cookie = `token=${data.token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Strict; Secure`;
+                document.cookie = `token=${data.token}; path=/; max-age=${60 * 60 * 24 * 7}; SameSite=Lax`;
                 localStorage.setItem("user_id", data.user.id);
+                localStorage.setItem("user_role", data.user.role || "user");
                 localStorage.setItem("token", data.token);
 
                 await Swal.fire({

@@ -6,7 +6,7 @@ import TopBar from "@/components/TopBar";
 
 // 💡 1. นำเข้า Component ใหม่ที่เราเพิ่งสร้าง
 import BackendWakeupLoader from "@/components/BackendWakeupLoader"; 
-
+import RoleGuard from "@/components/RoleGuard";
 
 const sarabun = Sarabun({
   subsets: ["latin", "thai"],
@@ -47,7 +47,9 @@ export default function RootLayout({
             
             {/* 💡 2. นำมาครอบเนื้อหาของหน้าเว็บ (children) ไว้ */}
             <BackendWakeupLoader>
+              <RoleGuard>
                 {children}
+              </RoleGuard>
             </BackendWakeupLoader>
 
           </main>

@@ -2,7 +2,7 @@ const User = require("../models/User");
 
 // Get token from model, create cookie and send response
 const sendTokenResponse = (user, statusCode, res) => {
-  const token = User.getSignedJwtToken(user.id);
+  const token = User.getSignedJwtToken(user.id, user.role);
 
   const expireDays = parseInt(process.env.JWT_COOKIE_EXPIRE, 10) || 30;
 

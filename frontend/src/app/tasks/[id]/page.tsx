@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Swal from "sweetalert2";
 import {
@@ -424,10 +424,18 @@ export default function TaskDetailPage() {
     };
 
     const handleOverwriteDocument = () => {
+        if (!canEditTask) {
+            Swal.fire({ icon: "error", title: "ไม่มีสิทธิ์แก้ไข", text: "คุณสามารถแก้ไขได้เฉพาะงานที่ตนเองได้รับผิดชอบหรือเป็นผู้สร้างเท่านั้น" });
+            return;
+        }
         overwriteInputRef.current?.click();
     };
 
     const handleAttachDocument = () => {
+        if (!canEditTask) {
+            Swal.fire({ icon: "error", title: "ไม่มีสิทธิ์แก้ไข", text: "คุณสามารถแก้ไขได้เฉพาะงานที่ตนเองได้รับผิดชอบหรือเป็นผู้สร้างเท่านั้น" });
+            return;
+        }
         attachInputRef.current?.click();
     };
 
@@ -597,6 +605,10 @@ export default function TaskDetailPage() {
     };
 
     const handleDeleteAttachment = async (attachmentId: string, filename: string) => {
+        if (!canEditTask) {
+            Swal.fire({ icon: "error", title: "ไม่มีสิทธิ์แก้ไข", text: "คุณสามารถแก้ไขได้เฉพาะงานที่ตนเองได้รับผิดชอบหรือเป็นผู้สร้างเท่านั้น" });
+            return;
+        }
         const confirm = await Swal.fire({
             title: `ลบเอกสาร "${filename}"?`,
             text: "คุณแน่ใจหรือไม่ที่จะลบเอกสารแนบนี้?",
@@ -623,6 +635,10 @@ export default function TaskDetailPage() {
     };
 
     const handleEditAttachmentNote = (attachmentId: string | number, currentNote?: string, filename?: string) => {
+        if (!canEditTask) {
+            Swal.fire({ icon: "error", title: "ไม่มีสิทธิ์แก้ไข", text: "คุณสามารถแก้ไขได้เฉพาะงานที่ตนเองได้รับผิดชอบหรือเป็นผู้สร้างเท่านั้น" });
+            return;
+        }
         Swal.fire({
             title: "แก้ไขหมายเหตุเอกสารแนบ",
             text: filename || "",
@@ -681,9 +697,29 @@ export default function TaskDetailPage() {
         };
     }
 
+    const logoutAndRedirect = useCallback(() => {
+        if (typeof window !== "undefined") {
+            localStorage.removeItem("token");
+            localStorage.removeItem("user_id");
+            document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        }
+        router.replace("/login");
+    }, [router]);
+
     const fetchTask = useCallback(async () => {
+        const token = getToken();
+        if (!token) {
+            logoutAndRedirect();
+            return;
+        }
         try {
-            const res = await fetch(`${backendUrl}/api/v1/tasks/${id}`);
+            const res = await fetch(`${backendUrl}/api/v1/tasks/${id}`, {
+                headers: getAuthHeaders(),
+            });
+            if (res.status === 401 || res.status === 403) {
+                logoutAndRedirect();
+                return;
+            }
             if (!res.ok) throw new Error("Failed to fetch");
             const data = await res.json();
             if (data.success) {
@@ -694,7 +730,7 @@ export default function TaskDetailPage() {
         } finally {
             setLoading(false);
         }
-    }, [backendUrl, id]);
+    }, [backendUrl, id, logoutAndRedirect]);
 
     const fetchMe = useCallback(async () => {
         try {
@@ -703,6 +739,10 @@ export default function TaskDetailPage() {
             const res = await fetch(`${backendUrl}/api/v1/auth/me`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
+            if (res.status === 401 || res.status === 403) {
+                logoutAndRedirect();
+                return null;
+            }
             if (res.ok) {
                 const data = await res.json();
                 setCurrentUser(data.data);
@@ -712,11 +752,19 @@ export default function TaskDetailPage() {
             /* ignore */
         }
         return null;
-    }, [backendUrl]);
+    }, [backendUrl, logoutAndRedirect]);
 
     const fetchUsers = useCallback(async () => {
+        const token = getToken();
+        if (!token) return;
         try {
-            const res = await fetch(`${backendUrl}/api/v1/users`);
+            const res = await fetch(`${backendUrl}/api/v1/users`, {
+                headers: getAuthHeaders(),
+            });
+            if (res.status === 401 || res.status === 403) {
+                logoutAndRedirect();
+                return;
+            }
             if (res.ok) {
                 const data = await res.json();
                 setUsers(data.data || data.users || []);
@@ -724,7 +772,7 @@ export default function TaskDetailPage() {
         } catch {
             /* ignore */
         }
-    }, [backendUrl]);
+    }, [backendUrl, logoutAndRedirect]);
 
     const fetchLogs = useCallback(
         async (token: string) => {
@@ -732,6 +780,10 @@ export default function TaskDetailPage() {
                 const res = await fetch(`${backendUrl}/api/v1/tasks/${id}/logs`, {
                     headers: { Authorization: `Bearer ${token}` },
                 });
+                if (res.status === 401 || res.status === 403) {
+                    logoutAndRedirect();
+                    return;
+                }
                 if (res.ok) {
                     const data = await res.json();
                     setLogs(data.data || []);
@@ -740,38 +792,97 @@ export default function TaskDetailPage() {
                 /* ignore */
             }
         },
-        [backendUrl, id]
+        [backendUrl, id, logoutAndRedirect]
     );
 
     const [suggestions, setSuggestions] = useState<{ senders: string[]; recipients: string[] }>({ senders: [], recipients: [] });
 
     const fetchSuggestions = useCallback(async () => {
+        const token = getToken();
+        if (!token) return;
         try {
-            const res = await fetch(`${backendUrl}/api/v1/tasks/suggestions`);
+            const res = await fetch(`${backendUrl}/api/v1/tasks/suggestions`, {
+                headers: getAuthHeaders(),
+            });
+            if (res.status === 401 || res.status === 403) {
+                logoutAndRedirect();
+                return;
+            }
             if (res.ok) {
                 const data = await res.json();
                 setSuggestions({ senders: data.senders || [], recipients: data.recipients || [] });
             }
         } catch {}
-    }, [backendUrl]);
+    }, [backendUrl, logoutAndRedirect]);
 
     useEffect(() => {
         if (!id) return;
+        const token = getToken();
+        if (!token) {
+            logoutAndRedirect();
+            return;
+        }
         fetchTask();
         fetchUsers();
         fetchSuggestions();
         fetchMe().then((user) => {
             if (user?.role === "superadmin") {
-                const token = getToken();
                 if (token) fetchLogs(token);
             }
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [id]);
 
+    /* -------------------------- task ownership permission -------------------------- */
+    const canEditTask = useMemo(() => {
+        if (!currentUser || !taskData) return false;
+        if (currentUser.role === "superadmin") return true;
+        if (currentUser.role !== "admin") return false;
+
+        // Check if created by current user
+        if (taskData.created_by && String(taskData.created_by) === String(currentUser.id)) {
+            return true;
+        }
+
+        // Check if assigned to current user
+        const userName = currentUser.name?.trim().toLowerCase();
+        const userId = String(currentUser.id);
+
+        if (Array.isArray(taskData.assignments)) {
+            const isAssigned = taskData.assignments.some((assign: any) => {
+                if (typeof assign === "string") {
+                    return assign.trim().toLowerCase() === userName;
+                }
+                if (assign && typeof assign === "object") {
+                    if (assign.user_id && String(assign.user_id) === userId) return true;
+                    const nameStr = assign.role_or_name || assign.name || assign.personInCharge || "";
+                    if (nameStr && nameStr.trim().toLowerCase() === userName) return true;
+                }
+                return false;
+            });
+            if (isAssigned) return true;
+        }
+
+        if (taskData.personInCharge && typeof taskData.personInCharge === "string") {
+            if (userName && taskData.personInCharge.toLowerCase().includes(userName)) {
+                return true;
+            }
+        }
+
+        return false;
+    }, [currentUser, taskData]);
+
     /* -------------------------- actions -------------------------- */
 
     const startEditing = () => {
+        if (!canEditTask) {
+            Swal.fire({
+                icon: "error",
+                title: "ไม่มีสิทธิ์แก้ไข",
+                text: "คุณสามารถแก้ไขได้เฉพาะงานที่ตนเองได้รับผิดชอบหรือเป็นผู้สร้างเท่านั้น",
+            });
+            return;
+        }
         if (!taskData) return;
         setDraft(JSON.parse(JSON.stringify(taskData)));
         setIsEditing(true);
@@ -783,6 +894,14 @@ export default function TaskDetailPage() {
     };
 
     const handleStatusChange = async (taskId: string, newStatus: TaskStatus) => {
+        if (!canEditTask) {
+            Swal.fire({
+                icon: "error",
+                title: "ไม่มีสิทธิ์แก้ไข",
+                text: "คุณสามารถแก้ไขได้เฉพาะงานที่ตนเองได้รับผิดชอบหรือเป็นผู้สร้างเท่านั้น",
+            });
+            return;
+        }
         try {
             const res = await fetch(`${backendUrl}/api/v1/tasks/${taskId}/status`, {
                 method: "PUT",
@@ -808,6 +927,14 @@ export default function TaskDetailPage() {
     };
 
     const handleToggleUrgent = async () => {
+        if (!canEditTask) {
+            Swal.fire({
+                icon: "error",
+                title: "ไม่มีสิทธิ์แก้ไข",
+                text: "คุณสามารถแก้ไขได้เฉพาะงานที่ตนเองได้รับผิดชอบหรือเป็นผู้สร้างเท่านั้น",
+            });
+            return;
+        }
         if (!taskData) return;
         const current = taskData.isUrgent ?? taskData.is_urgent ?? false;
         const next = !current;

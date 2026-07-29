@@ -25,6 +25,29 @@ const isValidUUID = (uuid) => {
   return typeof uuid === 'string' && uuidRegex.test(uuid);
 };
 
+// Helper function to check if a user is superadmin OR is creator/assigned to a task
+const canUserEditTask = async (user, taskId, dbClient = pool) => {
+  if (!user) return false;
+  if (user.role === 'superadmin') return true;
+  if (user.role !== 'admin') return false;
+
+  const { rows } = await dbClient.query(
+    `SELECT t.id 
+     FROM tasks t 
+     LEFT JOIN task_assignments ta ON ta.task_id = t.id 
+     WHERE t.id = $1 
+       AND (
+         t.created_by = $2 
+         OR ta.user_id = $2 
+         OR (ta.role_or_name IS NOT NULL AND LOWER(TRIM(ta.role_or_name)) = LOWER(TRIM($3)))
+       )
+     LIMIT 1`,
+    [taskId, user.id, user.name]
+  );
+  return rows.length > 0;
+};
+exports.canUserEditTask = canUserEditTask;
+
 // Helper function to parse Thai date string into YYYY-MM-DD
 const parseThaiDateToIso = (dateStr) => {
   if (!dateStr) return null;
@@ -273,6 +296,11 @@ exports.updateTaskStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
+
+    if (!(await canUserEditTask(req.user, id))) {
+      return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์แก้ไขงานที่ไม่ได้อยู่ในความรับผิดชอบของคุณ' });
+    }
+
     const result = await pool.query(
       `UPDATE tasks SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`,
       [status, id]
@@ -509,6 +537,12 @@ exports.updateTaskDetail = async (req, res) => {
     try {
       await client.query('BEGIN');
       const { id } = req.params;
+
+      if (!(await canUserEditTask(req.user, id, client))) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์แก้ไขงานที่ไม่ได้อยู่ในความรับผิดชอบของคุณ' });
+      }
+
       const { name, date, notes, assignments, isUrgent, main_text, task_detail, urgency_level, secret_level, receive_date, sign_date, meeting_date, reply_due_date, receive_no, recipient_to, additional_docs, sender, memo_no, memo_date } = req.body;
   
       const validDate = (date === "" || !date) ? null : parseThaiDateToIso(date) || date;
@@ -693,6 +727,11 @@ exports.deleteTask = async (req, res) => {
     await client.query('BEGIN');
     const { id } = req.params;
 
+    if (!(await canUserEditTask(req.user, id, client))) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์ลบงานที่ไม่ได้อยู่ในความรับผิดชอบของคุณ' });
+    }
+
     const taskRes = await client.query('SELECT document_id FROM tasks WHERE id = $1', [id]);
     if (taskRes.rows.length === 0) {
       await client.query('ROLLBACK');
@@ -834,6 +873,12 @@ exports.overwriteTaskDocument = async (req, res) => {
   try {
     await client.query('BEGIN');
     const { id } = req.params;
+
+    if (!(await canUserEditTask(req.user, id, client))) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์แก้ไขงานที่ไม่ได้อยู่ในความรับผิดชอบของคุณ' });
+    }
+
     const file = req.file;
 
     if (!file) {
@@ -1016,6 +1061,12 @@ exports.attachTaskDocument = async (req, res) => {
   try {
     await client.query('BEGIN');
     const { id } = req.params;
+
+    if (!(await canUserEditTask(req.user, id, client))) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์แก้ไขงานที่ไม่ได้อยู่ในความรับผิดชอบของคุณ' });
+    }
+
     const files = req.files || (req.file ? [req.file] : []);
 
     if (!files || files.length === 0) {
@@ -1102,6 +1153,11 @@ exports.attachTaskDocument = async (req, res) => {
 exports.deleteTaskAttachment = async (req, res) => {
   try {
     const { id, docId } = req.params;
+
+    if (!(await canUserEditTask(req.user, id))) {
+      return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์แก้ไขงานที่ไม่ได้อยู่ในความรับผิดชอบของคุณ' });
+    }
+
     const docRes = await pool.query('SELECT drive_file_id FROM task_documents WHERE id = $1 AND task_id = $2', [docId, id]);
     if (docRes.rows.length === 0) {
       return res.status(404).json({ success: false, message: 'ไม่พบเอกสารแนบนี้' });
@@ -1133,6 +1189,10 @@ exports.updateTaskAttachmentNote = async (req, res) => {
   try {
     const { id, docId } = req.params;
     const { notes } = req.body;
+
+    if (!(await canUserEditTask(req.user, id))) {
+      return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์แก้ไขงานที่ไม่ได้อยู่ในความรับผิดชอบของคุณ' });
+    }
 
     const docRes = await pool.query('SELECT id FROM task_documents WHERE id = $1 AND task_id = $2', [docId, id]);
     if (docRes.rows.length === 0) {
