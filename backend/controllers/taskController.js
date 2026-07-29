@@ -952,16 +952,26 @@ exports.overwriteTaskDocument = async (req, res) => {
 exports.getSuggestions = async (req, res) => {
   try {
     const sendersRes = await pool.query(
-      `SELECT DISTINCT TRIM(sender) as value FROM tasks WHERE sender IS NOT NULL AND TRIM(sender) != '' ORDER BY value ASC LIMIT 100`
+      `SELECT TRIM(sender) as value, MAX(created_at) as last_used, COUNT(*) as usage_count
+       FROM tasks 
+       WHERE sender IS NOT NULL AND TRIM(sender) != '' 
+       GROUP BY TRIM(sender) 
+       ORDER BY last_used DESC, usage_count DESC, value ASC 
+       LIMIT 500`
     );
     const recipientsRes = await pool.query(
-      `SELECT DISTINCT TRIM(recipient_to) as value FROM tasks WHERE recipient_to IS NOT NULL AND TRIM(recipient_to) != '' ORDER BY value ASC LIMIT 100`
+      `SELECT TRIM(recipient_to) as value, MAX(created_at) as last_used, COUNT(*) as usage_count
+       FROM tasks 
+       WHERE recipient_to IS NOT NULL AND TRIM(recipient_to) != '' 
+       GROUP BY TRIM(recipient_to) 
+       ORDER BY last_used DESC, usage_count DESC, value ASC 
+       LIMIT 500`
     );
 
     res.status(200).json({
       success: true,
-      senders: sendersRes.rows.map(r => r.value),
-      recipients: recipientsRes.rows.map(r => r.value)
+      senders: sendersRes.rows.map(r => r.value).filter(Boolean),
+      recipients: recipientsRes.rows.map(r => r.value).filter(Boolean)
     });
   } catch (err) {
     console.error("Get suggestions error:", err.message);
