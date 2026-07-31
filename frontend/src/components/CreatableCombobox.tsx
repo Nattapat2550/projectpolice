@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { ChevronDown, X, Check } from "lucide-react";
 
 interface CreatableComboboxProps {
   value: string;
@@ -9,6 +10,8 @@ interface CreatableComboboxProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  isError?: boolean;
+  style?: React.CSSProperties;
 }
 
 export const CreatableCombobox: React.FC<CreatableComboboxProps> = ({
@@ -18,6 +21,8 @@ export const CreatableCombobox: React.FC<CreatableComboboxProps> = ({
   placeholder = "พิมพ์หรือเลือกจากรายการ...",
   className = "",
   disabled = false,
+  isError = false,
+  style = {},
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [highlightIndex, setHighlightIndex] = useState(-1);
@@ -89,28 +94,78 @@ export const CreatableCombobox: React.FC<CreatableComboboxProps> = ({
     }
   };
 
+  const hasExactMatch = useMemo(() => {
+    if (!value || !value.trim()) return true;
+    return uniqueOptions.some((opt) => opt.toLowerCase() === value.trim().toLowerCase());
+  }, [uniqueOptions, value]);
+
   return (
     <div ref={containerRef} className={`relative w-full ${className}`}>
-      <input
-        ref={inputRef}
-        type="text"
-        value={value || ""}
-        disabled={disabled}
-        onChange={(e) => {
-          onChange(e.target.value);
-          setIsOpen(true);
-          setHighlightIndex(-1);
-        }}
-        onFocus={() => setIsOpen(true)}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        className="w-full rounded-lg border border-(--shadow) bg-(--button) px-3 py-2.5 text-base outline-none transition focus:border-(--header) focus:ring-2 focus:ring-(--header)/20 text-(--foreground)"
-      />
+      <div className="relative flex items-center w-full">
+        <input
+          ref={inputRef}
+          type="text"
+          value={value || ""}
+          disabled={disabled}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setIsOpen(true);
+            setHighlightIndex(-1);
+          }}
+          onFocus={() => setIsOpen(true)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          className="w-full rounded-md pl-3 pr-16 py-2.5 text-sm font-medium outline-none transition h-11 placeholder:text-gray-400"
+          style={{
+            border: isError ? "2px solid #ef4444" : "1px solid var(--wrapper)",
+            backgroundColor: isError ? "rgba(239, 68, 68, 0.05)" : "var(--button)",
+            color: "var(--foreground)",
+            ...style,
+          }}
+        />
 
-      {isOpen && filteredOptions.length > 0 && (
-        <div className="absolute z-50 left-0 right-0 top-full mt-1 max-h-60 overflow-y-auto rounded-md border border-zinc-400 bg-white shadow-md py-0.5 text-base">
+        <div className="absolute right-2.5 flex items-center gap-1">
+          {value && !disabled && (
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={() => {
+                onChange("");
+                setIsOpen(true);
+                if (inputRef.current) inputRef.current.focus();
+              }}
+              className="p-1 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-200/50 transition-colors cursor-pointer"
+              title="ล้างข้อความ"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          <button
+            type="button"
+            tabIndex={-1}
+            disabled={disabled}
+            onClick={() => {
+              if (!disabled) {
+                setIsOpen(!isOpen);
+                if (!isOpen && inputRef.current) {
+                  inputRef.current.focus();
+                }
+              }
+            }}
+            className="p-1 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors cursor-pointer"
+          >
+            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+          </button>
+        </div>
+      </div>
+
+      {isOpen && (filteredOptions.length > 0 || (value && !hasExactMatch)) && (
+        <div className="absolute z-50 left-0 right-0 top-full mt-1.5 max-h-60 overflow-y-auto rounded-lg border border-(--wrapper) bg-(--container) shadow-xl py-1.5 text-sm text-(--foreground) backdrop-blur-sm">
           {filteredOptions.map((opt, i) => {
             const isHighlighted = i === highlightIndex;
+            const isSelected = value?.trim().toLowerCase() === opt.toLowerCase();
+
             return (
               <div
                 key={i}
@@ -119,14 +174,32 @@ export const CreatableCombobox: React.FC<CreatableComboboxProps> = ({
                   handleSelectOption(opt);
                 }}
                 onMouseEnter={() => setHighlightIndex(i)}
-                className={`px-3 py-1.5 cursor-pointer text-black transition-colors ${
-                  isHighlighted ? "bg-[#0066cc] text-white font-medium" : "hover:bg-[#0066cc] hover:text-white"
+                className={`px-3.5 py-2 cursor-pointer flex items-center justify-between transition-colors ${
+                  isHighlighted
+                    ? "bg-[#0066cc] text-white font-medium"
+                    : isSelected
+                    ? "bg-[#0066cc]/10 text-[#0066cc] font-semibold"
+                    : "hover:bg-gray-100 dark:hover:bg-gray-800 opacity-90 hover:opacity-100"
                 }`}
               >
-                {opt}
+                <span>{opt}</span>
+                {isSelected && <Check className="w-4 h-4 ml-2 shrink-0 opacity-80" />}
               </div>
             );
           })}
+
+          {value && !hasExactMatch && (
+            <div
+              onMouseDown={(e) => {
+                e.preventDefault();
+                setIsOpen(false);
+              }}
+              className="px-3.5 py-2 text-xs italic text-gray-500 border-t border-(--wrapper)/50 bg-gray-50/50 dark:bg-gray-900/30 flex items-center gap-1.5"
+            >
+              <span>✍️ พิมพ์ข้อความใหม่:</span>
+              <span className="font-semibold text-(--foreground) not-italic">&quot;{value}&quot;</span>
+            </div>
+          )}
         </div>
       )}
     </div>

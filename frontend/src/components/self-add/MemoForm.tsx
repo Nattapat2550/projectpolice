@@ -14,13 +14,31 @@ const getFutureDateStr = (daysToAdd: number) => {
   return d.toISOString().slice(0, 16); // return format "YYYY-MM-DDThh:mm"
 };
 
+const DEFAULT_SENDERS = [
+  "ศปนม.สพฐ.ตร.",
+  "สพฐ.ตร.",
+  "ตร.",
+  "บช.ก.",
+  "บช.น.",
+  "ภ.1", "ภ.2", "ภ.3", "ภ.4", "ภ.5", "ภ.6", "ภ.7", "ภ.8", "ภ.9"
+];
+
+const DEFAULT_RECIPIENTS = [
+  "ผอ.ศปนม.ตร.",
+  "ผบก.ศปนม.ตร.",
+  "ผบ.ตร.",
+  "รอง ผบ.ตร.",
+  "ผู้ช่วย ผบ.ตร."
+];
+
 export default function MemoForm() {
   const [users, setUsers] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [errors, setErrors] = useState<{ [key: string]: boolean }>({});
   
   const [formData, setFormData] = useState({
     memo_no: "",
-    memo_date: new Date().toISOString().split('T')[0], // วันนี้
+    memo_date: "", // ค่าเริ่มต้นว่างเพื่อให้ผู้ใช้เลือก วว/ดด/ปปปป เอง
     sender: "",
     recipient_to: "",
     title: "",
@@ -40,6 +58,9 @@ export default function MemoForm() {
   // ใช้ Checklist แทน Dropdown
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [suggestions, setSuggestions] = useState<{ senders: string[]; recipients: string[] }>({ senders: [], recipients: [] });
+
+  const senderOptions = Array.from(new Set([...DEFAULT_SENDERS, ...(suggestions.senders || [])]));
+  const recipientOptions = Array.from(new Set([...DEFAULT_RECIPIENTS, ...(suggestions.recipients || [])]));
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -64,8 +85,14 @@ export default function MemoForm() {
 
     const fetchSuggestions = async () => {
       try {
+        const token = typeof window !== 'undefined' ? localStorage.getItem("token") || document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1] : "";
         const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
-        const res = await fetch(`${backendUrl}/api/v1/tasks/suggestions`);
+        const res = await fetch(`${backendUrl}/api/v1/tasks/suggestions`, {
+          headers: {
+            "Content-Type": "application/json",
+            ...(token ? { "Authorization": `Bearer ${token}` } : {})
+          }
+        });
         if (res.ok) {
           const data = await res.json();
           setSuggestions({ senders: data.senders || [], recipients: data.recipients || [] });
@@ -106,6 +133,10 @@ export default function MemoForm() {
       ...prev,
       [name]: type === "checkbox" ? isChecked : value,
     }));
+
+    if (errors[name]) {
+      setErrors((prev) => ({ ...prev, [name]: false }));
+    }
   };
 
   // จัดการการเลือก Checkbox บุคคล
@@ -124,10 +155,45 @@ export default function MemoForm() {
     setSelectedUsers(newSelected);
   };
 
-
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // 💡 ล็อคว่าต้องกรอก 5 ฟิลด์หลักให้ครบถ้วนก่อนบันทึก พร้อมแสดง Custom Validation UI
+    const newErrors: { [key: string]: boolean } = {};
+    const missingFields: string[] = [];
+
+    if (!formData.memo_no?.trim()) {
+      newErrors.memo_no = true;
+      missingFields.push("เลขที่ Memo");
+    }
+    if (!formData.memo_date?.trim()) {
+      newErrors.memo_date = true;
+      missingFields.push("วันที่ Memo");
+    }
+    if (!formData.sender?.trim()) {
+      newErrors.sender = true;
+      missingFields.push("ส่วนราชการ (จาก)");
+    }
+    if (!formData.recipient_to?.trim()) {
+      newErrors.recipient_to = true;
+      missingFields.push("เรียน (ถึง)");
+    }
+    if (!formData.title?.trim()) {
+      newErrors.title = true;
+      missingFields.push("หัวข้องาน (Title)");
+    }
+
+    if (missingFields.length > 0) {
+      setErrors(newErrors);
+      Swal.fire({
+        icon: 'warning',
+        title: 'กรุณากรอกข้อมูลให้ครบถ้วน',
+        html: `โปรดกรอกข้อมูล 5 รายการจำเป็นต่อไปนี้ให้ครบถ้วนก่อนบันทึก:<br/><br/><div style="color: #e11d48; font-weight: bold; text-align: left; background: #fff1f2; padding: 12px; border-radius: 8px; border: 1px solid #fecdd3;">• ${missingFields.join('<br/>• ')}</div>`,
+        confirmButtonText: 'รับทราบ',
+        confirmButtonColor: 'var(--header, #1e293b)'
+      });
+      return;
+    }
 
     const validAssignments: any[] = [];
     if (selectedUsers.includes("all")) {
@@ -165,8 +231,8 @@ export default function MemoForm() {
       reply_due_date: normalizeFormDateStr(formData.reply_due_date),
       document_id: null,
       assignments: validAssignments,
-      created_by: currentUserId, // 💡 เพิ่มบรรทัดนี้: ส่ง ID ไปบันทึกลง Database
-      createdBy: currentUserId   // 💡 เพิ่มเผื่อไว้ในกรณีที่ Backend รับเป็นชื่อนี้
+      created_by: currentUserId,
+      createdBy: currentUserId
     };
 
     try {
@@ -210,7 +276,7 @@ export default function MemoForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="w-full space-y-6">
+    <form onSubmit={handleSubmit} noValidate className="w-full space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
         {/* ===== กล่องซ้าย (สไตล์ Container เดิม) ===== */}
@@ -222,41 +288,122 @@ export default function MemoForm() {
           {/* 1. เลขที่ Memo & 2. วันที่ Memo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>เลขที่ Memo</label>
-              <input type="text" name="memo_no" value={formData.memo_no} onChange={handleMainChange} placeholder="เช่น 123/2567" autoComplete="off" required className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+              <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>
+                เลขที่ Memo <span className="text-red-500 font-bold">*</span>
+              </label>
+              <input
+                type="text"
+                name="memo_no"
+                value={formData.memo_no}
+                onChange={handleMainChange}
+                placeholder="เช่น 123/2567"
+                autoComplete="off"
+                className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium transition"
+                style={{
+                  border: errors.memo_no ? "2px solid #ef4444" : "1px solid var(--wrapper)",
+                  backgroundColor: errors.memo_no ? "rgba(239, 68, 68, 0.05)" : "var(--button)",
+                  color: "var(--foreground)"
+                }}
+              />
+              {errors.memo_no && (
+                <p className="text-xs font-semibold text-red-500 mt-1.5 flex items-center gap-1">
+                  ⚠️ โปรดกรอกเลขที่ Memo
+                </p>
+              )}
             </div>
             <div>
-              <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>วันที่ Memo</label>
-              <input type="date" name="memo_date" value={formData.memo_date} onChange={handleMainChange} autoComplete="off" required className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+              <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>
+                วันที่ Memo <span className="text-red-500 font-bold">*</span>
+              </label>
+              <input
+                type="date"
+                name="memo_date"
+                value={formData.memo_date}
+                onChange={handleMainChange}
+                autoComplete="off"
+                className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium transition"
+                style={{
+                  border: errors.memo_date ? "2px solid #ef4444" : "1px solid var(--wrapper)",
+                  backgroundColor: errors.memo_date ? "rgba(239, 68, 68, 0.05)" : "var(--button)",
+                  color: "var(--foreground)"
+                }}
+              />
+              {errors.memo_date && (
+                <p className="text-xs font-semibold text-red-500 mt-1.5 flex items-center gap-1">
+                  ⚠️ โปรดเลือกวันที่ Memo
+                </p>
+              )}
             </div>
           </div>
 
           {/* 3. ส่วนราชการ (จาก) & 4. เรียน (ถึง) */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>ส่วนราชการ (จาก)</label>
+              <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>
+                ส่วนราชการ (จาก) <span className="text-red-500 font-bold">*</span>
+              </label>
               <CreatableCombobox
                 value={formData.sender}
-                onChange={(val) => setFormData(prev => ({ ...prev, sender: val }))}
-                options={suggestions.senders}
+                onChange={(val) => {
+                  setFormData(prev => ({ ...prev, sender: val }));
+                  if (errors.sender) setErrors(prev => ({ ...prev, sender: false }));
+                }}
+                options={senderOptions}
                 placeholder="เช่น ศปนม.สพฐ.ตร."
+                isError={errors.sender}
               />
+              {errors.sender && (
+                <p className="text-xs font-semibold text-red-500 mt-1.5 flex items-center gap-1">
+                  ⚠️ โปรดระบุส่วนราชการ (จาก)
+                </p>
+              )}
             </div>
             <div>
-              <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>เรียน (ถึง)</label>
+              <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>
+                เรียน (ถึง) <span className="text-red-500 font-bold">*</span>
+              </label>
               <CreatableCombobox
                 value={formData.recipient_to}
-                onChange={(val) => setFormData(prev => ({ ...prev, recipient_to: val }))}
-                options={suggestions.recipients}
+                onChange={(val) => {
+                  setFormData(prev => ({ ...prev, recipient_to: val }));
+                  if (errors.recipient_to) setErrors(prev => ({ ...prev, recipient_to: false }));
+                }}
+                options={recipientOptions}
                 placeholder="เช่น ผอ.ศปนม.ตร."
+                isError={errors.recipient_to}
               />
+              {errors.recipient_to && (
+                <p className="text-xs font-semibold text-red-500 mt-1.5 flex items-center gap-1">
+                  ⚠️ โปรดระบุเรียน (ถึง)
+                </p>
+              )}
             </div>
           </div>
 
           {/* 5. เรื่อง (หัวข้องาน) */}
           <div>
-            <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>หัวข้องาน (Title)</label>
-            <input type="text" name="title" value={formData.title} onChange={handleMainChange} placeholder="ระบุหัวข้องานติดตาม..." required className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+            <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>
+              หัวข้องาน (Title) <span className="text-red-500 font-bold">*</span>
+            </label>
+            <input
+              type="text"
+              name="title"
+              value={formData.title}
+              onChange={handleMainChange}
+              placeholder="ระบุหัวข้องานติดตาม..."
+              autoComplete="off"
+              className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium transition"
+              style={{
+                border: errors.title ? "2px solid #ef4444" : "1px solid var(--wrapper)",
+                backgroundColor: errors.title ? "rgba(239, 68, 68, 0.05)" : "var(--button)",
+                color: "var(--foreground)"
+              }}
+            />
+            {errors.title && (
+              <p className="text-xs font-semibold text-red-500 mt-1.5 flex items-center gap-1">
+                ⚠️ โปรดกรอกหัวข้องาน (Title)
+              </p>
+            )}
           </div>
 
           {/* รายละเอียดเอกสาร (Main Text) */}
@@ -316,7 +463,7 @@ export default function MemoForm() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>วันครบกำหนด (Due Date)</label>
-              <input type="datetime-local" name="due_date" value={formData.due_date} onChange={handleMainChange} autoComplete="off" required className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
+              <input type="datetime-local" name="due_date" value={formData.due_date} onChange={handleMainChange} autoComplete="off" className="mt-1 block w-full h-11 px-3 rounded-md outline-none text-sm font-medium" style={{ border: "1px solid var(--wrapper)", backgroundColor: "var(--button)", color: "var(--foreground)" }}/>
             </div>
             <div>
               <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>วันที่ลงนาม (Sign Date)</label>
