@@ -289,7 +289,7 @@ export default function MemoForm() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>
-                เลขที่ Memo <span className="text-red-500 font-bold">*</span>
+                เลขที่หนังสือ <span className="text-red-500 font-bold">*</span>
               </label>
               <input
                 type="text"
@@ -313,7 +313,7 @@ export default function MemoForm() {
             </div>
             <div>
               <label className="block text-sm font-bold mb-1" style={{ color: "var(--header)" }}>
-                วันที่ Memo <span className="text-red-500 font-bold">*</span>
+                วันที่หนังสือ <span className="text-red-500 font-bold">*</span>
               </label>
               <input
                 type="date"
