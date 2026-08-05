@@ -104,7 +104,7 @@ const COLUMNS: { key: SortKey; label: string; className?: string }[] = [
 const COLUMNS_AFTER_ASSIGNEE: { key: SortKey; label: string; className?: string }[] = [
   { key: 'sender', label: 'จาก (หน่วยงาน)', className: 'w-[95px]' },
   { key: 'recipient_to', label: 'ถึง', className: 'w-[80px]' },
-  { key: 'urgency_level', label: 'ความเร่งด่วน', className: 'w-[80px] text-center' },
+  { key: 'urgency_level', label: 'ชั้นความเร็ว', className: 'w-[80px] text-center' },
   { key: 'status', label: 'สถานะ', className: 'w-[95px] text-center' },
   { key: 'secret_level', label: 'ชั้นความลับ', className: 'w-[75px] text-center' },
   { key: 'memo_date', label: 'วันที่หนังสือ', className: 'w-[78px]' },

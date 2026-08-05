@@ -333,7 +333,7 @@ export const Header: React.FC<HeaderProps> = ({ filters, setFilters, users = [] 
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className={labelClass}>ความเร่งด่วน</label>
+                  <label className={labelClass}>ชั้นความเร็ว</label>
                   <select
                     className={selectClass}
                     value={filters.urgency_level}

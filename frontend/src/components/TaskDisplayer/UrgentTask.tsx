@@ -355,7 +355,7 @@ export default function UrgentTask() {
                                 onChange={(e) => setUrgencyFilter(e.target.value)}
                                 className={styles.Dropdown}
                             >
-                                <option value="">ทั้งหมด (ความเร่งด่วน)</option>
+                                <option value="">ทั้งหมด (ชั้นความเร็ว)</option>
                                 <option value="ด่วน">ด่วน</option>
                                 <option value="ด่วนมาก">ด่วนมาก</option>
                                 <option value="ด่วนที่สุด">ด่วนที่สุด</option>

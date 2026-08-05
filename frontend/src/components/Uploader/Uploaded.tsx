@@ -36,6 +36,7 @@ interface MemoData {
     assignments?: ResponsibilityAssignment[];
     due_date?: string; 
     isUrgent?: boolean;
+    is_duplicate?: boolean;
 }
 
 interface FileResult {
@@ -502,7 +503,7 @@ export default function Uploaded({ extractedData, onClearExtractedData }: Upload
                                                     {!memo.is_duplicate && (
                                                         <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-(--shadow)/60">
                                                             <div className="flex items-center gap-2">
-                                                                <strong className="w-24 shrink-0">ความเร่งด่วน:</strong>
+                                                                <strong className="w-24 shrink-0">ชั้นความเร็ว:</strong>
                                                                 <select className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--redText) outline-none bg-(--button)" value={memo.urgency_level || "ปกติ"} onChange={(e) => handleMemoChange(fileIdx, index, "urgency_level", e.target.value)}>
                                                                     <option value="ปกติ">ปกติ</option>
                                                                     <option value="ด่วน">ด่วน</option>
@@ -511,7 +512,7 @@ export default function Uploaded({ extractedData, onClearExtractedData }: Upload
                                                                 </select>
                                                             </div>
                                                             <div className="flex items-center gap-2">
-                                                                <strong className="w-24 shrink-0">ความลับ:</strong>
+                                                                <strong className="w-24 shrink-0">ชั้นความลับ:</strong>
                                                                 <select className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.secret_level || "ปกติ"} onChange={(e) => handleMemoChange(fileIdx, index, "secret_level", e.target.value)}>
                                                                     <option value="ปกติ">ปกติ</option>
                                                                     <option value="ลับ">ลับ</option>

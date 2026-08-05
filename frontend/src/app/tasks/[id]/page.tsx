@@ -963,7 +963,7 @@ export default function TaskDetailPage() {
             }
         } catch (error) {
             console.error("Error updating urgent status:", error);
-            Swal.fire({ icon: "error", title: "เกิดข้อผิดพลาด", text: "ไม่สามารถอัปเดตความเร่งด่วนได้" });
+            Swal.fire({ icon: "error", title: "เกิดข้อผิดพลาด", text: "ไม่สามารถอัปเดตชั้นความเร็วได้" });
         }
     };
 
@@ -1323,7 +1323,7 @@ export default function TaskDetailPage() {
                                     <ReadValue>{formatThaiDate(taskData.sign_date)}</ReadValue>
                                 )}
                             </Field>
-                            <Field label="ระดับความเร่งด่วน">
+                            <Field label="ชั้นความเร็ว">
                                 {isEditing && draft ? (
                                     <select
                                         value={draft.urgency_level}
@@ -1787,7 +1787,7 @@ export default function TaskDetailPage() {
                         </p>
 
                         <div className="space-y-4">
-                            {[
+                            {([
                                 { key: "notes", label: "หมายเหตุ", type: "text" },
                                 { key: "sign_date", label: "วันที่ลงนาม", type: "date" },
                                 { key: "meeting_date", label: "วันประชุม", type: "date" },
@@ -1795,7 +1795,7 @@ export default function TaskDetailPage() {
                                 { key: "assignments", label: "ผู้รับผิดชอบ / มอบหมายงาน", type: "text" },
                                 { key: "main_text", label: "เนื้อหาเรื่อง / สาระสำคัญ", type: "textarea" },
                                 { key: "task_detail", label: "รายละเอียดการมอบหมายงาน", type: "textarea" },
-                            ].map((field) => {
+                            ] as { key: string; label: string; type: string; options?: string[] }[]).map((field) => {
                                 const item = reviewModalData[field.key];
                                 if (!item) return null;
                                 return (

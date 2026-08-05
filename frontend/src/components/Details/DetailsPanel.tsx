@@ -325,7 +325,7 @@ export default function DetailsPanel({
                                                     />
                                                 </div>
                                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
-                                                    <strong>ชั้นความเร่งด่วน: </strong>
+                                                    <strong>ชั้นความเร็ว: </strong>
                                                     <select
                                                         className={styles.CustomSelect}
                                                         style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
@@ -437,7 +437,7 @@ export default function DetailsPanel({
                                                     />
                                                 </div>
                                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
-                                                    <strong>ชั้นความเร่งด่วน: </strong>
+                                                    <strong>ชั้นความเร็ว: </strong>
                                                     <select
                                                         className={styles.CustomSelect}
                                                         style={{ width: 'auto', padding: '0.4rem 0.8rem' }}

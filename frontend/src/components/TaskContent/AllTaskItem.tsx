@@ -182,7 +182,7 @@ export default function AllTaskItem({date, createdAt, name, personInCharge, assi
                         </h1>
                         <p className="flex flex-row flex-wrap gap-2 mt-1 mb-1">
                             <span style={{ fontWeight: 'bold', color: urgencyStyle.color, backgroundColor: urgencyStyle.bg, padding: '0.1rem 0.6rem', borderRadius: '1rem', fontSize: '0.75rem', border: `1px solid ${urgencyStyle.color}` }}>
-                                {urgencyStyle.icon} ความเร่งด่วน: {urgencyStyle.label}
+                                {urgencyStyle.icon} ชั้นความเร็ว: {urgencyStyle.label}
                             </span>
                             <span style={{ fontWeight: 'bold', color: secretStyle.color, backgroundColor: secretStyle.bg, padding: '0.1rem 0.6rem', borderRadius: '1rem', fontSize: '0.75rem', border: `1px solid ${secretStyle.color}` }}>
                                 {secretStyle.icon} ชั้นความลับ: {secretStyle.label}
