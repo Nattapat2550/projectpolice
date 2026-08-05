@@ -169,7 +169,7 @@ exports.uploadExcelTasks = async (req, res) => {
                 let receiveNoInput = null;
                 for (const key of Object.keys(row)) {
                     const cleanKey = key.replace(/\s+/g, '');
-                    if (cleanKey === "เลขทะเบียน" || cleanKey === "ทะเบียนรับ" || cleanKey === "ทะเบียน" || cleanKey === "เลขรับ" || cleanKey === "ที่") {
+                    if (cleanKey === "เลขทะเบียน" || cleanKey === "ทะเบียนรับ" || cleanKey === "ทะเบียน" || cleanKey === "เลขรับ" || cleanKey === "เลขทะเบียนรับ" || cleanKey === "ที่" || cleanKey.includes("เลขทะเบียน") || cleanKey.includes("ทะเบียนรับ")) {
                         receiveNoInput = row[key];
                         break;
                     }
@@ -177,7 +177,7 @@ exports.uploadExcelTasks = async (req, res) => {
                 
                 let receiveNo = null;
                 let receiveYear = null;
-                if (receiveNoInput) {
+                if (receiveNoInput !== null && receiveNoInput !== undefined) {
                     if (typeof receiveNoInput === 'string') {
                         const thaiNumerals = { '๐':'0', '๑':'1', '๒':'2', '๓':'3', '๔':'4', '๕':'5', '๖':'6', '๗':'7', '๘':'8', '๙':'9' };
                         receiveNoInput = receiveNoInput.replace(/[๐-๙]/g, match => thaiNumerals[match]);
@@ -187,6 +187,9 @@ exports.uploadExcelTasks = async (req, res) => {
                     const parsedNum = matchNum ? parseInt(matchNum[0], 10) : NaN;
                     receiveNo = isNaN(parsedNum) ? null : parsedNum;
                 }
+
+                // ถ้าไม่มีเลขทะเบียน ให้ข้ามแถวนี้ไปเลยตามเงื่อนไข
+                if (!receiveNo) return;
 
                 const { round, fiscalYear } = calculateFiscalRoundAndYear(receivedDate);
                 if (receiveNo) {

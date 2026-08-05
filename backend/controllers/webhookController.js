@@ -15,6 +15,7 @@ exports.handleSheetUpdate = async (req, res) => {
 
   const receive_no = data.receive_no;
   const receive_year = data.receive_year;
+  const created_at = data.created_at;
   const memo_no = data.memo_no;
   const memo_date = data.memo_date;
   const sender = data.sender;
@@ -31,8 +32,40 @@ exports.handleSheetUpdate = async (req, res) => {
 
   const parseDate = (d) => {
     if (!d) return null;
-    const dt = new Date(d);
-    return isNaN(dt.getTime()) ? null : dt.toISOString().split('T')[0];
+    const str = String(d).trim();
+    if (!str) return null;
+
+    // Case 1: DD/MM/YYYY or D/M/YYYY (e.g. 22/7/2569, 05/08/2569, 22/07/2026)
+    const dmYMatch = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+    if (dmYMatch) {
+      let day = parseInt(dmYMatch[1], 10);
+      let month = parseInt(dmYMatch[2], 10);
+      let year = parseInt(dmYMatch[3], 10);
+      if (year >= 2500 && year <= 2650) year -= 543;
+      if (year >= 1900 && year <= 2150 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+    }
+
+    // Case 2: YYYY-MM-DD (e.g. 2569-07-22 or 2026-07-22)
+    const ymdMatch = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (ymdMatch) {
+      let year = parseInt(ymdMatch[1], 10);
+      let month = parseInt(ymdMatch[2], 10);
+      let day = parseInt(ymdMatch[3], 10);
+      if (year >= 2500 && year <= 2650) year -= 543;
+      if (year >= 1900 && year <= 2150 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      }
+    }
+
+    // Case 3: Fallback standard JS Date
+    const dt = new Date(str);
+    if (isNaN(dt.getTime())) return null;
+    let year = dt.getFullYear();
+    if (year >= 2500 && year <= 2650) year -= 543;
+    if (year < 1900 || year > 2150) return null;
+    return `${year}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
   };
 
   try {
@@ -57,8 +90,9 @@ exports.handleSheetUpdate = async (req, res) => {
           additional_docs = COALESCE($12, additional_docs),
           urgency_level = COALESCE($13, urgency_level),
           secret_level = COALESCE($14, secret_level),
+          created_at = COALESCE($15, created_at),
           updated_at = NOW()
-        WHERE id = $15
+        WHERE id = $16
       `;
 
       await client.query(updateQuery, [
@@ -76,6 +110,7 @@ exports.handleSheetUpdate = async (req, res) => {
         additional_docs,
         urgency_level,
         secret_level,
+        parseDate(created_at),
         taskId
       ]);
 
