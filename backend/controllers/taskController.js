@@ -225,9 +225,26 @@ exports.getAllTasks = async (req, res) => {
         t.memo_date,
         t.sender,
         t.recipient_to,
-        t.additional_docs
+        t.additional_docs,
+        COALESCE(
+          d.drive_web_view_link,
+          (SELECT td.drive_web_view_link FROM task_documents td WHERE td.task_id = t.id AND td.drive_web_view_link IS NOT NULL AND td.drive_web_view_link != '' ORDER BY td.id ASC LIMIT 1)
+        ) AS document_link,
+        COALESCE(
+          d.drive_web_view_link,
+          (SELECT td.drive_web_view_link FROM task_documents td WHERE td.task_id = t.id AND td.drive_web_view_link IS NOT NULL AND td.drive_web_view_link != '' ORDER BY td.id ASC LIMIT 1)
+        ) AS drive_web_view_link,
+        (
+          CASE 
+            WHEN d.drive_web_view_link IS NOT NULL AND d.drive_web_view_link != '' THEN true
+            WHEN t.document_id IS NOT NULL THEN true
+            WHEN EXISTS (SELECT 1 FROM task_documents td WHERE td.task_id = t.id) THEN true
+            ELSE false
+          END
+        ) AS has_document
       FROM tasks t
       LEFT JOIN agg_assignees aa ON t.id = aa.task_id
+      LEFT JOIN documents d ON t.document_id = d.id
       ORDER BY t.due_date ASC NULLS LAST
     `;
     const { rows } = await pool.query(query);
@@ -278,9 +295,26 @@ exports.getUrgentTasks = async (req, res) => {
         t.memo_date,
         t.sender,
         t.recipient_to,
-        t.additional_docs
+        t.additional_docs,
+        COALESCE(
+          d.drive_web_view_link,
+          (SELECT td.drive_web_view_link FROM task_documents td WHERE td.task_id = t.id AND td.drive_web_view_link IS NOT NULL AND td.drive_web_view_link != '' ORDER BY td.id ASC LIMIT 1)
+        ) AS document_link,
+        COALESCE(
+          d.drive_web_view_link,
+          (SELECT td.drive_web_view_link FROM task_documents td WHERE td.task_id = t.id AND td.drive_web_view_link IS NOT NULL AND td.drive_web_view_link != '' ORDER BY td.id ASC LIMIT 1)
+        ) AS drive_web_view_link,
+        (
+          CASE 
+            WHEN d.drive_web_view_link IS NOT NULL AND d.drive_web_view_link != '' THEN true
+            WHEN t.document_id IS NOT NULL THEN true
+            WHEN EXISTS (SELECT 1 FROM task_documents td WHERE td.task_id = t.id) THEN true
+            ELSE false
+          END
+        ) AS has_document
       FROM tasks t
       LEFT JOIN agg_assignees aa ON t.id = aa.task_id
+      LEFT JOIN documents d ON t.document_id = d.id
       WHERE t.is_urgent = true
       ORDER BY t.due_date ASC NULLS LAST
     `;

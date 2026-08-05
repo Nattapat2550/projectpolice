@@ -1,5 +1,6 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
+import { FileText } from 'lucide-react';
 
 export interface Assignee {
   assignment_id: string;
@@ -44,6 +45,7 @@ export interface Task {
   notes?: string | null;
   document_link?: string;
   drive_web_view_link?: string;
+  has_document?: boolean;
   createdAt?: string | null;
   assignments?: Assignee[];
 }
@@ -261,11 +263,15 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                     </th>
                   );
                 })}
+                {/* 📄 เอกสารต้นฉบับ ขวาสุด */}
+                <th className="w-[55px] px-1.5 py-3 select-none text-center">เอกสาร</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[var(--shadow)]/20 text-sm">
               {tasks.map((task) => {
                 const flagged = isKanLekLongRub(task.title);
+                const hasDoc = task.has_document || !!(task.document_link || task.drive_web_view_link);
+                const docTarget = task.document_link || task.drive_web_view_link || `/tasks/${task.id}`;
                 return (
                   <tr
                     key={task.id}
@@ -395,6 +401,24 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                         {task.due_date ? formatDate(task.due_date) : '-'}
                       </div>
                     </td>
+
+                    {/* 📄 ไอคอนเอกสารต้นฉบับ (Google Drive) ขวาสุด */}
+                    <td className="px-2 py-3 text-center overflow-hidden" onClick={(e) => e.stopPropagation()}>
+                      {hasDoc ? (
+                        <a
+                          href={docTarget}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center justify-center p-1.5 text-blue-600 dark:text-blue-400 hover:text-blue-800 bg-blue-500/10 hover:bg-blue-500/25 rounded-lg transition-colors border border-blue-500/20 cursor-pointer"
+                          title={task.document_link || task.drive_web_view_link ? "เปิดเอกสารต้นฉบับ (Google Drive)" : "ดูรายละเอียดเอกสาร"}
+                        >
+                          <FileText size={16} />
+                        </a>
+                      ) : (
+                        <span className="text-[var(--foreground)]/20 select-none" title="ไม่มีเอกสารต้นฉบับ">-</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
@@ -415,6 +439,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       <div className="block xl:hidden space-y-3">
         {tasks.map((task) => {
           const flagged = isKanLekLongRub(task.title);
+          const hasDoc = task.has_document || !!(task.document_link || task.drive_web_view_link);
+          const docTarget = task.document_link || task.drive_web_view_link || `/tasks/${task.id}`;
           return (
             <div
               key={task.id}
@@ -476,6 +502,19 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                 </div>
 
                 <div className="flex items-center space-x-1.5 shrink-0">
+                  {hasDoc && (
+                    <a
+                      href={docTarget}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 rounded border border-blue-500/20 transition-colors shrink-0 cursor-pointer"
+                      title={task.document_link || task.drive_web_view_link ? "เปิดเอกสารต้นฉบับ (Google Drive)" : "ดูรายละเอียดเอกสาร"}
+                    >
+                      <FileText size={13} />
+                      <span>เอกสาร</span>
+                    </a>
+                  )}
                   <select
                     value={task.status === 'completed' || task.status === 'success' ? 'completed' : 'following'}
                     onChange={(e) => onStatusChange?.(task.id, e.target.value)}
