@@ -49,7 +49,9 @@ export const CreatableCombobox: React.FC<CreatableComboboxProps> = ({
   const filteredOptions = useMemo(() => {
     const search = (value || "").trim().toLowerCase();
     if (!search) return uniqueOptions;
-    return uniqueOptions.filter((opt) => opt.toLowerCase().includes(search));
+    const normalizeDigits = (str: string) => str.replace(/[๐-๙]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0x0e50 + 48));
+    const normSearch = normalizeDigits(search);
+    return uniqueOptions.filter((opt) => normalizeDigits(opt.toLowerCase()).includes(normSearch));
   }, [uniqueOptions, value]);
 
   // ปิดเมื่อคลิกข้างนอก

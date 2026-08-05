@@ -229,6 +229,7 @@ export default function HomePage() {
 
   const [filters, setFilters] = useState<SearchFilters>({ ...emptyFilters });
   const [usersList, setUsersList] = useState<UserOption[]>([]);
+  const [quickFilter, setQuickFilter] = useState<'all' | 'urgent' | 'following'>('all');
 
   // เรียงตาม receive_year ก่อน แล้วต่อด้วย receive_no จากน้อยไปมาก เป็นค่าเริ่มต้น
   const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'receive_no', direction: 'asc' });
@@ -364,46 +365,58 @@ export default function HomePage() {
     }
   };
 
+  const normalizeDigits = (str?: string | number | null): string => {
+    if (str === null || str === undefined) return '';
+    return String(str).replace(/[๐-๙]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0x0e50 + 48));
+  };
+
   // 🔍 กรองข้อมูลตามฟิลด์ที่ตรงกับ DB จริง
   const filteredTasks = useMemo(() => {
-    const t = filters.title.trim().toLowerCase();
-    const rNo = filters.receive_no.trim();
-    const rYear = filters.receive_year.trim();
-    const m = filters.memo_no.trim().toLowerCase();
-    const s = filters.sender.trim().toLowerCase();
-    const recTo = (filters.recipient_to || '').trim().toLowerCase();
-    const addDocs = (filters.additional_docs || '').trim().toLowerCase();
+    const t = normalizeDigits(filters.title.trim().toLowerCase());
+    const rNo = normalizeDigits(filters.receive_no.trim());
+    const rYear = normalizeDigits(filters.receive_year.trim());
+    const m = normalizeDigits(filters.memo_no.trim().toLowerCase());
+    const s = normalizeDigits(filters.sender.trim().toLowerCase());
+    const recTo = normalizeDigits((filters.recipient_to || '').trim().toLowerCase());
+    const addDocs = normalizeDigits((filters.additional_docs || '').trim().toLowerCase());
     const status = filters.status.trim();
     const urgency = filters.urgency_level.trim();
     const secret = filters.secret_level.trim();
 
     // 👥 ผู้รับผิดชอบเลือกได้หลายคน (intersect): งานต้องมี "ครบทุกคน" ที่เลือกไว้ ไม่ใช่แค่คนใดคนหนึ่ง
-    // Backend ไม่ส่ง user_id ต่อ assignment มาด้วย (ดู resolveAssigneeName ด้านบน) จึงต้อง match กันด้วย "ชื่อ"
-    // ซึ่งปลอดภัยเพราะ users.name เป็น UNIQUE ใน DB (ดู be.md ตาราง users)
     const idToName = new Map(usersList.map((u) => [u.id, u.name]));
     const selectedAssigneeNames = filters.assignees
       .map((id) => idToName.get(id))
       .filter((n): n is string => !!n);
 
     return tasks.filter((task) => {
-      const matchTitle = !t || task.title?.toLowerCase().includes(t);
-      const matchReceiveNo = !rNo || task.receive_no?.toString().includes(rNo);
+      const matchTitle = !t || normalizeDigits(task.title?.toLowerCase()).includes(t);
+      const matchReceiveNo = !rNo || normalizeDigits(task.receive_no).includes(rNo);
       const thYear = task.receive_year ? (task.receive_year < 2400 ? task.receive_year + 543 : task.receive_year).toString() : '';
-      const matchReceiveYear = !rYear || task.receive_year?.toString().includes(rYear) || thYear.includes(rYear);
-      const matchMemo = !m || task.memo_no?.toLowerCase().includes(m);
-      const matchSender = !s || task.sender?.toLowerCase().includes(s);
-      const matchRecipientTo = !recTo || task.recipient_to?.toLowerCase().includes(recTo);
-      const matchAdditionalDocs = !addDocs || task.additional_docs?.toLowerCase().includes(addDocs);
+      const matchReceiveYear = !rYear || normalizeDigits(task.receive_year).includes(rYear) || normalizeDigits(thYear).includes(rYear);
+      const matchMemo = !m || normalizeDigits(task.memo_no?.toLowerCase()).includes(m);
+      const matchSender = !s || normalizeDigits(task.sender?.toLowerCase()).includes(s);
+      const matchRecipientTo = !recTo || normalizeDigits(task.recipient_to?.toLowerCase()).includes(recTo);
+      const matchAdditionalDocs = !addDocs || normalizeDigits(task.additional_docs?.toLowerCase()).includes(addDocs);
       const matchStatus = !status || task.status === status;
       const matchUrgency = !urgency || task.urgency_level === urgency;
       const matchSecret = !secret || task.secret_level === secret;
+
+      const matchQuickFilter =
+        quickFilter === 'all'
+          ? true
+          : quickFilter === 'urgent'
+          ? ['ด่วน', 'ด่วนมาก', 'ด่วนที่สุด'].includes(task.urgency_level)
+          : quickFilter === 'following'
+          ? ['following', 'pending'].includes(task.status)
+          : true;
 
       const taskAssigneeNames = (task.assignments || [])
         .map((a) => a.personInCharge || a.role_or_name)
         .filter((n): n is string => !!n);
       const matchAssignee =
-  selectedAssigneeNames.length === 0 ||
-  selectedAssigneeNames.some((name) => taskAssigneeNames.includes(name));
+        selectedAssigneeNames.length === 0 ||
+        selectedAssigneeNames.some((name) => taskAssigneeNames.includes(name));
       return (
         matchTitle &&
         matchReceiveNo &&
@@ -415,10 +428,11 @@ export default function HomePage() {
         matchStatus &&
         matchUrgency &&
         matchSecret &&
-        matchAssignee
+        matchAssignee &&
+        matchQuickFilter
       );
     });
-  }, [tasks, filters, usersList]);
+  }, [tasks, filters, usersList, quickFilter]);
 
   // ↕️ เรียงข้อมูล: ถ้าไม่มีการเลือกคอลัมน์เอง ใช้ค่าเริ่มต้น receive_year -> receive_no
   const sortedTasks = useMemo(() => {
@@ -625,18 +639,24 @@ export default function HomePage() {
             title="งานทั้งหมดในระบบ"
             value={tasks.length}
             icon= {<ListTodo></ListTodo>}
+            isActive={quickFilter === 'all'}
+            onClick={() => setQuickFilter('all')}
           />
           <StatCard
             title="งานด่วน / ด่วนที่สุด"
             value={tasks.filter(t => ['ด่วน', 'ด่วนมาก', 'ด่วนที่สุด'].includes(t.urgency_level)).length}
             icon={<Flame className='text-[var(--redText)]'></Flame>}
             valueClass="text-[var(--redText)]"
+            isActive={quickFilter === 'urgent'}
+            onClick={() => setQuickFilter(prev => prev === 'urgent' ? 'all' : 'urgent')}
           />
           <StatCard
             title="กำลังดำเนินการ (Following)"
             value={tasks.filter(t => ['following', 'pending'].includes(t.status)).length}
             icon={<Hourglass className='text-[var(--blueText)]'></Hourglass>}
             valueClass="text-[var(--blueText)]"
+            isActive={quickFilter === 'following'}
+            onClick={() => setQuickFilter(prev => prev === 'following' ? 'all' : 'following')}
           />
         </div>
 

@@ -24,6 +24,8 @@ exports.handleSheetUpdate = async (req, res) => {
   const task_detail = data.task_detail;
   const sign_date = data.sign_date;
   const notes = data.notes;
+  const urgency_level = data.urgency_level || data.urgencyLevel || data['ชั้นความเร็ว'] || data['ความเร่งด่วน'] || null;
+  const secret_level = data.secret_level || data.secretLevel || data['ชั้นความลับ'] || data['ความลับ'] || null;
   const additional_docs = data.additional_docs;
   const document_link = data.document_link || data.drive_web_view_link;
 
@@ -53,8 +55,10 @@ exports.handleSheetUpdate = async (req, res) => {
           sign_date = COALESCE($10, sign_date),
           notes = COALESCE($11, notes),
           additional_docs = COALESCE($12, additional_docs),
+          urgency_level = COALESCE($13, urgency_level),
+          secret_level = COALESCE($14, secret_level),
           updated_at = NOW()
-        WHERE id = $13
+        WHERE id = $15
       `;
 
       await client.query(updateQuery, [
@@ -70,6 +74,8 @@ exports.handleSheetUpdate = async (req, res) => {
         parseDate(sign_date),
         notes,
         additional_docs,
+        urgency_level,
+        secret_level,
         taskId
       ]);
 

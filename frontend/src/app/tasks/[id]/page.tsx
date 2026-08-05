@@ -1582,27 +1582,22 @@ export default function TaskDetailPage() {
                                         <select
                                             value={a.user_id || ""}
                                             onChange={(e) => {
-                                                const u = users.find((x) => x.id === e.target.value);
+                                                const selectedId = e.target.value;
+                                                const u = users.find((x) => x.id === selectedId);
                                                 updateAssignment(i, {
-                                                    user_id: e.target.value || null,
-                                                    role_or_name: a.role_or_name || u?.name || "",
+                                                    user_id: selectedId || null,
+                                                    role_or_name: u?.name || "",
                                                 });
                                             }}
                                             className={`${inputClass} sm:flex-1 cursor-pointer`}
                                         >
-                                            <option value="">— ไม่ผูกกับผู้ใช้ —</option>
+                                            <option value="">— เลือกผู้รับผิดชอบ —</option>
                                             {users.map((u) => (
                                                 <option key={u.id} value={u.id}>
                                                     {u.name}
                                                 </option>
                                             ))}
                                         </select>
-                                        <input
-                                            value={a.role_or_name}
-                                            onChange={(e) => updateAssignment(i, { role_or_name: e.target.value })}
-                                            placeholder="ตำแหน่ง / ชื่อ เช่น ฝอ.1"
-                                            className={`${inputClass} sm:flex-1`}
-                                        />
                                         <button
                                             type="button"
                                             onClick={() => removeAssignment(i)}

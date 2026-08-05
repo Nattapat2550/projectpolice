@@ -215,18 +215,22 @@ export default function AllTask() {
             taskPersons.includes("ทุกหน่วยงาน") ||
             taskPersons.some((p:string) => personFilter.includes(p)); 
 
+        const normalizeDigits = (str?: any) => str ? String(str).replace(/[๐-๙]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0x0e50 + 48)) : '';
         const searchTokens = searchText.toLowerCase().split(/\s+/).filter(Boolean);
-        const matchSearch = searchTokens.length === 0 || searchTokens.every(token => 
-            task.name?.toLowerCase().includes(token) || 
-            task.personInCharge?.toLowerCase().includes(token) ||
-            task.urgency_level?.toLowerCase().includes(token) ||
-            task.secret_level?.toLowerCase().includes(token) ||
-            task.id?.toString().toLowerCase().includes(token) ||
-            task.receive_no?.toString().toLowerCase().includes(token) ||
-            task.receive_year?.toString().toLowerCase().includes(token) ||
-            task.date?.toString().toLowerCase().includes(token) ||
-            task.createdAt?.toString().toLowerCase().includes(token)
-        );
+        const matchSearch = searchTokens.length === 0 || searchTokens.every(rawToken => {
+            const token = normalizeDigits(rawToken);
+            return (
+                normalizeDigits(task.name?.toLowerCase()).includes(token) || 
+                normalizeDigits(task.personInCharge?.toLowerCase()).includes(token) ||
+                normalizeDigits(task.urgency_level?.toLowerCase()).includes(token) ||
+                normalizeDigits(task.secret_level?.toLowerCase()).includes(token) ||
+                normalizeDigits(task.id?.toString().toLowerCase()).includes(token) ||
+                normalizeDigits(task.receive_no?.toString().toLowerCase()).includes(token) ||
+                normalizeDigits(task.receive_year?.toString().toLowerCase()).includes(token) ||
+                normalizeDigits(task.date?.toString().toLowerCase()).includes(token) ||
+                normalizeDigits(task.createdAt?.toString().toLowerCase()).includes(token)
+            );
+        });
 
         const matchUrgency = urgencyFilter === "" || task.urgency_level === urgencyFilter;
         const matchSecrecy = secrecyFilter === "" || task.secret_level === secrecyFilter;

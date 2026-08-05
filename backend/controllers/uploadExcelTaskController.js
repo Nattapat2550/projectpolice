@@ -205,6 +205,8 @@ exports.uploadExcelTasks = async (req, res) => {
                 let excelRecipientTo = null;
                 let excelAdditionalDocs = null;
                 let excelMemoNo = null;
+                let excelUrgencyLevel = null;
+                let excelSecretLevel = null;
 
                 for (const key of Object.keys(row)) {
                     const cleanKey = key.replace(/\s+/g, '');
@@ -220,7 +222,16 @@ exports.uploadExcelTasks = async (req, res) => {
                     if (cleanKey === "ที่หนังสือ" || cleanKey === "เลขที่หนังสือ" || cleanKey === "ที่") {
                         if (!excelMemoNo) excelMemoNo = row[key] ? String(row[key]).trim() : null;
                     }
+                    if (cleanKey === "ความเร่งด่วน" || cleanKey === "ระดับความเร่งด่วน" || cleanKey === "ชั้นความเร่งด่วน" || cleanKey === "ชั้นความเร็ว") {
+                        if (!excelUrgencyLevel) excelUrgencyLevel = row[key] ? String(row[key]).trim() : null;
+                    }
+                    if (cleanKey === "ความลับ" || cleanKey === "ชั้นความลับ" || cleanKey === "ระดับความลับ") {
+                        if (!excelSecretLevel) excelSecretLevel = row[key] ? String(row[key]).trim() : null;
+                    }
                 }
+
+                const computedUrgency = excelUrgencyLevel || row["ชั้นความเร็ว"] || row["ระดับความเร่งด่วน"] || row["ความเร่งด่วน"] ? String(excelUrgencyLevel || row["ชั้นความเร็ว"] || row["ระดับความเร่งด่วน"] || row["ความเร่งด่วน"]).trim() : "ปกติ";
+                const computedSecret = excelSecretLevel || row["ชั้นความลับ"] || row["ความลับ"] ? String(excelSecretLevel || row["ชั้นความลับ"] || row["ความลับ"]).trim() : "ปกติ";
 
                 allData.push({
                     original_row: index + 1,
@@ -241,10 +252,10 @@ exports.uploadExcelTasks = async (req, res) => {
                     signed_date: parseDateSafe(row["วันที่ลงนาม"]),
                     meeting_date: parseDateSafe(row["วันประชุม"]),
                     reply_due_date: parseDateSafe(row["กำหนดส่งตอบรับ"]),
-                    urgency_level: row["ความเร่งด่วน"] ? String(row["ความเร่งด่วน"]).trim() : "ปกติ",
-                    secret_level: row["ความลับ"] ? String(row["ความลับ"]).trim() : "ปกติ",
+                    urgency_level: computedUrgency,
+                    secret_level: computedSecret,
                     notes: row["หมายเหตุ"] ? String(row["หมายเหตุ"]).trim() : null,
-                    is_urgent: row["ความเร่งด่วน"] && String(row["ความเร่งด่วน"]).trim() !== "ปกติ" ? true : isUrgent,
+                    is_urgent: computedUrgency !== "ปกติ" ? true : isUrgent,
                     raw_data: row
                 });
             });

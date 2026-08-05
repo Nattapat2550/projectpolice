@@ -47,8 +47,12 @@ const SECRET_OPTIONS = ['ปกติ', 'ลับ', 'ลับมาก', 'ล�
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'following', label: 'กำลังติดตาม' },
   { value: 'success', label: 'เสร็จสิ้น' },
-  { value: 'pending', label: 'รอดำเนินการ' },
 ];
+
+export const normalizeDigits = (str?: string | null): string => {
+  if (!str) return '';
+  return str.replace(/[๐-๙]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0x0e50 + 48));
+};
 
 const selectClass =
   'w-full px-4 py-2.5 text-sm rounded-xl bg-[var(--wrapper)]/40 border border-[var(--shadow)]/40 focus:bg-[var(--background)] focus:ring-2 focus:ring-[var(--blueText)]/50 focus:border-transparent outline-none transition-all appearance-none cursor-pointer';
@@ -85,7 +89,7 @@ export const Header: React.FC<HeaderProps> = ({ filters, setFilters, users = [] 
 
   const selectedUsers = users.filter((u) => filters.assignees.includes(u.id));
   const filteredUserOptions = users.filter((u) =>
-    u.name.toLowerCase().includes(assigneeSearch.trim().toLowerCase())
+    normalizeDigits(u.name.toLowerCase()).includes(normalizeDigits(assigneeSearch.trim().toLowerCase()))
   );
 
   const isFiltering = Object.values(filters).some((v) =>
