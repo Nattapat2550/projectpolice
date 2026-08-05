@@ -78,19 +78,18 @@ exports.handleSheetUpdate = async (req, res) => {
         SET 
           receive_no = COALESCE($1, receive_no),
           receive_year = COALESCE($2, receive_year),
-          memo_no = COALESCE($3, memo_no),
-          memo_date = COALESCE($4, memo_date),
-          sender = COALESCE($5, sender),
-          recipient_to = COALESCE($6, recipient_to),
-          title = COALESCE($7, title),
+          memo_no = COALESCE(memo_no, $3),
+          memo_date = COALESCE(memo_date, $4),
+          sender = COALESCE(sender, $5),
+          recipient_to = COALESCE(recipient_to, $6),
+          title = COALESCE(title, $7),
           due_date = COALESCE($8, due_date),
           task_detail = COALESCE($9, task_detail),
-          sign_date = COALESCE($10, sign_date),
+          sign_date = COALESCE(sign_date, $10),
           notes = COALESCE($11, notes),
           additional_docs = COALESCE($12, additional_docs),
-          urgency_level = COALESCE($13, urgency_level),
-          secret_level = COALESCE($14, secret_level),
-          created_at = COALESCE($15, created_at),
+          urgency_level = COALESCE(urgency_level, $13),
+          secret_level = COALESCE(secret_level, $14),
           updated_at = NOW()
         WHERE id = $16
       `;
@@ -140,7 +139,6 @@ exports.handleSheetUpdate = async (req, res) => {
         : (data.responsible_person !== undefined ? data.responsible_person 
         : (data.assignee !== undefined ? data.assignee : undefined)));
       if (personInCharge !== undefined && personInCharge !== null) {
-        await client.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
         const rawAssignees = String(personInCharge)
           .split(/[,;\n]/)
           .map(s => s.trim())
@@ -158,11 +156,16 @@ exports.handleSheetUpdate = async (req, res) => {
             [cleanName, `%${cleanName}%`]
           );
           const matchedUserId = userRes.rows.length > 0 ? userRes.rows[0].id : null;
-          await client.query(
-            `INSERT INTO task_assignments (task_id, user_id, role_or_name)
-             VALUES ($1, $2, $3)`,
-            [taskId, matchedUserId, cleanName]
+          const checkAss = await client.query(
+            `SELECT id FROM task_assignments WHERE task_id = $1 AND (role_or_name = $2 OR (user_id IS NOT NULL AND user_id = $3))`,
+            [taskId, cleanName, matchedUserId]
           );
+          if (checkAss.rows.length === 0) {
+            await client.query(
+              `INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ($1, $2, $3)`,
+              [taskId, matchedUserId, cleanName]
+            );
+          }
         }
       }
       // 🏷️ อัปเดตเปลี่ยนชื่อไฟล์บน Google Drive หากแก้ไขข้อมูลที่ส่งผลต่อชื่อไฟล์

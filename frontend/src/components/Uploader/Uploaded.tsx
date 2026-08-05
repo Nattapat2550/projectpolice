@@ -433,34 +433,45 @@ export default function Uploaded({ extractedData, onClearExtractedData }: Upload
                                             <div key={index} className="text-sm flex flex-col gap-4 border-b border-(--shadow) pb-6 last:border-b-0 shrink-0">
                                                 <h3 className="text-md font-bold" style={{ color: "var(--header)" }}>📄 เอกสารหน้าที่/ฉบับที่ {index + 1}</h3>
                                                 <div className="flex flex-col gap-2 p-4 rounded-lg border bg-(--container) border-(--shadow) shrink-0 text-foreground">
-                                                    <div className="flex items-center gap-2">
-                                                        <strong className="w-28 shrink-0">ที่:</strong>
-                                                        <input type="text" className="border border-(--shadow) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.ที่ || ''} onChange={(e) => handleMemoChange(fileIdx, index, "ที่", e.target.value)} />
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <strong className="w-28 shrink-0">วันที่:</strong>
-                                                        <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 font-bold text-(--blueText) focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.วันที่ || ''} onChange={(e) => handleMemoChange(fileIdx, index, "วันที่", e.target.value)} />
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <strong className="w-28 shrink-0">จาก:</strong>
-                                                        <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.จาก || memo.sender || ''} onChange={(e) => { handleMemoChange(fileIdx, index, "จาก", e.target.value); handleMemoChange(fileIdx, index, "sender", e.target.value); }} />
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <strong className="w-28 shrink-0">ถึง (เรียน):</strong>
-                                                        <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.recipient_to || memo.เรียน || ''} onChange={(e) => { handleMemoChange(fileIdx, index, "recipient_to", e.target.value); handleMemoChange(fileIdx, index, "เรียน", e.target.value); }} />
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <strong className="w-28 shrink-0">เรื่อง:</strong>
-                                                        <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.เรื่อง || ''} onChange={(e) => handleMemoChange(fileIdx, index, "เรื่อง", e.target.value)} />
-                                                    </div>
+                                                    {memo.is_duplicate && (
+                                                        <div className="text-xs bg-amber-500/10 text-amber-600 border border-amber-500/20 px-3 py-1.5 rounded-lg font-bold mb-1">
+                                                            💡 ตรวจพบเลขรับซ้ำในรอบการตัดบัญชีปัจจุบัน (ระบบสแกนเฉพาะส่วนและซ่อนฟิลด์เดิมเพื่อความประหยัด)
+                                                        </div>
+                                                    )}
+                                                    {!memo.is_duplicate && (
+                                                        <>
+                                                            <div className="flex items-center gap-2">
+                                                                <strong className="w-28 shrink-0">ที่:</strong>
+                                                                <input type="text" className="border border-(--shadow) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.ที่ || ''} onChange={(e) => handleMemoChange(fileIdx, index, "ที่", e.target.value)} />
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <strong className="w-28 shrink-0">วันที่:</strong>
+                                                                <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 font-bold text-(--blueText) focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.วันที่ || ''} onChange={(e) => handleMemoChange(fileIdx, index, "วันที่", e.target.value)} />
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <strong className="w-28 shrink-0">จาก:</strong>
+                                                                <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.จาก || memo.sender || ''} onChange={(e) => { handleMemoChange(fileIdx, index, "จาก", e.target.value); handleMemoChange(fileIdx, index, "sender", e.target.value); }} />
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <strong className="w-28 shrink-0">ถึง (เรียน):</strong>
+                                                                <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.recipient_to || memo.เรียน || ''} onChange={(e) => { handleMemoChange(fileIdx, index, "recipient_to", e.target.value); handleMemoChange(fileIdx, index, "เรียน", e.target.value); }} />
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <strong className="w-28 shrink-0">เรื่อง:</strong>
+                                                                <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.เรื่อง || ''} onChange={(e) => handleMemoChange(fileIdx, index, "เรื่อง", e.target.value)} />
+                                                            </div>
+                                                        </>
+                                                    )}
                                                     <div className="flex items-center gap-2">
                                                         <strong className="w-28 shrink-0">หมายเหตุ:</strong>
                                                         <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.notes || memo.หมายเหตุ || ''} onChange={(e) => { handleMemoChange(fileIdx, index, "notes", e.target.value); handleMemoChange(fileIdx, index, "หมายเหตุ", e.target.value); }} />
                                                     </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <strong className="w-28 shrink-0">เวลา:</strong>
-                                                        <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.เวลา || ''} onChange={(e) => handleMemoChange(fileIdx, index, "เวลา", e.target.value)} />
-                                                    </div>
+                                                    {!memo.is_duplicate && (
+                                                        <div className="flex items-center gap-2">
+                                                            <strong className="w-28 shrink-0">เวลา:</strong>
+                                                            <input type="text" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.เวลา || ''} onChange={(e) => handleMemoChange(fileIdx, index, "เวลา", e.target.value)} />
+                                                        </div>
+                                                    )}
                                                     
                                                     <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-(--shadow)/60">
                                                         <div className="flex items-center gap-2">
@@ -488,30 +499,32 @@ export default function Uploaded({ extractedData, onClearExtractedData }: Upload
                                                         <input type="date" className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-blue-400 outline-none bg-(--button)" value={memo.reply_due_date || ''} onChange={(e) => handleMemoChange(fileIdx, index, "reply_due_date", e.target.value)} />
                                                     </div>
                                                     
-                                                    <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-(--shadow)/60">
-                                                        <div className="flex items-center gap-2">
-                                                            <strong className="w-24 shrink-0">ความเร่งด่วน:</strong>
-                                                            <select className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--redText) outline-none bg-(--button)" value={memo.urgency_level || "ปกติ"} onChange={(e) => handleMemoChange(fileIdx, index, "urgency_level", e.target.value)}>
-                                                                <option value="ปกติ">ปกติ</option>
-                                                                <option value="ด่วน">ด่วน</option>
-                                                                <option value="ด่วนมาก">ด่วนมาก</option>
-                                                                <option value="ด่วนที่สุด">ด่วนที่สุด</option>
-                                                            </select>
+                                                    {!memo.is_duplicate && (
+                                                        <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-(--shadow)/60">
+                                                            <div className="flex items-center gap-2">
+                                                                <strong className="w-24 shrink-0">ความเร่งด่วน:</strong>
+                                                                <select className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--redText) outline-none bg-(--button)" value={memo.urgency_level || "ปกติ"} onChange={(e) => handleMemoChange(fileIdx, index, "urgency_level", e.target.value)}>
+                                                                    <option value="ปกติ">ปกติ</option>
+                                                                    <option value="ด่วน">ด่วน</option>
+                                                                    <option value="ด่วนมาก">ด่วนมาก</option>
+                                                                    <option value="ด่วนที่สุด">ด่วนที่สุด</option>
+                                                                </select>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <strong className="w-24 shrink-0">ความลับ:</strong>
+                                                                <select className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.secret_level || "ปกติ"} onChange={(e) => handleMemoChange(fileIdx, index, "secret_level", e.target.value)}>
+                                                                    <option value="ปกติ">ปกติ</option>
+                                                                    <option value="ลับ">ลับ</option>
+                                                                    <option value="ลับมาก">ลับมาก</option>
+                                                                    <option value="ลับที่สุด">ลับที่สุด</option>
+                                                                </select>
+                                                            </div>
+                                                            <div className="flex items-center gap-2 mt-1">
+                                                                <input type="checkbox" id={`urgent-${fileIdx}-${index}`} checked={memo.isUrgent || false} onChange={(e) => handleMemoChange(fileIdx, index, "isUrgent", e.target.checked)} className="w-4 h-4 cursor-pointer" style={{ accentColor: 'var(--redText)' }} />
+                                                                <label htmlFor={`urgent-${fileIdx}-${index}`} className="cursor-pointer font-bold text-red-600">🔥 กำหนดให้เอกสารนี้เป็นงานเร่งด่วน</label>
+                                                            </div>
                                                         </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <strong className="w-24 shrink-0">ความลับ:</strong>
-                                                            <select className="border border-(--wrapper) p-1.5 rounded flex-1 focus:ring-2 focus:ring-(--blueText) outline-none bg-(--button)" value={memo.secret_level || "ปกติ"} onChange={(e) => handleMemoChange(fileIdx, index, "secret_level", e.target.value)}>
-                                                                <option value="ปกติ">ปกติ</option>
-                                                                <option value="ลับ">ลับ</option>
-                                                                <option value="ลับมาก">ลับมาก</option>
-                                                                <option value="ลับที่สุด">ลับที่สุด</option>
-                                                            </select>
-                                                        </div>
-                                                        <div className="flex items-center gap-2 mt-1">
-                                                            <input type="checkbox" id={`urgent-${fileIdx}-${index}`} checked={memo.isUrgent || false} onChange={(e) => handleMemoChange(fileIdx, index, "isUrgent", e.target.checked)} className="w-4 h-4 cursor-pointer" style={{ accentColor: 'var(--redText)' }} />
-                                                            <label htmlFor={`urgent-${fileIdx}-${index}`} className="cursor-pointer font-bold text-red-600">🔥 กำหนดให้เอกสารนี้เป็นงานเร่งด่วน</label>
-                                                        </div>
-                                                    </div>
+                                                    )}
                                                 </div>
 
                                                 <div className="p-2 shrink-0 text-foreground">

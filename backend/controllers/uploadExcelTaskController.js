@@ -402,8 +402,12 @@ exports.uploadExcelTasks = async (req, res) => {
                             let safeAdditionalDocs = item.additional_docs ? String(item.additional_docs) : null;
 
                             await pool.query(
-                                `UPDATE tasks SET title = COALESCE($1, title), memo_no = COALESCE($2, memo_no), memo_date = COALESCE($3, memo_date), main_text = COALESCE($4, main_text), notes = COALESCE($5, notes), sender = COALESCE($6, sender), due_date = COALESCE($7, due_date), task_detail = COALESCE($8, task_detail), is_urgent = $9, sign_date = COALESCE($10, sign_date), meeting_date = COALESCE($11, meeting_date), reply_due_date = COALESCE($12, reply_due_date), urgency_level = COALESCE($13, urgency_level), secret_level = COALESCE($14, secret_level), recipient_to = COALESCE($15, recipient_to), additional_docs = COALESCE($16, additional_docs), round = COALESCE($17, round), updated_at = NOW() WHERE id = $18`,
+                                `UPDATE tasks SET title = COALESCE(title, $1), memo_no = COALESCE(memo_no, $2), memo_date = COALESCE(memo_date, $3), main_text = COALESCE($4, main_text), notes = COALESCE($5, notes), sender = COALESCE(sender, $6), due_date = COALESCE($7, due_date), task_detail = COALESCE($8, task_detail), is_urgent = COALESCE(is_urgent, $9), sign_date = COALESCE(sign_date, $10), meeting_date = COALESCE($11, meeting_date), reply_due_date = COALESCE($12, reply_due_date), urgency_level = COALESCE(urgency_level, $13), secret_level = COALESCE(secret_level, $14), recipient_to = COALESCE(recipient_to, $15), additional_docs = COALESCE($16, additional_docs), round = COALESCE(round, $17), updated_at = NOW() WHERE id = $18`,
                                 [safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, safeSender, parsedDueDate, safeTaskDetail, item.is_urgent, item.signed_date, item.meeting_date || null, item.reply_due_date || null, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ', safeRecipientTo, safeAdditionalDocs, item.round || 1, taskId]
+                            );
+                            await pool.query(
+                                `INSERT INTO task_logs (task_id, user_id, action, details) VALUES ($1, $2, 'reuploaded_excel_task', $3)`,
+                                [taskId, created_by, JSON.stringify({ filename, original_row: item.original_row })]
                             );
                             if (safeAdditionalDocs !== null) {
                                 await syncTaskDocumentNotesFromText(pool, taskId, safeAdditionalDocs);

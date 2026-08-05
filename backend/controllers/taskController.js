@@ -4,7 +4,7 @@ const path = require('path'); // เพิ่ม module path สำหรับ�
 const { uploadToDrive, deleteFromDrive, renameFileOnDrive } = require('../services/googleDriveService');
 const { appendTaskToSheet, appendMultipleTasksToSheet, updateTaskInSheet } = require('../services/googleSheetsService');
 const { generateHash } = require('../utils/duplicateChecker');
-const { formatStandardFilename } = require('../utils/filenameParser');
+const { parseFilenameInfo, formatStandardFilename, cleanToOnlyName } = require('../utils/filenameParser');
 const { extractDataWithGemini } = require('../services/ocrService');
 const { calculateFiscalRoundAndYear } = require('../utils/fiscalYearHelper');
 const { syncTaskDocumentNotesFromText } = require('../utils/attachmentSync');
@@ -403,8 +403,8 @@ exports.confirmTasks = async (req, res) => {
 
               // 1. อัปเดตงานในตาราง tasks ก่อนเพื่อให้ document_id ชี้ไปที่เอกสารใหม่
               await client.query(
-                  `UPDATE tasks SET document_id = COALESCE($1, document_id), title = $2, memo_no = $3, memo_date = $4, main_text = $5, task_detail = $6, due_date = COALESCE($7, due_date), is_urgent = $8, urgency_level = $9, secret_level = $10, sign_date = $11, meeting_date = $13, reply_due_date = $14, sender = $16, recipient_to = $17, additional_docs = $18, round = $19, notes = COALESCE($20, notes), created_at = COALESCE(CAST($12 AS timestamp), created_at), updated_at = NOW() WHERE id = $15`,
-                  [documentId, memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', memo.ที่, parsedMemoDate, memo.main_text, memo.task_detail || null, finalDueDate, memo.isUrgent || false, memo.urgency_level || null, memo.secret_level || null, parsedSignDate, parsedReceiveDate, parsedMeetingDate, parsedReplyDueDate, taskId, memoSender, memoRecipient, memoAdditionalDocs, round, memoNotes]
+                  `UPDATE tasks SET document_id = COALESCE($1, document_id), title = COALESCE(title, $2), memo_no = COALESCE(memo_no, $3), memo_date = COALESCE(memo_date, $4), main_text = COALESCE($5, main_text), task_detail = COALESCE($6, task_detail), due_date = COALESCE($7, due_date), is_urgent = COALESCE(is_urgent, $8), urgency_level = COALESCE(urgency_level, $9), secret_level = COALESCE(secret_level, $10), sign_date = COALESCE(sign_date, $11), meeting_date = COALESCE($12, meeting_date), reply_due_date = COALESCE($13, reply_due_date), sender = COALESCE(sender, $15), recipient_to = COALESCE(recipient_to, $16), additional_docs = COALESCE($17, additional_docs), round = COALESCE(round, $18), notes = COALESCE($19, notes), updated_at = NOW() WHERE id = $14`,
+                  [documentId, memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', memo.ที่, parsedMemoDate, memo.main_text, memo.task_detail || null, finalDueDate, memo.isUrgent || false, memo.urgency_level || null, memo.secret_level || null, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, taskId, memoSender, memoRecipient, memoAdditionalDocs, round, memoNotes]
               );
 
               // 2. ลบเอกสารเก่าและไฟล์เก่าใน Drive หากไม่มีงานอื่นใช้อยู่
@@ -425,7 +425,6 @@ exports.confirmTasks = async (req, res) => {
               }
 
               await logTaskAction(client, taskId, validCreatorId, 'updated_task', { source: 'confirm_tasks_upsert' });
-              await client.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
               updatedTaskIds.push(taskId);
           } else {
               const taskRes = await client.query(
@@ -460,25 +459,25 @@ exports.confirmTasks = async (req, res) => {
               await logTaskAction(client, taskId, validCreatorId, 'created_task', { source: 'confirm_tasks' });
               createdTaskIds.push(taskId);
           }
-        
-
-        if (Array.isArray(memo.assignments) && memo.assignments.length > 0) {
           for (const assign of memo.assignments) {
             const userId = isValidUUID(assign.user_id) ? assign.user_id : null; 
             const personStr = assign.role_or_name || assign.responsible_person || assign.name || '';
+            if (!personStr && !userId) continue;
 
-            const assignRes = await client.query(
-              `INSERT INTO task_assignments (task_id, user_id, role_or_name)
-               VALUES ($1, $2, $3) RETURNING id`,
-              [taskId, userId, personStr]
+            const checkAss = await client.query(
+              `SELECT id FROM task_assignments WHERE task_id = $1 AND (role_or_name = $2 OR (user_id IS NOT NULL AND user_id = $3))`,
+              [taskId, personStr, userId]
             );
-            const assignmentId = assignRes.rows[0].id;
-            
-            await logTaskAction(client, taskId, validCreatorId, 'assigned_user', { user_id: userId, role_or_name: personStr });
+            if (checkAss.rows.length === 0) {
+              await client.query(
+                `INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ($1, $2, $3)`,
+                [taskId, userId, personStr]
+              );
+              await logTaskAction(client, taskId, validCreatorId, 'assigned_user', { user_id: userId, role_or_name: personStr });
+            }
           }
         }
       }
-    }
 
     // 🏷️ อัปเดตเปลี่ยนชื่อไฟล์บน Google Drive และ DB ให้ตรงตามข้อมูลรับงานและผู้รับผิดชอบล่าสุดที่บันทึกจริง
     if (documentId && driveData && driveData.id) {
@@ -599,14 +598,21 @@ exports.updateTaskDetail = async (req, res) => {
         assignList = assignments;
       }
 
-      await client.query(`DELETE FROM task_assignments WHERE task_id = $1`, [id]);
       for (const assign of assignList) {
         const roleName = typeof assign === 'string' ? assign : (assign.role_or_name || assign.responsible_person || 'เพิ่มด้วยตนเอง');
         const userId = (typeof assign === 'object' && isValidUUID(assign.user_id)) ? assign.user_id : null;
-        await client.query(
-          `INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ($1, $2, $3)`,
-          [id, userId, roleName]
+        if (!roleName && !userId) continue;
+
+        const checkRes = await client.query(
+          `SELECT id FROM task_assignments WHERE task_id = $1 AND (role_or_name = $2 OR (user_id IS NOT NULL AND user_id = $3))`,
+          [id, roleName, userId]
         );
+        if (checkRes.rows.length === 0) {
+          await client.query(
+            `INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ($1, $2, $3)`,
+            [id, userId, roleName]
+          );
+        }
       }
     }
 
@@ -794,11 +800,10 @@ exports.createTask = async (req, res) => {
     if (existingRes.rows.length > 0) {
         taskId = existingRes.rows[0].id;
         await client.query(
-          `UPDATE tasks SET title = COALESCE($1, title), memo_no = $2, memo_date = $3, main_text = $4, due_date = COALESCE($5, due_date), is_urgent = COALESCE($6, is_urgent), urgency_level = $7, secret_level = $8, sign_date = $10, meeting_date = $11, reply_due_date = $12, sender = $14, recipient_to = $15, additional_docs = $16, round = $17, notes = COALESCE($18, notes), created_at = COALESCE(CAST($9 AS timestamp), created_at), updated_at = NOW() WHERE id = $13`,
-          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent, urgency_level, secret_level, parsedReceiveDate, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, taskId, sender, recipient_to, additional_docs, round, notes]
+          `UPDATE tasks SET title = COALESCE(title, $1), memo_no = COALESCE(memo_no, $2), memo_date = COALESCE(memo_date, $3), main_text = COALESCE($4, main_text), due_date = COALESCE($5, due_date), is_urgent = COALESCE(is_urgent, $6), urgency_level = COALESCE(urgency_level, $7), secret_level = COALESCE(secret_level, $8), sign_date = COALESCE(sign_date, $9), meeting_date = COALESCE($10, meeting_date), reply_due_date = COALESCE($11, reply_due_date), sender = COALESCE(sender, $13), recipient_to = COALESCE(recipient_to, $14), additional_docs = COALESCE($15, additional_docs), round = COALESCE(round, $16), notes = COALESCE($17, notes), updated_at = NOW() WHERE id = $12`,
+          [title || 'ไม่ระบุชื่อเรื่อง', memo_no, parsedMemoDate, main_text, finalDueDate, is_urgent, urgency_level, secret_level, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, taskId, sender, recipient_to, additional_docs, round, notes]
         );
         await logTaskAction(client, taskId, validCreatorId, 'updated_task', { source: 'manual_create_upsert' });
-        await client.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
     } else {
         const taskRes = await client.query(
           `INSERT INTO tasks (title, memo_no, memo_date, main_text, due_date, is_urgent, status, created_by, urgency_level, secret_level, sign_date, meeting_date, reply_due_date, receive_no, receive_year, round, sender, recipient_to, additional_docs, notes, created_at)
@@ -814,12 +819,18 @@ exports.createTask = async (req, res) => {
       for (const assign of assignments) {
         const userId = isValidUUID(assign.user_id) ? assign.user_id : null;
         const roleOrName = assign.role_or_name || null;
+        if (!roleOrName && !userId) continue;
 
-        const assignRes = await client.query(
-          `INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ($1, $2, $3) RETURNING id`,
-          [taskId, userId, roleOrName]
+        const checkAss = await client.query(
+          `SELECT id FROM task_assignments WHERE task_id = $1 AND (role_or_name = $2 OR (user_id IS NOT NULL AND user_id = $3))`,
+          [taskId, roleOrName, userId]
         );
-        const assignmentId = assignRes.rows[0].id;
+        if (checkAss.rows.length === 0) {
+          await client.query(
+            `INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ($1, $2, $3)`,
+            [taskId, userId, roleOrName]
+          );
+        }
       }
     }
 
@@ -896,9 +907,25 @@ exports.overwriteTaskDocument = async (req, res) => {
     const safeFileName = path.basename(file.path);
     const safePath = path.join(path.dirname(file.path), safeFileName);
 
+    const fnInfo = parseFilenameInfo(file.originalname);
+
+    // เช็คว่าเลขรับในชื่อไฟล์ตรงกับงานเดิมหรือไม่ หากเลขรับไม่ตรง ให้ยกเลิกและแจ้งเตือนทันทีโดยไม่ต้องแสกน
+    if (fnInfo.receive_no && oldTask.receive_no) {
+      const fileRecNo = String(fnInfo.receive_no).trim();
+      const taskRecNo = String(oldTask.receive_no).trim();
+      if (fileRecNo !== taskRecNo) {
+        try { await fs.unlink(safePath); } catch (e) {}
+        return res.status(400).json({
+          success: false,
+          isMismatched: true,
+          message: `เลขรับหนังสือในชื่อไฟล์ (${fileRecNo}) ไม่ตรงกับเลขรับของงานเดิมในระบบ (${taskRecNo}) กรุณาตรวจสอบไฟล์อีกครั้ง`
+        });
+      }
+    }
+
     let extractedMemos = [];
     try {
-      const geminiRes = await extractDataWithGemini(safePath, file.mimetype, 'gemini');
+      const geminiRes = await extractDataWithGemini(safePath, file.mimetype, 'gemini', { scanMode: 'partial' });
       if (geminiRes && Array.isArray(geminiRes.extractedData)) {
         extractedMemos = geminiRes.extractedData;
       }
@@ -907,6 +934,17 @@ exports.overwriteTaskDocument = async (req, res) => {
     }
 
     const primaryMemo = extractedMemos.length > 0 ? extractedMemos[0] : {};
+
+    let assignments = [];
+    if (fnInfo.assignee) {
+      assignments = [{ responsible_person: fnInfo.assignee, role_or_name: fnInfo.assignee }];
+    } else if (Array.isArray(primaryMemo.assignments) && primaryMemo.assignments.length > 0) {
+      assignments = primaryMemo.assignments;
+    }
+    primaryMemo.assignments = assignments;
+    if (fnInfo.receive_no && !primaryMemo.receive_no) primaryMemo.receive_no = fnInfo.receive_no;
+    if (fnInfo.sender && !primaryMemo.sender) primaryMemo.sender = fnInfo.sender;
+
     const formattedFilename = formatStandardFilename(
       primaryMemo.receive_no || oldTask.receive_no,
       primaryMemo.sender || primaryMemo.จาก || oldTask.sender,
@@ -968,28 +1006,8 @@ exports.overwriteTaskDocument = async (req, res) => {
     const newSecretLevel = primaryMemo.secret_level || null;
 
     await client.query(
-      `UPDATE tasks SET 
-        document_id = $1,
-        title = COALESCE($2, title),
-        memo_no = COALESCE($3, memo_no),
-        memo_date = COALESCE($4, memo_date),
-        sender = COALESCE($5, sender),
-        recipient_to = COALESCE($6, recipient_to),
-        additional_docs = COALESCE($7, additional_docs),
-        main_text = COALESCE($8, main_text),
-        task_detail = COALESCE($9, task_detail),
-        sign_date = COALESCE($10, sign_date),
-        meeting_date = COALESCE($11, meeting_date),
-        reply_due_date = COALESCE($12, reply_due_date),
-        urgency_level = COALESCE($14, urgency_level),
-        secret_level = COALESCE($15, secret_level),
-        updated_at = NOW()
-       WHERE id = $13`,
-      [
-        newDocId, newTitle, newMemoNo, newMemoDate, newSender, newRecipientTo,
-        newAdditionalDocs, newMainText, newTaskDetail, newSignDate, newMeetingDate,
-        newReplyDueDate, id, newUrgencyLevel, newSecretLevel
-      ]
+      `UPDATE tasks SET document_id = $1, updated_at = NOW() WHERE id = $2`,
+      [newDocId, id]
     );
 
     try { await fs.unlink(safePath); } catch (e) {}

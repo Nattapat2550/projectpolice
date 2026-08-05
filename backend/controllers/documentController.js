@@ -1,7 +1,9 @@
 const fs = require('fs').promises; 
 const path = require('path');
+const pool = require('../config/db');
 const { extractDataWithGemini } = require('../services/ocrService'); 
 const { parseFilenameInfo } = require('../utils/filenameParser');
+const { calculateFiscalRoundAndYear } = require('../utils/fiscalYearHelper');
 
 // 🧹 ฟังก์ชันอัตโนมัติสำหรับลบไฟล์สแกนชั่วคราวที่ตกค้างในโฟลเดอร์ uploads เกิน 15 นาที
 async function cleanStaleUploads() {
@@ -48,11 +50,42 @@ exports.processDocuments = async (req, res) => {
       safePath = path.join(path.dirname(file.path), safeFileName);
 
       const engine = req.body.engine || 'gemini'; // Default to gemini if not provided
-      const geminiResult = await extractDataWithGemini(safePath, file.mimetype, engine);
-      const { text, extractedData } = geminiResult;
-
-      // สกัดข้อมูลจากชื่อไฟล์ (เช่น 556-ศตคม.(ตู่).pdf => 556=receive_no, ศตคม.=sender, ตู่=assignee)
       const fnInfo = parseFilenameInfo(file.originalname);
+
+      // เช็คว่ามีเลขรับจากชื่อไฟล์ และตรงกับรอบตัดของวันที่อัพโหลดหรือไม่
+      const uploadDate = new Date();
+      const { round, fiscalYear } = calculateFiscalRoundAndYear(uploadDate);
+
+      let existingTask = null;
+      if (fnInfo.receive_no) {
+        const receiveNoNum = parseInt(fnInfo.receive_no, 10);
+        if (!isNaN(receiveNoNum)) {
+          const taskRes = await pool.query(
+            `SELECT id, receive_no, receive_year, round, memo_no, memo_date, sender, recipient_to, title, notes, created_at
+             FROM tasks 
+             WHERE receive_no = $1 AND receive_year = $2 AND COALESCE(round, 1) = $3
+             LIMIT 1`,
+            [receiveNoNum, fiscalYear, round]
+          );
+          if (taskRes.rows.length > 0) {
+            existingTask = taskRes.rows[0];
+          }
+        }
+      }
+
+      let geminiResult;
+      let isDuplicate = false;
+
+      if (existingTask) {
+        // ประหยัดการสแกนด้วย AI OCR เมื่อพบว่าเป็นไฟล์ที่มีเลขรับและรอบตัดซ้ำในระบบ
+        isDuplicate = true;
+        geminiResult = await extractDataWithGemini(safePath, file.mimetype, engine, { scanMode: 'partial' });
+      } else {
+        // รายการใหม่ สแกนเต็มรูปแบบ
+        geminiResult = await extractDataWithGemini(safePath, file.mimetype, engine);
+      }
+
+      const { text, extractedData } = geminiResult;
 
       let memos = Array.isArray(extractedData) ? extractedData : [];
       if (memos.length === 0) {
@@ -60,24 +93,37 @@ exports.processDocuments = async (req, res) => {
       }
 
       const processedMemos = memos.map(memo => {
-        const receive_no = fnInfo.receive_no || memo.receive_no || null;
-        const sender = fnInfo.sender || memo.จาก || memo.sender || null;
+        const receive_no = fnInfo.receive_no || memo.receive_no || (existingTask ? existingTask.receive_no : null);
+        const sender = fnInfo.sender || memo.จาก || memo.sender || (existingTask ? existingTask.sender : null);
         
-        let assignments = Array.isArray(memo.assignments) ? [...memo.assignments] : [];
+        let assignments = [];
         if (fnInfo.assignee) {
-          const exists = assignments.some(a => a && a.responsible_person === fnInfo.assignee);
-          if (!exists) {
-            assignments.unshift({ responsible_person: fnInfo.assignee });
-          }
+          assignments = [{ responsible_person: fnInfo.assignee, role_or_name: fnInfo.assignee }];
+        } else if (Array.isArray(memo.assignments) && memo.assignments.length > 0) {
+          assignments = memo.assignments;
         }
 
-        return {
-          ...memo,
-          receive_no: receive_no,
-          จาก: sender,
-          sender: sender,
-          assignments: assignments
-        };
+        if (isDuplicate) {
+          return {
+            ...memo,
+            is_duplicate: true,
+            existing_task_id: existingTask.id,
+            receive_no: receive_no,
+            receive_date: existingTask.created_at ? new Date(existingTask.created_at).toISOString().split('T')[0] : (memo.receive_date || null),
+            จาก: sender,
+            sender: sender,
+            assignments: assignments
+          };
+        } else {
+          return {
+            ...memo,
+            is_duplicate: false,
+            receive_no: receive_no,
+            จาก: sender,
+            sender: sender,
+            assignments: assignments
+          };
+        }
       });
 
       results.push({

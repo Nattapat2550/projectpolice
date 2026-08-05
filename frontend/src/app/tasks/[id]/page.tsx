@@ -360,6 +360,10 @@ export default function TaskDetailPage() {
         try {
             setSaving(true);
             const payload: Record<string, any> = {};
+            if (reviewModalData.notes?.apply) payload.notes = reviewModalData.notes.newVal;
+            if (reviewModalData.sign_date?.apply) payload.sign_date = reviewModalData.sign_date.newVal;
+            if (reviewModalData.meeting_date?.apply) payload.meeting_date = reviewModalData.meeting_date.newVal;
+            if (reviewModalData.reply_due_date?.apply) payload.reply_due_date = reviewModalData.reply_due_date.newVal;
             if (reviewModalData.title?.apply) payload.name = reviewModalData.title.newVal;
             if (reviewModalData.memo_no?.apply) payload.memo_no = convertThaiDigits(reviewModalData.memo_no.newVal);
             if (reviewModalData.sender?.apply) payload.sender = reviewModalData.sender.newVal;
@@ -493,26 +497,25 @@ export default function TaskDetailPage() {
                     : "";
 
                 setReviewModalData({
-                    title: { oldVal: taskData?.name || "", newVal: memo.เรื่อง || "", apply: Boolean(memo.เรื่อง) },
-                    memo_no: { oldVal: convertThaiDigits(taskData?.memo_no) || "", newVal: memoNoClean || "", apply: Boolean(memoNoClean) },
-                    sender: { oldVal: taskData?.sender || "", newVal: memo.จาก || memo.sender || "", apply: Boolean(memo.จาก || memo.sender) },
-                    recipient_to: { oldVal: taskData?.recipient_to || "", newVal: memo.เรียน || memo.recipient_to || "", apply: Boolean(memo.เรียน || memo.recipient_to) },
-                    memo_date: { oldVal: taskData?.memo_date ? String(taskData.memo_date).split("T")[0] : "", newVal: memo.วันที่ || "", apply: Boolean(memo.วันที่) },
-                    urgency_level: { oldVal: taskData?.urgency_level || "ปกติ", newVal: memo.urgency_level || "ปกติ", apply: Boolean(memo.urgency_level && memo.urgency_level !== "ปกติ") },
-                    secret_level: { oldVal: taskData?.secret_level || "ปกติ", newVal: memo.secret_level || "ปกติ", apply: Boolean(memo.secret_level && memo.secret_level !== "ปกติ") },
+                    notes: { oldVal: taskData?.notes || "", newVal: memo.notes || memo.หมายเหตุ || "", apply: Boolean(memo.notes || memo.หมายเหตุ) },
+                    sign_date: { oldVal: taskData?.sign_date ? String(taskData.sign_date).split("T")[0] : "", newVal: memo.sign_date || "", apply: Boolean(memo.sign_date) },
+                    meeting_date: { oldVal: taskData?.meeting_date ? String(taskData.meeting_date).split("T")[0] : "", newVal: memo.meeting_date || "", apply: Boolean(memo.meeting_date) },
+                    reply_due_date: { oldVal: taskData?.reply_due_date ? String(taskData.reply_due_date).split("T")[0] : "", newVal: memo.reply_due_date || "", apply: Boolean(memo.reply_due_date) },
                     assignments: { oldVal: currentAssignStr || "", newVal: assignStr || "", apply: Boolean(assignStr) },
                     main_text: { oldVal: taskData?.main_text || "", newVal: memo.main_text || "", apply: Boolean(memo.main_text) },
                     task_detail: { oldVal: taskData?.task_detail || "", newVal: memo.task_detail || "", apply: Boolean(memo.task_detail) },
                 });
-                fetchTask();
             } else {
-                throw new Error(data.message || "Upload failed");
+                Swal.fire({
+                    icon: "error",
+                    title: "ไฟล์ไม่ตรงกับงานนี้!",
+                    text: data.message || "ไม่สามารถอัปโหลดข้อมูลทับได้ กรุณาลองใหม่อีกครั้ง"
+                });
             }
         } catch (err: any) {
-            console.error("Overwrite error:", err);
             Swal.fire({
                 icon: "error",
-                title: "เกิดข้อผิดพลาดในการอัปโหลดทับ",
+                title: "เกิดข้อผิดพลาดในการอัปโหลด",
                 text: err.message || "ไม่สามารถอัปโหลดข้อมูลทับได้ กรุณาลองใหม่อีกครั้ง"
             });
         } finally {
@@ -1785,13 +1788,10 @@ export default function TaskDetailPage() {
 
                         <div className="space-y-4">
                             {[
-                                { key: "title", label: "ชื่อเรื่อง", type: "text" },
-                                { key: "memo_no", label: "เลขที่หนังสือ (เลขอารบิก)", type: "text" },
-                                { key: "sender", label: "จาก (ส่วนราชการ)", type: "text" },
-                                { key: "recipient_to", label: "เรียน (ถึง)", type: "text" },
-                                { key: "memo_date", label: "วันที่หนังสือ", type: "text" },
-                                { key: "urgency_level", label: "ระดับความเร่งด่วน", type: "select", options: URGENCY_LEVELS },
-                                { key: "secret_level", label: "ชั้นความลับ", type: "select", options: SECRET_LEVELS },
+                                { key: "notes", label: "หมายเหตุ", type: "text" },
+                                { key: "sign_date", label: "วันที่ลงนาม", type: "date" },
+                                { key: "meeting_date", label: "วันประชุม", type: "date" },
+                                { key: "reply_due_date", label: "วันตอบรับ", type: "date" },
                                 { key: "assignments", label: "ผู้รับผิดชอบ / มอบหมายงาน", type: "text" },
                                 { key: "main_text", label: "เนื้อหาเรื่อง / สาระสำคัญ", type: "textarea" },
                                 { key: "task_detail", label: "รายละเอียดการมอบหมายงาน", type: "textarea" },
@@ -1855,7 +1855,7 @@ export default function TaskDetailPage() {
                                             </select>
                                         ) : (
                                             <input
-                                                type="text"
+                                                type={field.type || "text"}
                                                 value={item.newVal}
                                                 disabled={!item.apply}
                                                 onChange={(e) =>
