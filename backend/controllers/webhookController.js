@@ -6,29 +6,29 @@ const { syncTaskDocumentNotesFromText } = require('../utils/attachmentSync');
 exports.handleSheetUpdate = async (req, res) => {
   console.log("\n================ WEBHOOK RECEIVED ================");
   console.log("Webhook Payload:", req.body);
-  const data = req.body;
-  const taskId = data.id;
+  const data = req.body || {};
+  const taskId = data.id || data.ID || data['ID'] || data['id'];
 
   if (!taskId) {
     return res.status(400).json({ success: false, message: 'Missing Task ID' });
   }
 
-  const receive_no = data.receive_no;
-  const receive_year = data.receive_year;
-  const created_at = data.created_at;
-  const memo_no = data.memo_no;
-  const memo_date = data.memo_date;
-  const sender = data.sender;
-  const recipient_to = data.recipient_to;
-  const title = data.title;
-  const due_date = data.due_date;
-  const task_detail = data.task_detail;
-  const sign_date = data.sign_date;
-  const notes = data.notes;
+  const receive_no = data.receive_no !== undefined ? data.receive_no : (data['เลขทะเบียน'] !== undefined ? data['เลขทะเบียน'] : null);
+  const receive_year = data.receive_year !== undefined ? data.receive_year : (data['ปีทะเบียน'] !== undefined ? data['ปีทะเบียน'] : null);
+  const created_at = data.created_at || data.receive_date || data['วันที่รับ'] || null;
+  const memo_no = data.memo_no !== undefined ? data.memo_no : (data['ที่หนังสือ'] || data['ที่'] || null);
+  const memo_date = data.memo_date !== undefined ? data.memo_date : (data['ลงวันที่'] || null);
+  const sender = data.sender !== undefined ? data.sender : (data['จาก'] || null);
+  const recipient_to = data.recipient_to !== undefined ? data.recipient_to : (data['ถึง'] || null);
+  const title = data.title !== undefined ? data.title : (data['เรื่อง'] || null);
+  const due_date = data.due_date !== undefined ? data.due_date : (data['วันที่'] || null);
+  const task_detail = data.task_detail !== undefined ? data.task_detail : (data['ข้อสั่งการ'] || null);
+  const sign_date = data.sign_date !== undefined ? data.sign_date : (data['วันที่ลงนาม'] || null);
+  const notes = data.notes !== undefined ? data.notes : (data['หมายเหตุ'] || null);
   const urgency_level = data.urgency_level || data.urgencyLevel || data['ชั้นความเร็ว'] || data['ความเร่งด่วน'] || null;
   const secret_level = data.secret_level || data.secretLevel || data['ชั้นความลับ'] || data['ความลับ'] || null;
-  const additional_docs = data.additional_docs;
-  const document_link = data.document_link || data.drive_web_view_link;
+  const additional_docs = data.additional_docs !== undefined ? data.additional_docs : (data['เอกสารข้อมูลเพิ่มเติม'] || null);
+  const document_link = data.document_link || data.drive_web_view_link || data['ลิงก์ไฟล์ต้นฉบับ'] || null;
 
   const parseDate = (d) => {
     if (!d) return null;
@@ -68,56 +68,69 @@ exports.handleSheetUpdate = async (req, res) => {
     return `${year}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
   };
 
+  const parseNum = (val) => {
+    if (val === null || val === undefined || String(val).trim() === '') return null;
+    const n = parseInt(val, 10);
+    return isNaN(n) ? null : n;
+  };
+
+  const parseStr = (val) => {
+    if (val === null || val === undefined) return null;
+    const s = String(val).trim();
+    return s === '' ? null : s;
+  };
+
   try {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      
+
       const updateQuery = `
         UPDATE tasks 
         SET 
           receive_no = COALESCE($1, receive_no),
           receive_year = COALESCE($2, receive_year),
-          memo_no = COALESCE(memo_no, $3),
-          memo_date = COALESCE(memo_date, $4),
-          sender = COALESCE(sender, $5),
-          recipient_to = COALESCE(recipient_to, $6),
-          title = COALESCE(title, $7),
+          memo_no = COALESCE($3, memo_no),
+          memo_date = COALESCE($4, memo_date),
+          sender = COALESCE($5, sender),
+          recipient_to = COALESCE($6, recipient_to),
+          title = COALESCE($7, title),
           due_date = COALESCE($8, due_date),
           task_detail = COALESCE($9, task_detail),
-          sign_date = COALESCE(sign_date, $10),
+          sign_date = COALESCE($10, sign_date),
           notes = COALESCE($11, notes),
           additional_docs = COALESCE($12, additional_docs),
-          urgency_level = COALESCE(urgency_level, $13),
-          secret_level = COALESCE(secret_level, $14),
+          urgency_level = COALESCE($13, urgency_level),
+          secret_level = COALESCE($14, secret_level),
+          created_at = COALESCE(CAST($15 AS timestamp), created_at),
           updated_at = NOW()
         WHERE id = $16
       `;
 
       await client.query(updateQuery, [
-        receive_no ? parseInt(receive_no, 10) : null,
-        receive_year ? parseInt(receive_year, 10) : null,
-        memo_no,
+        parseNum(receive_no),
+        parseNum(receive_year),
+        parseStr(memo_no),
         parseDate(memo_date),
-        sender,
-        recipient_to,
-        title,
+        parseStr(sender),
+        parseStr(recipient_to),
+        parseStr(title),
         parseDate(due_date),
-        task_detail,
+        parseStr(task_detail),
         parseDate(sign_date),
-        notes,
-        additional_docs,
-        urgency_level,
-        secret_level,
+        parseStr(notes),
+        parseStr(additional_docs),
+        parseStr(urgency_level),
+        parseStr(secret_level),
         parseDate(created_at),
         taskId
       ]);
 
-      if (additional_docs !== undefined) {
+      if (additional_docs !== undefined && additional_docs !== null) {
         await syncTaskDocumentNotesFromText(client, taskId, additional_docs);
       }
 
-      // 📄 หากมีการส่ง document_link (ลิงก์ไฟล์ต้นฉบับ / Column P) มาจาก Google Sheets
+      // 📄 หากมีการส่ง document_link (ลิงก์ไฟล์ต้นฉบับ) มาจาก Google Sheets
       if (document_link) {
         const taskRes = await client.query('SELECT document_id FROM tasks WHERE id = $1', [taskId]);
         if (taskRes.rows.length > 0) {
@@ -133,12 +146,15 @@ exports.handleSheetUpdate = async (req, res) => {
           }
         }
       }
-            // 👥 หากมีการส่งข้อมูลผู้รับผิดชอบ (personInCharge / Column I) มาจาก Google Sheets
+
+      // 👥 หากมีการส่งข้อมูลผู้รับผิดชอบ (personInCharge) มาจาก Google Sheets
       const personInCharge = data.personInCharge !== undefined ? data.personInCharge 
         : (data.person_in_charge !== undefined ? data.person_in_charge 
         : (data.responsible_person !== undefined ? data.responsible_person 
-        : (data.assignee !== undefined ? data.assignee : undefined)));
-      if (personInCharge !== undefined && personInCharge !== null) {
+        : (data.assignee !== undefined ? data.assignee 
+        : (data['ผู้ปฏิบัติ'] !== undefined ? data['ผู้ปฏิบัติ'] : undefined))));
+
+      if (personInCharge !== undefined && personInCharge !== null && String(personInCharge).trim() !== '') {
         const rawAssignees = String(personInCharge)
           .split(/[,;\n]/)
           .map(s => s.trim())
@@ -168,6 +184,7 @@ exports.handleSheetUpdate = async (req, res) => {
           }
         }
       }
+
       // 🏷️ อัปเดตเปลี่ยนชื่อไฟล์บน Google Drive หากแก้ไขข้อมูลที่ส่งผลต่อชื่อไฟล์
       const docRes = await client.query(
         `SELECT t.receive_no, t.sender, d.id as doc_id, d.filename, d.drive_file_id,
@@ -187,6 +204,7 @@ exports.handleSheetUpdate = async (req, res) => {
           await client.query('UPDATE documents SET filename = $1 WHERE id = $2', [newFilename, row.doc_id]);
         }
       }
+
       const editorEmail = data.editorEmail || null;
       const logDetails = { source: 'google_sheets' };
       if (editorEmail) logDetails.editor = editorEmail;
@@ -197,7 +215,7 @@ exports.handleSheetUpdate = async (req, res) => {
       );
 
       await client.query('COMMIT');
-            console.log(`[Webhook] Successfully updated task ID ${taskId} and assignees from Google Sheets`);
+      console.log(`[Webhook] Successfully updated task ID ${taskId} and assignees from Google Sheets`);
       res.status(200).json({ success: true, message: 'Updated from Sheet' });
     } catch (e) {
       await client.query('ROLLBACK');
@@ -207,6 +225,6 @@ exports.handleSheetUpdate = async (req, res) => {
     }
   } catch (error) {
     console.error('[Webhook] Update Error:', error);
-    res.status(500).json({ success: false, message: 'Server error processing webhook' });
+    res.status(500).json({ success: false, message: 'Server error processing webhook', error: error.message });
   }
 };
