@@ -219,13 +219,13 @@ function toDateInputValue(value?: string | null) {
     const match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
     if (match) {
         let year = parseInt(match[1], 10);
-        if (year < 2400) year += 543;
+        if (year > 2400) year -= 543;
         return `${year}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
     }
-    const d = new Date(value);
+    const d = new Date(str);
     if (isNaN(d.getTime())) return "";
     let year = d.getFullYear();
-    if (year < 2400) year += 543;
+    if (year > 2400) year -= 543;
     const m = (d.getMonth() + 1).toString().padStart(2, "0");
     const day = d.getDate().toString().padStart(2, "0");
     return `${year}-${m}-${day}`;
@@ -237,18 +237,19 @@ function toDateTimeInputValue(value?: string | null) {
     const match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2}))?/);
     if (match) {
         let year = parseInt(match[1], 10);
-        if (year < 2400) year += 543;
-        const timePart = match[4] ? `T${match[4].padStart(2, "0")}:${match[5].padStart(2, "0")}` : "";
+        if (year > 2400) year -= 543;
+        const timePart = match[4] ? `T${match[4].padStart(2, "0")}:${match[5].padStart(2, "0")}` : "T00:00";
         return `${year}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}${timePart}`;
     }
-    const d = new Date(value);
+    const d = new Date(str);
     if (isNaN(d.getTime())) return "";
     let year = d.getFullYear();
-    if (year < 2400) year += 543;
-    const offset = d.getTimezoneOffset();
-    const local = new Date(d.getTime() - offset * 60000);
-    local.setFullYear(year);
-    return local.toISOString().slice(0, 16);
+    if (year > 2400) year -= 543;
+    const m = (d.getMonth() + 1).toString().padStart(2, "0");
+    const day = d.getDate().toString().padStart(2, "0");
+    const hh = d.getHours().toString().padStart(2, "0");
+    const mm = d.getMinutes().toString().padStart(2, "0");
+    return `${year}-${m}-${day}T${hh}:${mm}`;
 }
 
 function formatReceiveYear(year?: number | string | null) {

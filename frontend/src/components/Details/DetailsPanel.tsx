@@ -195,7 +195,28 @@ export default function DetailsPanel({
         const d = new Date(dateStr);
         if (isNaN(d.getTime())) return "";
         const pad = (n: number) => n.toString().padStart(2, '0');
-        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        let year = d.getFullYear();
+        if (year > 2400) year -= 543;
+        return `${year}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+
+    const toDateInputValue = (value?: string | null) => {
+        if (!value) return "";
+        let str = String(value).trim();
+        if (!str) return "";
+        const match = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+        if (match) {
+            let year = parseInt(match[1], 10);
+            if (year > 2400) year -= 543;
+            return `${year}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+        }
+        const d = new Date(str);
+        if (isNaN(d.getTime())) return "";
+        let year = d.getFullYear();
+        if (year > 2400) year -= 543;
+        const m = (d.getMonth() + 1).toString().padStart(2, "0");
+        const day = d.getDate().toString().padStart(2, "0");
+        return `${year}-${m}-${day}`;
     };
 
     const statusOption: StatusOption[] = [
@@ -358,7 +379,7 @@ export default function DetailsPanel({
                                                         type="date" 
                                                         className={styles.CustomSelect}
                                                         style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
-                                                        value={taskData?.meeting_date ? new Date(taskData.meeting_date).toISOString().split('T')[0] : ""} 
+                                                        value={toDateInputValue(taskData?.meeting_date)} 
                                                         onChange={(e) => setTaskData({ ...taskData, meeting_date: e.target.value })} 
                                                     />
                                                 </div>
@@ -368,7 +389,7 @@ export default function DetailsPanel({
                                                         type="date" 
                                                         className={styles.CustomSelect}
                                                         style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
-                                                        value={taskData?.reply_due_date ? new Date(taskData.reply_due_date).toISOString().split('T')[0] : ""} 
+                                                        value={toDateInputValue(taskData?.reply_due_date)} 
                                                         onChange={(e) => setTaskData({ ...taskData, reply_due_date: e.target.value })} 
                                                     />
                                                 </div>
@@ -388,7 +409,7 @@ export default function DetailsPanel({
                                                         type="date" 
                                                         className={styles.CustomSelect}
                                                         style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
-                                                        value={taskData?.memo_date ? new Date(taskData.memo_date).toISOString().split('T')[0] : ""} 
+                                                        value={toDateInputValue(taskData?.memo_date)} 
                                                         onChange={(e) => setTaskData({ ...taskData, memo_date: e.target.value })} 
                                                     />
                                                 </div>
@@ -420,7 +441,7 @@ export default function DetailsPanel({
                                                         type="date" 
                                                         className={styles.CustomSelect}
                                                         style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
-                                                        value={taskData?.sign_date ? new Date(taskData.sign_date).toISOString().split('T')[0] : ""} 
+                                                        value={toDateInputValue(taskData?.sign_date)} 
                                                         onChange={(e) => setTaskData({ ...taskData, sign_date: e.target.value })} 
                                                     />
                                                 </div>
@@ -463,26 +484,6 @@ export default function DetailsPanel({
                                                         <option value="ลับมาก">ลับมาก</option>
                                                         <option value="ลับที่สุด">ลับที่สุด</option>
                                                     </select>
-                                                </div>
-                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
-                                                    <strong>วันนัดประชุม: </strong>
-                                                    <input 
-                                                        type="date" 
-                                                        className={styles.CustomSelect}
-                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
-                                                        value={taskData?.meeting_date ? new Date(taskData.meeting_date).toISOString().split('T')[0] : ""} 
-                                                        onChange={(e) => setTaskData({ ...taskData, meeting_date: e.target.value })} 
-                                                    />
-                                                </div>
-                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 mt-2">
-                                                    <strong>วันนัดส่งแบบตอบรับ (ประชุม): </strong>
-                                                    <input 
-                                                        type="date" 
-                                                        className={styles.CustomSelect}
-                                                        style={{ width: 'auto', padding: '0.4rem 0.8rem' }}
-                                                        value={taskData?.reply_due_date ? new Date(taskData.reply_due_date).toISOString().split('T')[0] : ""} 
-                                                        onChange={(e) => setTaskData({ ...taskData, reply_due_date: e.target.value })} 
-                                                    />
                                                 </div>
                                             </div>
                                         ) : (
