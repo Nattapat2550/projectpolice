@@ -226,19 +226,12 @@ exports.getAllTasks = async (req, res) => {
         t.sender,
         t.recipient_to,
         t.additional_docs,
-        COALESCE(
-          d.drive_web_view_link,
-          (SELECT td.drive_web_view_link FROM task_documents td WHERE td.task_id = t.id AND td.drive_web_view_link IS NOT NULL AND td.drive_web_view_link != '' ORDER BY td.id ASC LIMIT 1)
-        ) AS document_link,
-        COALESCE(
-          d.drive_web_view_link,
-          (SELECT td.drive_web_view_link FROM task_documents td WHERE td.task_id = t.id AND td.drive_web_view_link IS NOT NULL AND td.drive_web_view_link != '' ORDER BY td.id ASC LIMIT 1)
-        ) AS drive_web_view_link,
+        d.drive_web_view_link AS document_link,
+        d.drive_web_view_link AS drive_web_view_link,
         (
           CASE 
             WHEN d.drive_web_view_link IS NOT NULL AND d.drive_web_view_link != '' THEN true
             WHEN t.document_id IS NOT NULL THEN true
-            WHEN EXISTS (SELECT 1 FROM task_documents td WHERE td.task_id = t.id) THEN true
             ELSE false
           END
         ) AS has_document
@@ -296,19 +289,12 @@ exports.getUrgentTasks = async (req, res) => {
         t.sender,
         t.recipient_to,
         t.additional_docs,
-        COALESCE(
-          d.drive_web_view_link,
-          (SELECT td.drive_web_view_link FROM task_documents td WHERE td.task_id = t.id AND td.drive_web_view_link IS NOT NULL AND td.drive_web_view_link != '' ORDER BY td.id ASC LIMIT 1)
-        ) AS document_link,
-        COALESCE(
-          d.drive_web_view_link,
-          (SELECT td.drive_web_view_link FROM task_documents td WHERE td.task_id = t.id AND td.drive_web_view_link IS NOT NULL AND td.drive_web_view_link != '' ORDER BY td.id ASC LIMIT 1)
-        ) AS drive_web_view_link,
+        d.drive_web_view_link AS document_link,
+        d.drive_web_view_link AS drive_web_view_link,
         (
           CASE 
             WHEN d.drive_web_view_link IS NOT NULL AND d.drive_web_view_link != '' THEN true
             WHEN t.document_id IS NOT NULL THEN true
-            WHEN EXISTS (SELECT 1 FROM task_documents td WHERE td.task_id = t.id) THEN true
             ELSE false
           END
         ) AS has_document

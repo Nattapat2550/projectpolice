@@ -254,7 +254,34 @@ export default function TaskExcelUploadPage() {
                                 <div className="text-sm"><span className="text-zinc-500 mr-2">[เลขที่หนังสือ]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.memo_no || renderNull()}</span></div>
                                 <div className="text-sm"><span className="text-zinc-500 mr-2">[จาก]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.sender || renderNull()}</span></div>
                                 <div className="text-sm"><span className="text-zinc-500 mr-2">[ถึง]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.recipient_to || renderNull()}</span></div>
-                                {row.additional_docs && <div className="text-sm"><span className="text-zinc-500 mr-2">[เอกสารแนบ]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.additional_docs}</span></div>}
+                                {row.parsed_docs && row.parsed_docs.length > 0 ? (
+                                  <div className="text-sm my-1 p-2 bg-blue-50/50 dark:bg-zinc-800/50 rounded-lg border border-blue-100 dark:border-zinc-700">
+                                    <span className="text-xs font-bold text-blue-800 dark:text-blue-300 block mb-1">📎 เอกสารประกอบเพิ่มเติม ({row.parsed_docs.length} รายการ):</span>
+                                    <ul className="space-y-1 text-xs">
+                                      {row.parsed_docs.map((doc: any, docIdx: number) => (
+                                        <li key={docIdx} className="flex items-center flex-wrap gap-1">
+                                          <span className="font-semibold text-zinc-700 dark:text-zinc-200">• {doc.filename}</span>
+                                          {doc.notes && <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 px-1.5 py-0.5 rounded text-[10px]">หน้า {doc.notes}</span>}
+                                          {doc.link && (
+                                            <a href={doc.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800 dark:text-blue-400 font-medium ml-1">
+                                              [เปิดดูไฟล์]
+                                            </a>
+                                          )}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                ) : (
+                                  row.additional_docs && <div className="text-sm"><span className="text-zinc-500 mr-2">[เอกสารแนบ]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.additional_docs}</span></div>
+                                )}
+                                {row.document_link && (
+                                  <div className="text-sm">
+                                    <span className="text-zinc-500 mr-2">[ลิงก์ต้นฉบับ]</span> 
+                                    <a href={row.document_link} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 underline hover:text-blue-800 dark:text-blue-400 break-all">
+                                      {row.document_link}
+                                    </a>
+                                  </div>
+                                )}
                                 <div className="text-sm"><span className="text-zinc-500 mr-2">[ลงวันที่]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.memo_date || renderNull()}</span></div>
                                 <div className="text-sm"><span className="text-zinc-500 mr-2">[เลขรับ]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.receive_no ? `${row.receive_no}/${row.receive_year}` : renderNull()}</span></div>
                             </div>

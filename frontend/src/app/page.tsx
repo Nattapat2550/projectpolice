@@ -89,7 +89,7 @@ function normalizeTask(raw: any, usersMap: Map<string, UserMeta>, userByNameMap:
     notes: raw.notes ?? null,
     document_link: raw.document_link || raw.drive_web_view_link || null,
     drive_web_view_link: raw.drive_web_view_link || raw.document_link || null,
-    has_document: raw.has_document ?? !!(raw.document_link || raw.drive_web_view_link || raw.document_id),
+    has_document: !!(raw.document_link || raw.drive_web_view_link || raw.document_id),
     createdAt: raw.createdAt ?? raw.created_at ?? null,
     assignments,
   };

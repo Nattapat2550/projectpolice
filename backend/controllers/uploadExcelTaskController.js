@@ -2,7 +2,7 @@ const xlsx = require("xlsx");
 const pool = require("../config/db");
 const { appendMultipleTasksToSheet, appendTaskToSheet } = require('../services/googleSheetsService');
 const { calculateFiscalRoundAndYear } = require("../utils/fiscalYearHelper");
-const { syncTaskDocumentNotesFromText } = require("../utils/attachmentSync");
+const { syncTaskDocumentNotesFromText, parseAdditionalDocsText } = require("../utils/attachmentSync");
 
 // สร้างตัวแปร Global สำหรับเก็บ Progress 
 if (!global.uploadProgress) { 
@@ -207,31 +207,93 @@ exports.uploadExcelTasks = async (req, res) => {
                 let excelSender = null;
                 let excelRecipientTo = null;
                 let excelAdditionalDocs = null;
+                let excelDocumentLink = null;
                 let excelMemoNo = null;
                 let excelUrgencyLevel = null;
                 let excelSecretLevel = null;
 
                 for (const key of Object.keys(row)) {
-                    const cleanKey = key.replace(/\s+/g, '');
+                    if (!key) continue;
+                    const cleanKey = key.trim().replace(/\s+/g, '');
+                    const val = row[key];
+                    if (val === null || val === undefined || val === '') continue;
+
+                    let strVal = null;
+                    let linkVal = null;
+
+                    if (typeof val === 'object') {
+                        strVal = val.text ? String(val.text).trim() : (val.result ? String(val.result).trim() : String(val).trim());
+                        linkVal = val.hyperlink || val.target || null;
+                    } else {
+                        strVal = String(val).trim();
+                        if (strVal.startsWith('http://') || strVal.startsWith('https://')) {
+                            linkVal = strVal;
+                        }
+                    }
+
+                    // 1. จาก / ผู้ส่ง
                     if (cleanKey === "จาก" || cleanKey === "ส่วนราชการ" || cleanKey === "ผู้ส่ง" || cleanKey === "หน่วยงาน" || cleanKey === "หน่วยงานผู้ส่ง") {
-                        if (!excelSender) excelSender = row[key] ? String(row[key]).trim() : null;
+                        if (!excelSender) excelSender = strVal;
                     }
+                    // 2. ถึง / ผู้รับ
                     if (cleanKey === "ถึง" || cleanKey === "เรียน" || cleanKey === "ผู้รับ" || cleanKey === "หน่วยงานรับ") {
-                        if (!excelRecipientTo) excelRecipientTo = row[key] ? String(row[key]).trim() : null;
+                        if (!excelRecipientTo) excelRecipientTo = strVal;
                     }
-                    if (cleanKey === "เอกสารข้อมูลเพิ่มเติม" || cleanKey === "สิ่งที่ส่งมาด้วย" || cleanKey === "เอกสารแนบ" || cleanKey === "สิ่งที่ส่งมา") {
-                        if (!excelAdditionalDocs) excelAdditionalDocs = row[key] ? String(row[key]).trim() : null;
+                    // 3. เอกสารข้อมูลเพิ่มเติม / เอกสารเพิ่มเติม / เอกสารแนบ / สิ่งที่ส่งมาด้วย
+                    if (
+                        cleanKey === "เอกสารข้อมูลเพิ่มเติม" || 
+                        cleanKey === "เอกสารเพิ่มเติม" || 
+                        cleanKey === "สิ่งที่ส่งมาด้วย" || 
+                        cleanKey === "สิ่งที่ส่งมา" || 
+                        cleanKey === "เอกสารแนบ" || 
+                        cleanKey === "เอกสารประกอบ" ||
+                        cleanKey === "รายละเอียดเพิ่มเติม" ||
+                        cleanKey === "เพิ่มเติม" ||
+                        cleanKey.includes("เอกสารเพิ่มเติม") ||
+                        cleanKey.includes("สิ่งที่ส่งมา") ||
+                        cleanKey.includes("เอกสารแนบ") ||
+                        cleanKey.includes("เอกสารประกอบ")
+                    ) {
+                        if (!excelAdditionalDocs) {
+                            excelAdditionalDocs = strVal || linkVal;
+                        }
                     }
+                    // 4. ลิงก์ไฟล์ต้นฉบับ / ลิงก์เอกสาร / Google Drive Link
+                    if (
+                        cleanKey === "ลิงก์ไฟล์ต้นฉบับ" || 
+                        cleanKey === "ลิงก์ต้นฉบับ" || 
+                        cleanKey === "ไฟล์ต้นฉบับ" || 
+                        cleanKey === "เอกสารต้นฉบับ" ||
+                        cleanKey === "ลิงก์เอกสาร" || 
+                        cleanKey === "ลิงก์ไฟล์" || 
+                        cleanKey === "ลิงก์" || 
+                        cleanKey === "URL" || 
+                        cleanKey === "document_link" || 
+                        cleanKey === "drive_web_view_link" ||
+                        cleanKey.includes("ลิงก์") ||
+                        cleanKey.includes("ต้นฉบับ") ||
+                        cleanKey.includes("document_link") ||
+                        cleanKey.includes("drive_link")
+                    ) {
+                        if (!excelDocumentLink) {
+                            excelDocumentLink = linkVal || strVal;
+                        }
+                    }
+                    // 5. ที่หนังสือ
                     if (cleanKey === "ที่หนังสือ" || cleanKey === "เลขที่หนังสือ" || cleanKey === "ที่") {
-                        if (!excelMemoNo) excelMemoNo = row[key] ? String(row[key]).trim() : null;
+                        if (!excelMemoNo) excelMemoNo = strVal;
                     }
+                    // 6. ความเร่งด่วน
                     if (cleanKey === "ความเร่งด่วน" || cleanKey === "ระดับความเร่งด่วน" || cleanKey === "ชั้นความเร่งด่วน" || cleanKey === "ชั้นความเร็ว") {
-                        if (!excelUrgencyLevel) excelUrgencyLevel = row[key] ? String(row[key]).trim() : null;
+                        if (!excelUrgencyLevel) excelUrgencyLevel = strVal;
                     }
+                    // 7. ความลับ
                     if (cleanKey === "ความลับ" || cleanKey === "ชั้นความลับ" || cleanKey === "ระดับความลับ") {
-                        if (!excelSecretLevel) excelSecretLevel = row[key] ? String(row[key]).trim() : null;
+                        if (!excelSecretLevel) excelSecretLevel = strVal;
                     }
                 }
+
+                const parsedDocs = parseAdditionalDocsText(excelAdditionalDocs);
 
                 const computedUrgency = excelUrgencyLevel || row["ชั้นความเร็ว"] || row["ระดับความเร่งด่วน"] || row["ความเร่งด่วน"] ? String(excelUrgencyLevel || row["ชั้นความเร็ว"] || row["ระดับความเร่งด่วน"] || row["ความเร่งด่วน"]).trim() : "ปกติ";
                 const computedSecret = excelSecretLevel || row["ชั้นความลับ"] || row["ความลับ"] ? String(excelSecretLevel || row["ชั้นความลับ"] || row["ความลับ"]).trim() : "ปกติ";
@@ -246,7 +308,9 @@ exports.uploadExcelTasks = async (req, res) => {
                     memo_date: parseDateSafe(row["ลงวันที่"]),
                     sender: excelSender || (row["จาก"] ? String(row["จาก"]).trim() : null),
                     recipient_to: excelRecipientTo || (row["ถึง"] || row["เรียน"] ? String(row["ถึง"] || row["เรียน"]).trim() : null),
-                    additional_docs: excelAdditionalDocs || (row["เอกสารข้อมูลเพิ่มเติม"] || row["เอกสารแนบ"] || row["สิ่งที่ส่งมาด้วย"] ? String(row["เอกสารข้อมูลเพิ่มเติม"] || row["เอกสารแนบ"] || row["สิ่งที่ส่งมาด้วย"]).trim() : null),
+                    additional_docs: excelAdditionalDocs || null,
+                    parsed_docs: parsedDocs,
+                    document_link: excelDocumentLink || null,
                     title: subject || "ไม่มีชื่องาน",
                     assignee_name: row["ผู้ปฏิบัติ"] ? String(row["ผู้ปฏิบัติ"]).trim() : null,
                     due_date_str: dueDate,
@@ -372,14 +436,45 @@ exports.uploadExcelTasks = async (req, res) => {
                     let assignFlatValues = [];
                     let assignCounter = 1;
 
-                    taskRes.rows.forEach((row, idx) => {
-                        createdTaskIds.push(row.id);
-                        const assignee = toInsert[idx].assignee_name;
+                    await Promise.all(taskRes.rows.map(async (row, idx) => {
+                        const taskId = row.id;
+                        createdTaskIds.push(taskId);
+                        const item = toInsert[idx];
+                        const assignee = item.assignee_name;
                         if (assignee) {
                             assignPlaceholders.push(`($${assignCounter++}, $${assignCounter++})`);
-                            assignFlatValues.push(row.id, String(assignee));
+                            assignFlatValues.push(taskId, String(assignee));
                         }
-                    });
+
+                        if (item.additional_docs !== null) {
+                            await syncTaskDocumentNotesFromText(pool, taskId, item.additional_docs);
+                        }
+
+                        if (item.document_link) {
+                            const linkStr = String(item.document_link).trim();
+                            let docId = null;
+                            const docCheck = await pool.query('SELECT id FROM documents WHERE drive_web_view_link = $1 LIMIT 1', [linkStr]);
+                            if (docCheck.rows.length > 0) {
+                                docId = docCheck.rows[0].id;
+                            } else {
+                                const newDoc = await pool.query(
+                                    'INSERT INTO documents (filename, drive_web_view_link, created_by) VALUES ($1, $2, $3) RETURNING id',
+                                    [item.title || 'เอกสารต้นฉบับ', linkStr, created_by]
+                                );
+                                docId = newDoc.rows[0].id;
+                            }
+                            if (docId) {
+                                await pool.query('UPDATE tasks SET document_id = $1 WHERE id = $2', [docId, taskId]);
+                            }
+                            const taskDocCheck = await pool.query('SELECT id FROM task_documents WHERE task_id = $1 AND drive_web_view_link = $2 LIMIT 1', [taskId, linkStr]);
+                            if (taskDocCheck.rows.length === 0) {
+                                await pool.query(
+                                    'INSERT INTO task_documents (task_id, filename, drive_web_view_link, doc_type, notes, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
+                                    [taskId, 'เอกสารต้นฉบับ', linkStr, 'attachment', item.additional_docs || null, created_by]
+                                );
+                            }
+                        }
+                    }));
 
                     if (assignPlaceholders.length > 0) {
                         await pool.query(`INSERT INTO task_assignments (task_id, role_or_name) VALUES ${assignPlaceholders.join(', ')}`, assignFlatValues);
@@ -412,6 +507,32 @@ exports.uploadExcelTasks = async (req, res) => {
                             if (safeAdditionalDocs !== null) {
                                 await syncTaskDocumentNotesFromText(pool, taskId, safeAdditionalDocs);
                             }
+
+                            if (item.document_link) {
+                                const linkStr = String(item.document_link).trim();
+                                let docId = null;
+                                const docCheck = await pool.query('SELECT id FROM documents WHERE drive_web_view_link = $1 LIMIT 1', [linkStr]);
+                                if (docCheck.rows.length > 0) {
+                                    docId = docCheck.rows[0].id;
+                                } else {
+                                    const newDoc = await pool.query(
+                                        'INSERT INTO documents (filename, drive_web_view_link, created_by) VALUES ($1, $2, $3) RETURNING id',
+                                        [safeTitle || 'เอกสารต้นฉบับ', linkStr, created_by]
+                                    );
+                                    docId = newDoc.rows[0].id;
+                                }
+                                if (docId) {
+                                    await pool.query('UPDATE tasks SET document_id = COALESCE(document_id, $1) WHERE id = $2', [docId, taskId]);
+                                }
+                                const taskDocCheck = await pool.query('SELECT id FROM task_documents WHERE task_id = $1 AND drive_web_view_link = $2 LIMIT 1', [taskId, linkStr]);
+                                if (taskDocCheck.rows.length === 0) {
+                                    await pool.query(
+                                        'INSERT INTO task_documents (task_id, filename, drive_web_view_link, doc_type, notes, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
+                                        [taskId, 'เอกสารต้นฉบับ', linkStr, 'attachment', safeAdditionalDocs, created_by]
+                                    );
+                                }
+                            }
+
                             updatedTaskIds.push(taskId);
                             await pool.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
                             if (item.assignee_name) {

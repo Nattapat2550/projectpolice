@@ -270,8 +270,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             <tbody className="divide-y divide-[var(--shadow)]/20 text-sm">
               {tasks.map((task) => {
                 const flagged = isKanLekLongRub(task.title);
-                const hasDoc = task.has_document || !!(task.document_link || task.drive_web_view_link);
-                const docTarget = task.document_link || task.drive_web_view_link || `/tasks/${task.id}`;
+                const hasDoc = task.has_document && !!(task.document_link || task.drive_web_view_link);
+                const docTarget = task.document_link || task.drive_web_view_link || '';
                 return (
                   <tr
                     key={task.id}
@@ -439,8 +439,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       <div className="block xl:hidden space-y-3">
         {tasks.map((task) => {
           const flagged = isKanLekLongRub(task.title);
-          const hasDoc = task.has_document || !!(task.document_link || task.drive_web_view_link);
-          const docTarget = task.document_link || task.drive_web_view_link || `/tasks/${task.id}`;
+          const hasDoc = task.has_document && !!(task.document_link || task.drive_web_view_link);
+          const docTarget = task.document_link || task.drive_web_view_link || '';
           return (
             <div
               key={task.id}
