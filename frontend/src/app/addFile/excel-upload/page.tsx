@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Swal from 'sweetalert2';
+import { getValidExternalUrl } from '@/components/firstpage/TaskTable';
 
 export default function TaskExcelUploadPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -262,8 +263,8 @@ export default function TaskExcelUploadPage() {
                                         <li key={docIdx} className="flex items-center flex-wrap gap-1">
                                           <span className="font-semibold text-zinc-700 dark:text-zinc-200">• {doc.filename}</span>
                                           {doc.notes && <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 px-1.5 py-0.5 rounded text-[10px]">หน้า {doc.notes}</span>}
-                                          {doc.link && (
-                                            <a href={doc.link} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800 dark:text-blue-400 font-medium ml-1">
+                                          {getValidExternalUrl(doc.link) && (
+                                            <a href={getValidExternalUrl(doc.link)!} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800 dark:text-blue-400 font-medium ml-1">
                                               [เปิดดูไฟล์]
                                             </a>
                                           )}
@@ -274,10 +275,10 @@ export default function TaskExcelUploadPage() {
                                 ) : (
                                   row.additional_docs && <div className="text-sm"><span className="text-zinc-500 mr-2">[เอกสารแนบ]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.additional_docs}</span></div>
                                 )}
-                                {row.document_link && (
+                                {getValidExternalUrl(row.document_link) && (
                                   <div className="text-sm">
                                     <span className="text-zinc-500 mr-2">[ลิงก์ต้นฉบับ]</span> 
-                                    <a href={row.document_link} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 underline hover:text-blue-800 dark:text-blue-400 break-all">
+                                    <a href={getValidExternalUrl(row.document_link)!} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 underline hover:text-blue-800 dark:text-blue-400 break-all">
                                       {row.document_link}
                                     </a>
                                   </div>

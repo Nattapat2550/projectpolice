@@ -4,6 +4,7 @@ import styles from "./Details.module.css"
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Swal from "sweetalert2";
+import { getValidExternalUrl } from "@/components/firstpage/TaskTable";
 
 const getTextColor = (bgColor: string) => {
     if (!bgColor || !bgColor.startsWith('#')) return '#1f2937'; 
@@ -131,9 +132,9 @@ export default function DetailsDisplayer({
                             <p className="text-sm text-(--foreground)/60 mb-4 font-medium flex items-center gap-2 bg-(--container) w-fit px-3 py-1.5 rounded-full border border-(--shadow)/60">
                                 👤 เพิ่มเข้าระบบโดย: <span className="font-bold text-(--blueText)">{taskData?.creatorName || "ไม่ระบุ"}</span>
                             </p>
-                            {taskData?.document_link && (
+                            {getValidExternalUrl(taskData?.document_link) && (
                                 <a 
-                                    href={taskData.document_link} 
+                                    href={getValidExternalUrl(taskData.document_link)!} 
                                     target="_blank" 
                                     rel="noopener noreferrer" 
                                     className={styles.Button}

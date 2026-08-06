@@ -181,6 +181,19 @@ function cleanTitleOrRank(str: string): string {
 /*  Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
+function getValidExternalUrl(url?: string | null): string | null {
+    if (!url || typeof url !== "string") return null;
+    const trimmed = url.trim();
+    if (!trimmed) return null;
+    if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+        return trimmed;
+    }
+    if (trimmed.startsWith("www.") || trimmed.includes("drive.google.com") || trimmed.includes("docs.google.com")) {
+        return `https://${trimmed}`;
+    }
+    return null;
+}
+
 function normalizeToCE(value?: string | null): string | null {
     if (!value) return null;
     let str = value.trim();
@@ -1523,9 +1536,9 @@ export default function TaskDetailPage() {
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-2 shrink-0">
-                                            {doc.drive_web_view_link ? (
+                                            {getValidExternalUrl(doc.drive_web_view_link) ? (
                                                 <a
-                                                    href={doc.drive_web_view_link}
+                                                    href={getValidExternalUrl(doc.drive_web_view_link)!}
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition flex items-center gap-1.5"
@@ -1700,9 +1713,9 @@ export default function TaskDetailPage() {
 
                     {/* 🌟 ปุ่มจัดการเอกสารอยู่ใต้กล่องผู้รับผิดชอบ */}
                     <div className="flex flex-col gap-2.5">
-                        {taskData.document_link && (
+                        {getValidExternalUrl(taskData.document_link) && (
                             <a
-                                href={taskData.document_link}
+                                href={getValidExternalUrl(taskData.document_link)!}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium bg-(--wrapper) hover:bg-(--shadow) transition border border-(--shadow) cursor-pointer select-none shadow-sm"

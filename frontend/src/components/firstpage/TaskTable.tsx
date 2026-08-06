@@ -97,6 +97,19 @@ const formatReceiveYear = (year?: number | string | null) => {
 // 🔴 เช็คว่าชื่อเรื่องมีคำว่า "กันเลขลงรับ" หรือไม่ -> ใช้ไฮไลต์ทั้งแถวเป็นสีแดง
 const isKanLekLongRub = (title?: string | null) => !!title && title.includes('กันเลขลงรับ');
 
+export const getValidExternalUrl = (url?: string | null): string | null => {
+  if (!url || typeof url !== 'string') return null;
+  const trimmed = url.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('www.') || trimmed.includes('drive.google.com') || trimmed.includes('docs.google.com')) {
+    return `https://${trimmed}`;
+  }
+  return null;
+};
+
 const COLUMNS: { key: SortKey; label: string; className?: string }[] = [
   { key: 'receive_no', label: 'เลขรับ / ปี', className: 'w-[80px]' },
   { key: 'memo_no', label: 'เลขที่หนังสือ', className: 'w-[95px]' },
@@ -270,8 +283,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
             <tbody className="divide-y divide-[var(--shadow)]/20 text-sm">
               {tasks.map((task) => {
                 const flagged = isKanLekLongRub(task.title);
-                const hasDoc = task.has_document && !!(task.document_link || task.drive_web_view_link);
-                const docTarget = task.document_link || task.drive_web_view_link || '';
+                const docTarget = getValidExternalUrl(task.document_link || task.drive_web_view_link) || '';
+                const hasDoc = task.has_document && !!docTarget;
                 return (
                   <tr
                     key={task.id}
@@ -439,8 +452,8 @@ export const TaskTable: React.FC<TaskTableProps> = ({
       <div className="block xl:hidden space-y-3">
         {tasks.map((task) => {
           const flagged = isKanLekLongRub(task.title);
-          const hasDoc = task.has_document && !!(task.document_link || task.drive_web_view_link);
-          const docTarget = task.document_link || task.drive_web_view_link || '';
+          const docTarget = getValidExternalUrl(task.document_link || task.drive_web_view_link) || '';
+          const hasDoc = task.has_document && !!docTarget;
           return (
             <div
               key={task.id}
