@@ -914,26 +914,22 @@ exports.getTaskLogs = async (req, res) => {
 };
 
 exports.overwriteTaskDocument = async (req, res) => {
-  const client = await pool.connect();
   try {
-    await client.query('BEGIN');
     const { id } = req.params;
 
-    if (!(await canUserEditTask(req.user, id, client))) {
-      await client.query('ROLLBACK');
+    if (!(await canUserEditTask(req.user, id))) {
       return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์แก้ไขงานที่ไม่ได้อยู่ในความรับผิดชอบของคุณ' });
     }
 
     const file = req.file;
 
     if (!file) {
-      await client.query('ROLLBACK');
       return res.status(400).json({ success: false, message: 'กรุณาเลือกไฟล์เอกสารที่ต้องการอัปโหลด' });
     }
 
-    const taskRes = await client.query('SELECT id, document_id, memo_no, sender, receive_no FROM tasks WHERE id = $1', [id]);
+    const taskRes = await pool.query('SELECT id, document_id, memo_no, sender, receive_no FROM tasks WHERE id = $1', [id]);
     if (taskRes.rows.length === 0) {
-      await client.query('ROLLBACK');
+      try { await fs.unlink(file.path); } catch (e) {}
       return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลงานนี้' });
     }
     const oldTask = taskRes.rows[0];
@@ -957,9 +953,18 @@ exports.overwriteTaskDocument = async (req, res) => {
       }
     }
 
+    // คำนวณ receive_date จากวันที่ไฟล์หรือวันที่สแกนปัจจุบัน
+    let computedReceiveDate = new Date().toISOString().split('T')[0];
+    try {
+      const stats = await fs.stat(safePath);
+      if (stats && stats.mtime) {
+        computedReceiveDate = new Date(stats.mtime).toISOString().split('T')[0];
+      }
+    } catch (e) {}
+
     let extractedMemos = [];
     try {
-      const geminiRes = await extractDataWithGemini(safePath, file.mimetype, 'gemini', { scanMode: 'partial' });
+      const geminiRes = await extractDataWithGemini(safePath, file.mimetype, 'gemini');
       if (geminiRes && Array.isArray(geminiRes.extractedData)) {
         extractedMemos = geminiRes.extractedData;
       }
@@ -978,6 +983,7 @@ exports.overwriteTaskDocument = async (req, res) => {
     primaryMemo.assignments = assignments;
     if (fnInfo.receive_no && !primaryMemo.receive_no) primaryMemo.receive_no = fnInfo.receive_no;
     if (fnInfo.sender && !primaryMemo.sender) primaryMemo.sender = fnInfo.sender;
+    primaryMemo.receive_date = computedReceiveDate;
 
     const formattedFilename = formatStandardFilename(
       primaryMemo.receive_no || oldTask.receive_no,
@@ -986,10 +992,70 @@ exports.overwriteTaskDocument = async (req, res) => {
       file.originalname
     );
 
+    if (primaryMemo.ที่) {
+      primaryMemo.ที่ = convertThaiDigits(primaryMemo.ที่);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'สแกนเอกสารสำเร็จ กรุณาตรวจสอบและเลือกข้อมูลก่อนยืนยัน',
+      data: {
+        tempFilePath: safePath,
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        filename: formattedFilename,
+        extractedMemo: primaryMemo,
+        currentTask: oldTask
+      }
+    });
+  } catch (err) {
+    console.error('Scan overwrite document error:', err.message);
+    res.status(500).json({ success: false, message: 'Server Error', error: err.message });
+  }
+};
+
+exports.confirmOverwriteTaskDocument = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { id } = req.params;
+    const { tempFilePath, originalname, mimetype, filename: customFilename, updates } = req.body;
+
+    if (!(await canUserEditTask(req.user, id, client))) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์แก้ไขงานที่ไม่ได้อยู่ในความรับผิดชอบของคุณ' });
+    }
+
+    if (!tempFilePath) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, message: 'ไม่พบบันทึกไฟล์ชั่วคราว กรุณาสแกนเอกสารใหม่อีกครั้ง' });
+    }
+
+    const safeFileName = path.basename(tempFilePath);
+    const safePath = path.join(path.dirname(tempFilePath), safeFileName);
+
+    try {
+      await fs.access(safePath);
+    } catch (e) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, message: 'ไฟล์ชั่วคราวหมดอายุหรือถูกลบแล้ว กรุณาอัปโหลดสแกนใหม่อีกครั้ง' });
+    }
+
+    const taskRes = await client.query('SELECT id, document_id, memo_no, sender, receive_no FROM tasks WHERE id = $1', [id]);
+    if (taskRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ success: false, message: 'ไม่พบข้อมูลงานนี้' });
+    }
+    const oldTask = taskRes.rows[0];
+
+    const fileOriginalName = originalname || safeFileName;
+    const fileMimeType = mimetype || 'application/pdf';
+    const finalFilename = customFilename || fileOriginalName;
+
     let driveData = null;
     try {
       driveData = await uploadToDrive(
-        { path: safePath, originalname: formattedFilename, mimetype: file.mimetype },
+        { path: safePath, originalname: finalFilename, mimetype: fileMimeType },
         DRIVE_FOLDER_ID
       );
 
@@ -1005,15 +1071,15 @@ exports.overwriteTaskDocument = async (req, res) => {
       console.error('[Overwrite Drive Error]:', driveErr.message);
     }
 
-    const hash = generateHash(file.originalname + Date.now().toString());
+    const hash = generateHash(fileOriginalName + Date.now().toString());
     const docRes = await client.query(
       `INSERT INTO documents (filename, content, content_hash, keywords_found, drive_file_id, drive_web_view_link, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
       [
-        formattedFilename,
+        finalFilename,
         '',
         hash,
-        JSON.stringify({ memos: extractedMemos }),
+        JSON.stringify({ updates }),
         driveData ? driveData.id : null,
         driveData ? driveData.webViewLink : null,
         req.user ? req.user.id : null
@@ -1021,32 +1087,57 @@ exports.overwriteTaskDocument = async (req, res) => {
     );
     const newDocId = docRes.rows[0].id;
 
-    if (primaryMemo.ที่) {
-      primaryMemo.ที่ = convertThaiDigits(primaryMemo.ที่);
-    }
-
-    const newTitle = primaryMemo.เรื่อง || null;
-    const newMemoNo = primaryMemo.ที่ ? convertThaiDigits(primaryMemo.ที่) : null;
-    const newMemoDate = parseThaiDateToIso(primaryMemo.วันที่) || null;
-    const newSender = primaryMemo.sender || primaryMemo.จาก || null;
-    const newRecipientTo = primaryMemo.recipient_to || primaryMemo.เรียน || null;
-    const newAdditionalDocs = primaryMemo.additional_docs || null;
-    const newMainText = primaryMemo.main_text || null;
-    const newTaskDetail = primaryMemo.task_detail || null;
-    const newSignDate = parseThaiDateToIso(primaryMemo.sign_date) || null;
-    const newMeetingDate = parseThaiDateToIso(primaryMemo.meeting_date) || null;
-    const newReplyDueDate = parseThaiDateToIso(primaryMemo.reply_due_date) || null;
-    const newUrgencyLevel = primaryMemo.urgency_level || null;
-    const newSecretLevel = primaryMemo.secret_level || null;
-
+    // อัปเดตผูก document_id ใหม่
     await client.query(
       `UPDATE tasks SET document_id = $1, updated_at = NOW() WHERE id = $2`,
       [newDocId, id]
     );
 
+    // หากมีการอัปเดตฟิลด์เพิ่มเติมที่ส่งมาจากผู้ใช้ ให้ทำการอัปเดตลงใน tasks table
+    if (updates && typeof updates === 'object' && Object.keys(updates).length > 0) {
+      const fieldMap = {
+        name: 'title',
+        title: 'title',
+        notes: 'notes',
+        sign_date: 'sign_date',
+        meeting_date: 'meeting_date',
+        reply_due_date: 'reply_due_date',
+        memo_no: 'memo_no',
+        memo_date: 'memo_date',
+        sender: 'sender',
+        recipient_to: 'recipient_to',
+        urgency_level: 'urgency_level',
+        is_urgent: 'is_urgent',
+        secret_level: 'secret_level',
+        main_text: 'main_text',
+        task_detail: 'task_detail'
+      };
+
+      const setClauses = [];
+      const queryParams = [];
+      let paramIdx = 1;
+
+      for (const [key, val] of Object.entries(updates)) {
+        const col = fieldMap[key];
+        if (col) {
+          setClauses.push(`${col} = $${paramIdx}`);
+          queryParams.push(val);
+          paramIdx++;
+        }
+      }
+
+      if (setClauses.length > 0) {
+        queryParams.push(id);
+        await client.query(
+          `UPDATE tasks SET ${setClauses.join(', ')}, updated_at = NOW() WHERE id = $${paramIdx}`,
+          queryParams
+        );
+      }
+    }
+
     try { await fs.unlink(safePath); } catch (e) {}
 
-    await logTaskAction(client, id, req.user ? req.user.id : null, 'overwrite_document', { filename: formattedFilename });
+    await logTaskAction(client, id, req.user ? req.user.id : null, 'overwrite_document', { filename: finalFilename });
 
     await client.query('COMMIT');
 
@@ -1062,16 +1153,11 @@ exports.overwriteTaskDocument = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: 'อัปโหลดเอกสารและสกัดข้อมูลสำเร็จ!',
-      data: {
-        filename: formattedFilename,
-        extractedMemo: primaryMemo,
-        currentTask: oldTask
-      }
+      message: 'อัปโหลดทับเอกสารและบันทึกข้อมูลเรียบร้อยแล้ว!'
     });
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('Overwrite document error:', err.message);
+    console.error('Confirm overwrite document error:', err.message);
     res.status(500).json({ success: false, message: 'Server Error', error: err.message });
   } finally {
     client.release();

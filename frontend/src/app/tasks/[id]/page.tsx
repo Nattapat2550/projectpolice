@@ -355,6 +355,23 @@ export default function TaskDetailPage() {
     const titleRef = useRef<HTMLTextAreaElement>(null);
     const useIsoLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
+    const handleCancelReviewModal = async () => {
+        if (reviewModalData?.tempFilePath) {
+            try {
+                const token = getToken();
+                await fetch(`${backendUrl}/api/v1/documents/delete-temp-files`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({ path: reviewModalData.tempFilePath }),
+                });
+            } catch (e) {}
+        }
+        setReviewModalData(null);
+    };
+
     const handleConfirmReviewSave = async () => {
         if (!reviewModalData || !id) return;
         try {
@@ -379,27 +396,61 @@ export default function TaskDetailPage() {
             if (reviewModalData.task_detail?.apply) payload.task_detail = reviewModalData.task_detail.newVal;
 
             const token = getToken();
-            const res = await fetch(`${backendUrl}/api/v1/tasks/${id}`, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-                },
-                body: JSON.stringify(payload),
-            });
 
-            if (res.ok) {
-                setReviewModalData(null);
-                Swal.fire({
-                    icon: "success",
-                    title: "บันทึกข้อมูลสำเร็จ!",
-                    text: "อัปเดตข้อมูลที่เลือกเรียบร้อยแล้ว",
-                    timer: 2000,
-                    showConfirmButton: false,
+            // หากมี tempFilePath แสดงว่าเป็นขั้นตอนการยืนยันอัปโหลดทับเอกสาร
+            if (reviewModalData.tempFilePath) {
+                const res = await fetch(`${backendUrl}/api/v1/tasks/${id}/confirm-overwrite-doc`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify({
+                        tempFilePath: reviewModalData.tempFilePath,
+                        originalname: reviewModalData.originalname,
+                        mimetype: reviewModalData.mimetype,
+                        filename: reviewModalData.filename,
+                        updates: payload,
+                    }),
                 });
-                fetchTask();
+
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    setReviewModalData(null);
+                    Swal.fire({
+                        icon: "success",
+                        title: "อัปโหลดทับสำเร็จ!",
+                        text: data.message || "อัปโหลดเอกสารใหม่และบันทึกข้อมูลเรียบร้อยแล้ว",
+                        timer: 2000,
+                        showConfirmButton: false,
+                    });
+                    fetchTask();
+                } else {
+                    throw new Error(data.message || "ไม่สามารถอัปเดตข้อมูลทับเอกสารได้");
+                }
             } else {
-                throw new Error("ไม่สามารถอัปเดตข้อมูลได้");
+                const res = await fetch(`${backendUrl}/api/v1/tasks/${id}`, {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                if (res.ok) {
+                    setReviewModalData(null);
+                    Swal.fire({
+                        icon: "success",
+                        title: "บันทึกข้อมูลสำเร็จ!",
+                        text: "อัปเดตข้อมูลที่เลือกเรียบร้อยแล้ว",
+                        timer: 2000,
+                        showConfirmButton: false,
+                    });
+                    fetchTask();
+                } else {
+                    throw new Error("ไม่สามารถอัปเดตข้อมูลได้");
+                }
             }
         } catch (err: any) {
             Swal.fire({ icon: "error", title: "เกิดข้อผิดพลาด", text: err.message || "ไม่สามารถอัปเดตข้อมูลได้" });
@@ -497,6 +548,10 @@ export default function TaskDetailPage() {
                     : "";
 
                 setReviewModalData({
+                    tempFilePath: data.data?.tempFilePath || "",
+                    originalname: data.data?.originalname || file.name,
+                    mimetype: data.data?.mimetype || file.type,
+                    filename: data.data?.filename || file.name,
                     notes: { oldVal: taskData?.notes || "", newVal: memo.notes || memo.หมายเหตุ || "", apply: Boolean(memo.notes || memo.หมายเหตุ) },
                     sign_date: { oldVal: taskData?.sign_date ? String(taskData.sign_date).split("T")[0] : "", newVal: memo.sign_date || "", apply: Boolean(memo.sign_date) },
                     meeting_date: { oldVal: taskData?.meeting_date ? String(taskData.meeting_date).split("T")[0] : "", newVal: memo.meeting_date || "", apply: Boolean(memo.meeting_date) },
@@ -1775,7 +1830,7 @@ export default function TaskDetailPage() {
                                 ตรวจสอบและเลือกข้อมูลหลังสแกนเอกสาร
                             </h3>
                             <button
-                                onClick={() => setReviewModalData(null)}
+                                onClick={handleCancelReviewModal}
                                 className="p-1.5 rounded-full hover:bg-(--wrapper) transition cursor-pointer"
                             >
                                 <X size={20} />
@@ -1875,7 +1930,7 @@ export default function TaskDetailPage() {
                         <div className="flex items-center justify-end gap-3 pt-3 border-t border-(--shadow)">
                             <button
                                 type="button"
-                                onClick={() => setReviewModalData(null)}
+                                onClick={handleCancelReviewModal}
                                 className="px-4 py-2 rounded-xl text-sm font-medium bg-(--wrapper) hover:bg-(--shadow) transition cursor-pointer"
                             >
                                 ยกเลิก (คงข้อมูลเดิม)

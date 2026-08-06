@@ -73,17 +73,22 @@ exports.processDocuments = async (req, res) => {
         }
       }
 
+      // ดึงวันที่สร้าง/แก้ไขไฟล์ หรือวันที่สแกนปัจจุบันเพื่อใช้เป็นวันที่รับ (receive_date)
+      let computedReceiveDate = new Date().toISOString().split('T')[0];
+      try {
+        const stats = await fs.stat(safePath);
+        if (stats && stats.mtime) {
+          computedReceiveDate = new Date(stats.mtime).toISOString().split('T')[0];
+        }
+      } catch (e) {}
+
       let geminiResult;
       let isDuplicate = false;
 
       if (existingTask) {
-        // ประหยัดการสแกนด้วย AI OCR เมื่อพบว่าเป็นไฟล์ที่มีเลขรับและรอบตัดซ้ำในระบบ
         isDuplicate = true;
-        geminiResult = await extractDataWithGemini(safePath, file.mimetype, engine, { scanMode: 'partial' });
-      } else {
-        // รายการใหม่ สแกนเต็มรูปแบบ
-        geminiResult = await extractDataWithGemini(safePath, file.mimetype, engine);
       }
+      geminiResult = await extractDataWithGemini(safePath, file.mimetype, engine);
 
       const { text, extractedData } = geminiResult;
 
@@ -95,6 +100,9 @@ exports.processDocuments = async (req, res) => {
       const processedMemos = memos.map(memo => {
         const receive_no = fnInfo.receive_no || memo.receive_no || (existingTask ? existingTask.receive_no : null);
         const sender = fnInfo.sender || memo.จาก || memo.sender || (existingTask ? existingTask.sender : null);
+        const recDate = isDuplicate && existingTask.created_at
+          ? new Date(existingTask.created_at).toISOString().split('T')[0]
+          : computedReceiveDate;
         
         let assignments = [];
         if (fnInfo.assignee) {
@@ -109,7 +117,7 @@ exports.processDocuments = async (req, res) => {
             is_duplicate: true,
             existing_task_id: existingTask.id,
             receive_no: receive_no,
-            receive_date: existingTask.created_at ? new Date(existingTask.created_at).toISOString().split('T')[0] : (memo.receive_date || null),
+            receive_date: recDate,
             จาก: sender,
             sender: sender,
             assignments: assignments
@@ -119,6 +127,7 @@ exports.processDocuments = async (req, res) => {
             ...memo,
             is_duplicate: false,
             receive_no: receive_no,
+            receive_date: recDate,
             จาก: sender,
             sender: sender,
             assignments: assignments
