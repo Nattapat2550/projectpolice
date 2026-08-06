@@ -127,6 +127,130 @@ const logTaskAction = async (clientOrPool, taskId, userId, action, details) => {
   }
 };
 
+// Helper to process, split comma-separated names, match users, and format assignees
+const processAssignmentsInput = async (assignments, dbClient = pool) => {
+  if (!assignments) return [];
+  
+  let rawList = [];
+  if (typeof assignments === 'string') {
+    rawList = assignments.split(/[,;\n]/).map(s => s.trim()).filter(Boolean).map(role => ({ role_or_name: role }));
+  } else if (Array.isArray(assignments)) {
+    rawList = assignments;
+  } else if (typeof assignments === 'object') {
+    rawList = [assignments];
+  }
+
+  // Fetch users for matching
+  const { rows: allUsers } = await dbClient.query('SELECT id, name, color FROM users');
+  const userByIdMap = new Map();
+  const userByNameMap = new Map();
+  const userByCleanNameMap = new Map();
+
+  for (const u of allUsers) {
+    userByIdMap.set(String(u.id), u);
+    userByNameMap.set(u.name.trim().toLowerCase(), u);
+    const cleanName = cleanToOnlyName(u.name).trim().toLowerCase();
+    if (cleanName) {
+      userByCleanNameMap.set(cleanName, u);
+    }
+  }
+
+  const result = [];
+  const addedKeys = new Set();
+
+  for (const item of rawList) {
+    let roleOrName = typeof item === 'string' ? item : (item.role_or_name || item.responsible_person || item.personInCharge || item.name || '');
+    let userId = (typeof item === 'object' && isValidUUID(item.user_id)) ? item.user_id : null;
+
+    if (!roleOrName && !userId) continue;
+
+    // Split if roleOrName contains comma/semicolon/newline
+    let namesToProcess = [roleOrName];
+    if (roleOrName && typeof roleOrName === 'string' && /[,;\n]/.test(roleOrName)) {
+      namesToProcess = roleOrName.split(/[,;\n]/).map(s => s.trim()).filter(Boolean);
+    }
+
+    for (const nameStr of namesToProcess) {
+      let matchedUser = null;
+      if (userId && userByIdMap.has(String(userId))) {
+        matchedUser = userByIdMap.get(String(userId));
+      } else if (nameStr) {
+        const lower = nameStr.trim().toLowerCase();
+        if (userByNameMap.has(lower)) {
+          matchedUser = userByNameMap.get(lower);
+        } else {
+          const clean = cleanToOnlyName(nameStr).trim().toLowerCase();
+          if (userByCleanNameMap.has(clean)) {
+            matchedUser = userByCleanNameMap.get(clean);
+          }
+        }
+      }
+
+      const finalUserId = matchedUser ? matchedUser.id : userId;
+      const finalRoleOrName = matchedUser ? matchedUser.name : nameStr;
+      const key = `${finalUserId || ''}_${finalRoleOrName}`;
+
+      if (!addedKeys.has(key)) {
+        addedKeys.add(key);
+        result.push({
+          user_id: finalUserId,
+          role_or_name: finalRoleOrName,
+          color: matchedUser ? matchedUser.color : (typeof item === 'object' && item.color ? item.color : '#e5e7eb')
+        });
+      }
+    }
+  }
+
+  return result;
+};
+
+// Helper to enrich task lists with split assignees and accurate user colors
+const enrichTasksWithAssignees = async (rows, dbClient = pool) => {
+  const { rows: allUsers } = await dbClient.query('SELECT id, name, color FROM users');
+  const userByNameMap = new Map();
+  const userByCleanNameMap = new Map();
+
+  for (const u of allUsers) {
+    userByNameMap.set(u.name.trim().toLowerCase(), u);
+    const clean = cleanToOnlyName(u.name).trim().toLowerCase();
+    if (clean) userByCleanNameMap.set(clean, u);
+  }
+
+  return rows.map(task => {
+    let rawAssignees = Array.isArray(task.assigneesData) ? task.assigneesData : [];
+    let expandedAssignees = [];
+    let addedKeys = new Set();
+
+    for (const item of rawAssignees) {
+      const rawName = item?.name || '';
+      const names = rawName.split(/[,;\n]/).map(s => s.trim()).filter(Boolean);
+      for (const nameStr of names) {
+        const lower = nameStr.toLowerCase();
+        const clean = cleanToOnlyName(nameStr).toLowerCase();
+        const matchedUser = userByNameMap.get(lower) || userByCleanNameMap.get(clean);
+
+        const finalName = matchedUser ? matchedUser.name : nameStr;
+        const finalColor = matchedUser ? matchedUser.color : (item.color && item.color !== '#e5e7eb' ? item.color : '#e5e7eb');
+
+        if (!addedKeys.has(finalName)) {
+          addedKeys.add(finalName);
+          expandedAssignees.push({
+            name: finalName,
+            personInCharge: finalName,
+            role_or_name: finalName,
+            color: finalColor
+          });
+        }
+      }
+    }
+
+    task.assigneesData = expandedAssignees;
+    task.personInCharge = expandedAssignees.length > 0 ? expandedAssignees.map(a => a.name).join(', ') : 'ไม่ระบุ';
+    return task;
+  });
+};
+
+
 // Helper function to handle receive_no, receive_year and round logic
 const handleReceiveNoAndYear = async (client, inputReceiveNo, parsedReceiveDate) => {
     let receiveNoInput = inputReceiveNo;
@@ -188,14 +312,19 @@ const fetchTaskDataForSheet = async (taskIdOrIds) => {
 exports.getAllTasks = async (req, res) => {
   try {
     const query = `
-      WITH unique_assignees AS (
-        SELECT DISTINCT 
-          ta.task_id, 
-          COALESCE(u.name, ta.role_or_name) AS name, 
-          COALESCE(u.color, '#e5e7eb') AS color
+      WITH raw_assignees AS (
+        SELECT ta.task_id, ta.user_id, ta.role_or_name
         FROM task_assignments ta
-        LEFT JOIN users u ON ta.user_id = u.id
-        WHERE COALESCE(u.name, ta.role_or_name) IS NOT NULL
+        WHERE ta.role_or_name IS NOT NULL AND ta.role_or_name != ''
+      ),
+      unique_assignees AS (
+        SELECT DISTINCT 
+          ra.task_id, 
+          COALESCE(u.name, ra.role_or_name) AS name, 
+          COALESCE(u.color, '#e5e7eb') AS color
+        FROM raw_assignees ra
+        LEFT JOIN users u ON ra.user_id = u.id OR (ra.user_id IS NULL AND LOWER(TRIM(ra.role_or_name)) = LOWER(TRIM(u.name)))
+        WHERE COALESCE(u.name, ra.role_or_name) IS NOT NULL
       ),
       agg_assignees AS (
         SELECT 
@@ -241,7 +370,8 @@ exports.getAllTasks = async (req, res) => {
       ORDER BY t.due_date ASC NULLS LAST
     `;
     const { rows } = await pool.query(query);
-    res.status(200).json(rows);
+    const enriched = await enrichTasksWithAssignees(rows, pool);
+    res.status(200).json(enriched);
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ success: false, message: 'Server Error' });
@@ -251,14 +381,19 @@ exports.getAllTasks = async (req, res) => {
 exports.getUrgentTasks = async (req, res) => {
   try {
     const query = `
-      WITH unique_assignees AS (
-        SELECT DISTINCT 
-          ta.task_id, 
-          COALESCE(u.name, ta.role_or_name) AS name, 
-          COALESCE(u.color, '#e5e7eb') AS color
+      WITH raw_assignees AS (
+        SELECT ta.task_id, ta.user_id, ta.role_or_name
         FROM task_assignments ta
-        LEFT JOIN users u ON ta.user_id = u.id
-        WHERE COALESCE(u.name, ta.role_or_name) IS NOT NULL
+        WHERE ta.role_or_name IS NOT NULL AND ta.role_or_name != ''
+      ),
+      unique_assignees AS (
+        SELECT DISTINCT 
+          ra.task_id, 
+          COALESCE(u.name, ra.role_or_name) AS name, 
+          COALESCE(u.color, '#e5e7eb') AS color
+        FROM raw_assignees ra
+        LEFT JOIN users u ON ra.user_id = u.id OR (ra.user_id IS NULL AND LOWER(TRIM(ra.role_or_name)) = LOWER(TRIM(u.name)))
+        WHERE COALESCE(u.name, ra.role_or_name) IS NOT NULL
       ),
       agg_assignees AS (
         SELECT 
@@ -305,7 +440,8 @@ exports.getUrgentTasks = async (req, res) => {
       ORDER BY t.due_date ASC NULLS LAST
     `;
     const { rows } = await pool.query(query);
-    res.status(200).json(rows);
+    const enriched = await enrichTasksWithAssignees(rows, pool);
+    res.status(200).json(enriched);
   } catch (err) {
     console.error(err.message);
     res.status(500).json({ success: false, message: 'Server Error' });
@@ -479,21 +615,18 @@ exports.confirmTasks = async (req, res) => {
               await logTaskAction(client, taskId, validCreatorId, 'created_task', { source: 'confirm_tasks' });
               createdTaskIds.push(taskId);
           }
-          for (const assign of memo.assignments) {
-            const userId = isValidUUID(assign.user_id) ? assign.user_id : null; 
-            const personStr = assign.role_or_name || assign.responsible_person || assign.name || '';
-            if (!personStr && !userId) continue;
-
+          const processedAssigns = await processAssignmentsInput(memo.assignments, client);
+          for (const assign of processedAssigns) {
             const checkAss = await client.query(
               `SELECT id FROM task_assignments WHERE task_id = $1 AND (role_or_name = $2 OR (user_id IS NOT NULL AND user_id = $3))`,
-              [taskId, personStr, userId]
+              [taskId, assign.role_or_name, assign.user_id]
             );
             if (checkAss.rows.length === 0) {
               await client.query(
                 `INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ($1, $2, $3)`,
-                [taskId, userId, personStr]
+                [taskId, assign.user_id, assign.role_or_name]
               );
-              await logTaskAction(client, taskId, validCreatorId, 'assigned_user', { user_id: userId, role_or_name: personStr });
+              await logTaskAction(client, taskId, validCreatorId, 'assigned_user', { user_id: assign.user_id, role_or_name: assign.role_or_name });
             }
           }
         }
@@ -611,28 +744,16 @@ exports.updateTaskDetail = async (req, res) => {
     }
 
     if (req.body.hasOwnProperty('assignments') && assignments !== undefined) {
-      let assignList = [];
-      if (typeof assignments === 'string') {
-        assignList = assignments.split(/[,;\n]/).map(s => s.trim()).filter(Boolean).map(role => ({ role_or_name: role }));
-      } else if (Array.isArray(assignments)) {
-        assignList = assignments;
-      }
+      const processedAssigns = await processAssignmentsInput(assignments, client);
+      
+      // ลบรายการผู้รับผิดชอบเดิมเพื่อให้อัปเดตข้อมูลถูกต้องเสมอ (ไม่ค้างคนเดิมที่โดนลบออก)
+      await client.query('DELETE FROM task_assignments WHERE task_id = $1', [id]);
 
-      for (const assign of assignList) {
-        const roleName = typeof assign === 'string' ? assign : (assign.role_or_name || assign.responsible_person || 'เพิ่มด้วยตนเอง');
-        const userId = (typeof assign === 'object' && isValidUUID(assign.user_id)) ? assign.user_id : null;
-        if (!roleName && !userId) continue;
-
-        const checkRes = await client.query(
-          `SELECT id FROM task_assignments WHERE task_id = $1 AND (role_or_name = $2 OR (user_id IS NOT NULL AND user_id = $3))`,
-          [id, roleName, userId]
+      for (const assign of processedAssigns) {
+        await client.query(
+          `INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ($1, $2, $3)`,
+          [id, assign.user_id, assign.role_or_name]
         );
-        if (checkRes.rows.length === 0) {
-          await client.query(
-            `INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ($1, $2, $3)`,
-            [id, userId, roleName]
-          );
-        }
       }
     }
 
@@ -707,15 +828,16 @@ exports.getTaskById = async (req, res) => {
           json_agg(
             json_build_object(
               'assignment_id', ta.id,
-              'user_id', ta.user_id,             
+              'user_id', COALESCE(ta.user_id, u.id),             
               'role_or_name', ta.role_or_name,   
-              'personInCharge', COALESCE(u.name, ta.role_or_name)
+              'personInCharge', COALESCE(u.name, ta.role_or_name),
+              'color', COALESCE(u.color, '#e5e7eb')
             )
           ) FILTER (WHERE ta.id IS NOT NULL), '[]'
         ) AS assignments
       FROM tasks t
       LEFT JOIN task_assignments ta ON t.id = ta.task_id
-      LEFT JOIN users u ON ta.user_id = u.id
+      LEFT JOIN users u ON ta.user_id = u.id OR (ta.user_id IS NULL AND LOWER(TRIM(ta.role_or_name)) = LOWER(TRIM(u.name)))
       LEFT JOIN documents d ON t.document_id = d.id
       LEFT JOIN users c ON t.created_by = c.id
       WHERE t.id = $1
@@ -727,6 +849,15 @@ exports.getTaskById = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Task not found' });
     }
     const task = rows[0];
+    const rawAssignments = Array.isArray(task.assignments) ? task.assignments : [];
+    const processedAssignments = await processAssignmentsInput(rawAssignments, pool);
+    task.assignments = processedAssignments.map((a, idx) => ({
+      assignment_id: rawAssignments[idx]?.assignment_id || `${id}-${idx}`,
+      user_id: a.user_id,
+      role_or_name: a.role_or_name,
+      personInCharge: a.role_or_name,
+      color: a.color
+    }));
     task.personInCharge = task.assignments.map(a => a.personInCharge).join(', ') || 'ไม่ระบุ';
 
     const docsRes = await pool.query(
@@ -836,19 +967,16 @@ exports.createTask = async (req, res) => {
 
     // 🔒 ตรวจสอบ Array Type ป้องกัน Crash 
     if (Array.isArray(assignments) && assignments.length > 0) {
-      for (const assign of assignments) {
-        const userId = isValidUUID(assign.user_id) ? assign.user_id : null;
-        const roleOrName = assign.role_or_name || null;
-        if (!roleOrName && !userId) continue;
-
+      const processedAssigns = await processAssignmentsInput(assignments, client);
+      for (const assign of processedAssigns) {
         const checkAss = await client.query(
           `SELECT id FROM task_assignments WHERE task_id = $1 AND (role_or_name = $2 OR (user_id IS NOT NULL AND user_id = $3))`,
-          [taskId, roleOrName, userId]
+          [taskId, assign.role_or_name, assign.user_id]
         );
         if (checkAss.rows.length === 0) {
           await client.query(
             `INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ($1, $2, $3)`,
-            [taskId, userId, roleOrName]
+            [taskId, assign.user_id, assign.role_or_name]
           );
         }
       }

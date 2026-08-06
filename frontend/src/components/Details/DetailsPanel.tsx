@@ -257,10 +257,10 @@ export default function DetailsPanel({
                                                         ]}
                                                         value={taskData?.assignments?.map((a: any) => {
                                                             if (a.role_or_name === "all") return { value: "all", label: "📢 เลือกทั้งหมด (ทุกคน)" };
-                                                            const user = users.find(u => String(u.id || u._id) === String(a.user_id));
+                                                            const user = users.find(u => String(u.id || u._id) === String(a.user_id) || u.name === a.role_or_name);
                                                             if (user) return { value: String(user.id || user._id), label: `${user.name} ${user.role ? `(${user.role})` : ''}` };
-                                                            return { value: String(a.user_id), label: a.role_or_name };
-                                                        }).filter(Boolean) || []}
+                                                            return { value: a.user_id || a.role_or_name, label: a.role_or_name || a.personInCharge || "ไม่ระบุ" };
+                                                        }).filter((opt: any) => opt && opt.value) || []}
                                                         onChange={(selectedOptions: any) => {
                                                             const isAllSelected = selectedOptions?.some((opt: any) => opt.value === "all");
                                                             if (isAllSelected) {
@@ -269,10 +269,10 @@ export default function DetailsPanel({
                                                                 setTaskData({
                                                                     ...taskData,
                                                                     assignments: selectedOptions ? selectedOptions.map((opt: any) => {
-                                                                        const matchedUser = users.find(u => String(u.id || u._id) === opt.value);
+                                                                        const matchedUser = users.find(u => String(u.id || u._id) === opt.value || u.name === opt.value);
                                                                         return matchedUser 
-                                                                            ? { user_id: matchedUser.id || matchedUser._id, role_or_name: matchedUser.name } 
-                                                                            : { user_id: opt.value, role_or_name: opt.label };
+                                                                            ? { user_id: matchedUser.id || matchedUser._id, role_or_name: matchedUser.name, color: matchedUser.color } 
+                                                                            : { user_id: null, role_or_name: opt.value || opt.label };
                                                                     }) : []
                                                                 });
                                                             }

@@ -17,11 +17,19 @@ interface UserMeta {
   color?: string;
 }
 
-function resolveAssigneeInfo(assign: any, usersMap: Map<string, UserMeta>, userByNameMap: Map<string, UserMeta>): { name: string; color?: string } {
+function cleanTitleOrRank(str: string): string {
+  if (!str) return '';
+  let s = str.trim();
+  s = s.replace(/[\(\[\（].*?[\)\]\）]/g, '').trim();
+  s = s.replace(/^(?:พล\.ต\.อ\.|พล\.ต\.ท\.|พล\.ต\.ต\.|พ\.ต\.อ\.|พ\.ต\.ท\.|พ\.ต\.ต\.|ร\.ต\.อ\.|ร\.ต\.ท\.|ร\.ต\.ต\.|ด\.ต\.|จ\.ส\.ต\.|ส\.ต\.อ\.|ส\.ต\.ท\.|ส\.ต\.ต\.|นาย|นางสาว|นาง|น\.ส\.)\s*/gi, '').trim();
+  return s || str.trim();
+}
+
+function resolveAssigneeInfo(assign: any, usersMap: Map<string, UserMeta>, userByNameMap: Map<string, UserMeta>): { name: string; color?: string; user_id?: string | null } {
   const userIdStr = assign?.user_id ? String(assign.user_id) : null;
   if (userIdStr && usersMap.has(userIdStr)) {
     const matched = usersMap.get(userIdStr)!;
-    return { name: matched.name, color: assign?.color || matched.color };
+    return { name: matched.name, color: assign?.color && assign.color !== '#e5e7eb' ? assign.color : matched.color, user_id: matched.id || userIdStr };
   }
   const name =
     assign?.name ||
@@ -30,9 +38,12 @@ function resolveAssigneeInfo(assign: any, usersMap: Map<string, UserMeta>, userB
     assign?.responsible_person ||
     'ไม่ระบุชื่อ';
 
-  const matchedByName = userByNameMap.get(name.trim());
-  const color = assign?.color || matchedByName?.color;
-  return { name, color };
+  const trimmed = name.trim();
+  const clean = cleanTitleOrRank(trimmed);
+
+  const matchedByName = userByNameMap.get(trimmed.toLowerCase()) || userByNameMap.get(clean.toLowerCase());
+  const color = (assign?.color && assign.color !== '#e5e7eb') ? assign.color : matchedByName?.color;
+  return { name: matchedByName ? matchedByName.name : trimmed, color, user_id: matchedByName?.id || null };
 }
 
 // 💡 API ของ backend มีการส่งข้อมูลมาได้ 2 รูปแบบ (list แบบย่อ กับ detail แบบเต็ม)
@@ -41,32 +52,38 @@ function resolveAssigneeInfo(assign: any, usersMap: Map<string, UserMeta>, userB
 function normalizeTask(raw: any, usersMap: Map<string, UserMeta>, userByNameMap: Map<string, UserMeta>): Task {
   const rawAssignments: any[] = raw.assignments ?? raw.assigneesData ?? [];
 
-  const assignments =
-    Array.isArray(rawAssignments) && rawAssignments.length > 0
-      ? rawAssignments.map((a, idx) => {
-          const info = resolveAssigneeInfo(a, usersMap, userByNameMap);
-          return {
-            assignment_id: a.assignment_id || `${raw.id}-${a.user_id || idx}`,
-            user_id: a.user_id ?? null,
-            role_or_name: a.role_or_name || info.name,
-            personInCharge: info.name,
-            color: info.color,
-          };
-        })
-      : raw.personInCharge && raw.personInCharge !== 'ไม่ระบุ'
-      ? [
-          (() => {
-            const info = resolveAssigneeInfo({ user_id: raw.user_id, personInCharge: raw.personInCharge }, usersMap, userByNameMap);
-            return {
-              assignment_id: `${raw.id}-person`,
-              user_id: raw.user_id ?? null,
-              role_or_name: info.name,
-              personInCharge: info.name,
-              color: info.color,
-            };
-          })()
-        ]
-      : [];
+  let itemsToProcess: any[] = [];
+  if (Array.isArray(rawAssignments) && rawAssignments.length > 0) {
+    itemsToProcess = rawAssignments;
+  } else if (raw.personInCharge && raw.personInCharge !== 'ไม่ระบุ') {
+    itemsToProcess = [{ personInCharge: raw.personInCharge }];
+  }
+
+  const assignments: any[] = [];
+  const addedNames = new Set<string>();
+
+  itemsToProcess.forEach((a, idx) => {
+    const rawName = a?.name || a?.personInCharge || a?.role_or_name || a?.responsible_person || '';
+    const splitNames = typeof rawName === 'string' && /[,;\n]/.test(rawName)
+      ? rawName.split(/[,;\n]/).map(s => s.trim()).filter(Boolean)
+      : [rawName];
+
+    splitNames.forEach((nameStr, subIdx) => {
+      const info = resolveAssigneeInfo({ ...a, name: nameStr, personInCharge: nameStr, role_or_name: nameStr }, usersMap, userByNameMap);
+      const displayName = info.name || nameStr || 'ไม่ระบุชื่อ';
+
+      if (displayName && !addedNames.has(displayName.toLowerCase())) {
+        addedNames.add(displayName.toLowerCase());
+        assignments.push({
+          assignment_id: a?.assignment_id || `${raw.id}-${info.user_id || idx}-${subIdx}`,
+          user_id: info.user_id || a?.user_id || null,
+          role_or_name: displayName,
+          personInCharge: displayName,
+          color: info.color || '#e5e7eb',
+        });
+      }
+    });
+  });
 
   return {
     id: raw.id,

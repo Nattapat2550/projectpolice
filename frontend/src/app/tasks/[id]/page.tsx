@@ -52,6 +52,7 @@ interface Assignment {
     user_id: string | null;
     role_or_name: string;
     personInCharge?: string;
+    color?: string;
 }
 
 interface UserOption {
@@ -161,10 +162,19 @@ const AVATAR_COLORS = [
     "#900707", "#903207", "#872d00", "#008755", "#1447e6", "#5f5f5f",
 ];
 
-function avatarColorFor(seed: string) {
+function avatarColorFor(seed: string, color?: string) {
+    if (color && color.startsWith('#') && color !== '#e5e7eb') return color;
     let hash = 0;
     for (let i = 0; i < seed.length; i++) hash = seed.charCodeAt(i) + ((hash << 5) - hash);
     return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function cleanTitleOrRank(str: string): string {
+    if (!str) return '';
+    let s = str.trim();
+    s = s.replace(/[\(\[\（].*?[\)\]\）]/g, '').trim();
+    s = s.replace(/^(?:พล\.ต\.อ\.|พล\.ต\.ท\.|พล\.ต\.ต\.|พ\.ต\.อ\.|พ\.ต\.ท\.|พ\.ต\.ต\.|ร\.ต\.อ\.|ร\.ต\.ท\.|ร\.ต\.ต\.|ด\.ต\.|จ\.ส\.ต\.|ส\.ต\.อ\.|ส\.ต\.ท\.|ส\.ต\.ต\.|นาย|นางสาว|นาง|น\.ส\.)\s*/gi, '').trim();
+    return s || str.trim();
 }
 
 /* ------------------------------------------------------------------ */
@@ -942,7 +952,18 @@ export default function TaskDetailPage() {
             return;
         }
         if (!taskData) return;
-        setDraft(JSON.parse(JSON.stringify(taskData)));
+        const initialDraft = JSON.parse(JSON.stringify(taskData));
+        if (Array.isArray(initialDraft.assignments)) {
+            initialDraft.assignments = initialDraft.assignments.map((a: any) => {
+                const u = users.find((x: any) => x.id === a.user_id || x.name === a.role_or_name || cleanTitleOrRank(x.name) === cleanTitleOrRank(a.role_or_name));
+                return {
+                    user_id: u ? u.id : (a.user_id || null),
+                    role_or_name: u ? u.name : (a.role_or_name || a.personInCharge || ""),
+                    color: u ? u.color : a.color
+                };
+            });
+        }
+        setDraft(initialDraft);
         setIsEditing(true);
     };
 
@@ -1611,22 +1632,22 @@ export default function TaskDetailPage() {
                         {!isEditing && (
                             <div className="flex flex-col gap-3">
                                 {taskData.assignments && taskData.assignments.length > 0 ? (
-                                    taskData.assignments.map((a, i) => (
-                                        <div key={a.assignment_id || i} className="flex items-center gap-3">
-                                            <div
-                                                className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold shrink-0"
-                                                style={{ backgroundColor: avatarColorFor(a.role_or_name || a.personInCharge || "?") }}
-                                            >
-                                                {(a.personInCharge || a.role_or_name || "?").charAt(0).toUpperCase()}
+                                    taskData.assignments.map((a, i) => {
+                                        const nameToShow = a.role_or_name || a.personInCharge || "-";
+                                        return (
+                                            <div key={a.assignment_id || i} className="flex items-center gap-3">
+                                                <div
+                                                    className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-semibold shrink-0"
+                                                    style={{ backgroundColor: avatarColorFor(nameToShow, a.color) }}
+                                                >
+                                                    {nameToShow.charAt(0).toUpperCase()}
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-medium truncate">{nameToShow}</p>
+                                                </div>
                                             </div>
-                                            <div className="min-w-0">
-                                                <p className="text-sm font-medium truncate">{a.role_or_name || "-"}</p>
-                                                {a.personInCharge && (
-                                                    <p className="text-xs opacity-60 truncate">{a.personInCharge}</p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    ))
+                                        );
+                                    })
                                 ) : (
                                     <p className="text-sm opacity-60">{taskData.personInCharge || "ไม่ระบุผู้รับผิดชอบ"}</p>
                                 )}

@@ -3,6 +3,42 @@ const pool = require("../config/db");
 const { appendMultipleTasksToSheet, appendTaskToSheet } = require('../services/googleSheetsService');
 const { calculateFiscalRoundAndYear } = require("../utils/fiscalYearHelper");
 const { syncTaskDocumentNotesFromText, parseAdditionalDocsText } = require("../utils/attachmentSync");
+const { cleanToOnlyName } = require("../utils/filenameParser");
+
+const processExcelAssignees = async (assigneeStr, dbClient = pool) => {
+    if (!assigneeStr || typeof assigneeStr !== 'string') return [];
+    const names = assigneeStr.split(/[,;\n]/).map(s => s.trim()).filter(Boolean);
+    if (names.length === 0) return [];
+
+    const { rows: allUsers } = await dbClient.query('SELECT id, name FROM users');
+    const userByNameMap = new Map();
+    const userByCleanNameMap = new Map();
+
+    for (const u of allUsers) {
+        userByNameMap.set(u.name.trim().toLowerCase(), u);
+        const clean = cleanToOnlyName(u.name).trim().toLowerCase();
+        if (clean) userByCleanNameMap.set(clean, u);
+    }
+
+    const results = [];
+    const addedKeys = new Set();
+
+    for (const nameStr of names) {
+        const lower = nameStr.toLowerCase();
+        const clean = cleanToOnlyName(nameStr).toLowerCase();
+        const matchedUser = userByNameMap.get(lower) || userByCleanNameMap.get(clean);
+
+        const finalUserId = matchedUser ? matchedUser.id : null;
+        const finalRoleOrName = matchedUser ? matchedUser.name : nameStr;
+        const key = `${finalUserId || ''}_${finalRoleOrName}`;
+
+        if (!addedKeys.has(key)) {
+            addedKeys.add(key);
+            results.push({ user_id: finalUserId, role_or_name: finalRoleOrName });
+        }
+    }
+    return results;
+};
 
 // สร้างตัวแปร Global สำหรับเก็บ Progress 
 if (!global.uploadProgress) { 
@@ -442,8 +478,11 @@ exports.uploadExcelTasks = async (req, res) => {
                         const item = toInsert[idx];
                         const assignee = item.assignee_name;
                         if (assignee) {
-                            assignPlaceholders.push(`($${assignCounter++}, $${assignCounter++})`);
-                            assignFlatValues.push(taskId, String(assignee));
+                            const processed = await processExcelAssignees(String(assignee), pool);
+                            for (const ass of processed) {
+                                assignPlaceholders.push(`($${assignCounter++}, $${assignCounter++}, $${assignCounter++})`);
+                                assignFlatValues.push(taskId, ass.user_id, ass.role_or_name);
+                            }
                         }
 
                         if (item.additional_docs !== null) {
@@ -477,7 +516,7 @@ exports.uploadExcelTasks = async (req, res) => {
                     }));
 
                     if (assignPlaceholders.length > 0) {
-                        await pool.query(`INSERT INTO task_assignments (task_id, role_or_name) VALUES ${assignPlaceholders.join(', ')}`, assignFlatValues);
+                        await pool.query(`INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ${assignPlaceholders.join(', ')}`, assignFlatValues);
                     }
                 }
 
@@ -536,7 +575,10 @@ exports.uploadExcelTasks = async (req, res) => {
                             updatedTaskIds.push(taskId);
                             await pool.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
                             if (item.assignee_name) {
-                                await pool.query(`INSERT INTO task_assignments (task_id, role_or_name) VALUES ($1, $2)`, [taskId, String(item.assignee_name)]);
+                                const processed = await processExcelAssignees(String(item.assignee_name), pool);
+                                for (const ass of processed) {
+                                    await pool.query(`INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ($1, $2, $3)`, [taskId, ass.user_id, ass.role_or_name]);
+                                }
                             }
                         } catch (err) {
                             errors.push(`ข้อผิดพลาดแถวที่ ${item.original_row} (Update): ${err.message}`);
