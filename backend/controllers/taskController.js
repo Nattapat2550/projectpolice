@@ -2,7 +2,7 @@ const pool = require('../config/db');
 const fs = require('fs').promises;
 const path = require('path'); // เพิ่ม module path สำหรับป้องกัน Path Traversal
 const { uploadToDrive, deleteFromDrive, renameFileOnDrive } = require('../services/googleDriveService');
-const { appendTaskToSheet, appendMultipleTasksToSheet, updateTaskInSheet } = require('../services/googleSheetsService');
+const { appendTaskToSheet, appendMultipleTasksToSheet, updateTaskInSheet, deleteTaskFromSheet, clearTaskLinksInSheet } = require('../services/googleSheetsService');
 const { generateHash } = require('../utils/duplicateChecker');
 const { parseFilenameInfo, formatStandardFilename, cleanToOnlyName } = require('../utils/filenameParser');
 const { extractDataWithGemini } = require('../services/ocrService');
@@ -889,13 +889,26 @@ exports.deleteTask = async (req, res) => {
       return res.status(403).json({ success: false, message: 'คุณไม่มีสิทธิ์ลบงานที่ไม่ได้อยู่ในความรับผิดชอบของคุณ' });
     }
 
-    const taskRes = await client.query('SELECT document_id FROM tasks WHERE id = $1', [id]);
+    const taskRes = await client.query('SELECT document_id, receive_year, receive_no FROM tasks WHERE id = $1', [id]);
     if (taskRes.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ success: false, message: 'Task not found' });
     }
 
-    const docId = taskRes.rows[0].document_id;
+    const { document_id: docId, receive_year: receiveYear, receive_no: receiveNo } = taskRes.rows[0];
+
+    // ลบไฟล์เอกสารประกอบเพิ่มเติม (task_documents) ใน Google Drive
+    const attachRes = await client.query('SELECT drive_file_id FROM task_documents WHERE task_id = $1', [id]);
+    for (const attachRow of attachRes.rows) {
+      if (attachRow.drive_file_id) {
+        try {
+          await deleteFromDrive(attachRow.drive_file_id);
+        } catch (e) {
+          console.error("Drive delete error for attachment:", e.message);
+        }
+      }
+    }
+    await client.query('DELETE FROM task_documents WHERE task_id = $1', [id]);
 
     await client.query('DELETE FROM task_assignments WHERE task_id = $1', [id]);
     await client.query('DELETE FROM tasks WHERE id = $1', [id]);
@@ -905,13 +918,20 @@ exports.deleteTask = async (req, res) => {
       if (parseInt(otherRes.rows[0].count, 10) === 0) {
         const docRes = await client.query('SELECT drive_file_id FROM documents WHERE id = $1', [docId]);
         if (docRes.rows.length > 0 && docRes.rows[0].drive_file_id) {
-          deleteFromDrive(docRes.rows[0].drive_file_id).catch(e => console.error("Drive delete error on task deletion:", e.message));
+          try {
+            await deleteFromDrive(docRes.rows[0].drive_file_id);
+          } catch (e) {
+            console.error("Drive delete error on task deletion:", e.message);
+          }
         }
         await client.query('DELETE FROM documents WHERE id = $1', [docId]);
       }
     }
 
     await client.query('COMMIT');
+
+    // เคลียร์ลิงก์ไฟล์เอกสารทั้ง 2 แบบใน Google Sheets (คอลัมน์ Q และ R)
+    clearTaskLinksInSheet(id, receiveYear, receiveNo).catch(e => console.error("[Google Sheets Clear Links Error]:", e.message));
     res.status(200).json({ success: true, message: 'ลบข้อมูลสำเร็จ' });
   } catch (err) {
     await client.query('ROLLBACK');
