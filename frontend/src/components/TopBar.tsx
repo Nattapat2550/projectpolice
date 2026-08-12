@@ -105,6 +105,7 @@ export default function TopBar() {
                                 width={24} 
                                 height={24} 
                                 className="rounded-full object-cover w-6 h-6 shrink-0"
+                                unoptimized
                             />
                             <span className="font-medium text-foreground! truncate text-sm sm:text-base block">
                                 {user.name}
@@ -120,6 +121,7 @@ export default function TopBar() {
                                         width={20} 
                                         height={20} 
                                         className="rounded-full shrink-0"
+                                        unoptimized
                                     />
                                     <span className="font-semibold text-xs text-foreground! truncate">{user.name}</span>
                                 </div>

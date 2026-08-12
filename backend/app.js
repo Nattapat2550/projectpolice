@@ -9,6 +9,8 @@ const morgan = require("morgan");
 const swaggerJsDoc = require("swagger-jsdoc");
 const swaggerUi = require("swagger-ui-express");
 
+const path = require("path");
+
 const auth = require("./routes/auth");
 const users = require("./routes/users");
 const documents = require("./routes/documents");
@@ -47,9 +49,10 @@ app.use(cors(corsOptions));
 if (process.env.NODE_ENV !== "test") app.use(morgan("dev"));
 app.use(express.json());
 app.use(cookieParser());
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(xss());
 app.use(hpp());
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

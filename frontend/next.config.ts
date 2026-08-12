@@ -6,8 +6,9 @@ const nextConfig: NextConfig = {
 
 
 
-  // 💡 ปรับแต่งการโหลด Image ให้รองรับฟอร์แมตใหม่ๆ
+  // 💡 ปรับแต่งการโหลด Image ให้รองรับการทำงานบน Render
   images: {
+    unoptimized: true,
     formats: ['image/avif', 'image/webp'],
     minimumCacheTTL: 60, 
   },
@@ -31,7 +32,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Content-Security-Policy",
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://projectpolice-1.onrender.com https://projectpolice.onrender.com http://localhost:5003 https://projectpolice-iota.vercel.app https://projectpolice-um54.vercel.app ;"
+            value: "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: http:; connect-src 'self' https://projectpolice-1.onrender.com https://projectpolice.onrender.com http://localhost:5003 https://projectpolice-iota.vercel.app https://projectpolice-um54.vercel.app ;"
           },
         ],
       },
