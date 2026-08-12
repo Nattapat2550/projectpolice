@@ -1,8 +1,38 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import Swal from 'sweetalert2';
+import styles from '@/components/self-add/SelfAdd.module.css';
 import { getValidExternalUrl } from '@/components/firstpage/TaskTable';
+
+const getUrgencyBadgeStyle = (level?: string) => {
+  switch (level) {
+    case 'ด่วนที่สุด':
+      return 'bg-[var(--redBG)] text-[var(--redText)] border-[var(--redBorder)]';
+    case 'ด่วนมาก':
+      return 'bg-[var(--orangeBG)] text-[var(--orangeText)] border-[var(--orangeBorder)]';
+    case 'ด่วน':
+      return 'bg-[var(--yellowBG)] text-[var(--yellowText)] border-[var(--yellowBorder)]';
+    case 'ปกติ':
+    default:
+      return 'bg-[var(--greenBG)] text-[var(--greenText)] border-[var(--greenBorder)]';
+  }
+};
+
+const getSecretBadgeStyle = (level?: string) => {
+  switch (level) {
+    case 'ลับที่สุด':
+      return 'bg-[var(--redBG)] text-[var(--redText)] border-[var(--redBorder)]';
+    case 'ลับมาก':
+      return 'bg-[var(--orangeBG)] text-[var(--orangeText)] border-[var(--orangeBorder)]';
+    case 'ลับ':
+      return 'bg-[var(--yellowBG)] text-[var(--yellowText)] border-[var(--yellowBorder)]';
+    case 'ปกติ':
+    default:
+      return 'bg-[var(--greenBG)] text-[var(--greenText)] border-[var(--greenBorder)]';
+  }
+};
 
 export default function TaskExcelUploadPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -28,7 +58,7 @@ export default function TaskExcelUploadPage() {
   const handlePreview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file) {
-      setError('กรุณาเลือกไฟล์ Excel ก่อนทำการตรวจสอบ');
+      setError('กรุณาเลือกไฟล์ Excel หรือ Word ก่อนทำการตรวจสอบ');
       return;
     }
 
@@ -135,206 +165,228 @@ export default function TaskExcelUploadPage() {
   };
 
   const renderNull = (text = "ไม่มีข้อมูล") => (
-    <span className="text-gray-400 italic font-normal text-xs">{text}</span>
+    <span className="text-[var(--header)]/40 italic font-normal text-xs sm:text-sm">{text}</span>
   );
 
   const paginatedData = result?.preview_data?.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPages = Math.ceil((result?.preview_data?.length || 0) / itemsPerPage);
 
   return (
-    <div className="p-8 max-w-7xl mx-auto min-h-screen bg-background text-foreground">
-      <div className="mb-8 border-b border-zinc-200 dark:border-zinc-800 pb-4">
-        <h1 className="text-3xl font-extrabold tracking-tight text-blue-600 dark:text-blue-400">
-          ระบบนำเข้างานจาก Excel (Tasks)
-        </h1>
-        <p className="text-zinc-500 dark:text-zinc-400 mt-2">
-          รองรับการดึงข้อมูลจากทุก Sheet (ใช้ชื่อ Sheet เป็นชื่อสำนักงาน)
-        </p>
+    <main className="w-full min-h-screen px-4 sm:px-8 py-6">
+      {/* 🧭 Top Navigation Header matching main app & self-add */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div>
+          <h1 className={styles.Header} style={{ fontSize: '1.75rem', marginBottom: '0.25rem' }}>
+            นำเข้างานจากไฟล์ Excel / Word (Tasks)
+          </h1>
+          <p className="text-[var(--header)]/80 text-base font-medium">
+            รองรับการดึงข้อมูลจากทุก Sheet (ใช้ชื่อ Sheet เป็นชื่อหน่วยงาน/ผู้รับผิดชอบ)
+          </p>
+        </div>
+
+        <Link href="/">
+          <button className={styles.SecondaryButton} style={{ padding: '0.5rem 1.25rem', fontSize: '1.05rem' }}>
+            กลับหน้าหลัก
+          </button>
+        </Link>
       </div>
 
-      <form onSubmit={handlePreview} className="mb-8 p-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-sm max-w-xl">
-        <div className="flex flex-col gap-4">
-          <label className="font-semibold text-sm text-blue-900 dark:text-blue-100">เลือกไฟล์ Excel หรือ Word ของคุณ (.xlsx, .xls, .docx)</label>
-          <input 
-            type="file" 
-            accept=".xlsx, .xls, .docx" 
-            onChange={handleFileChange}
-            className="file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-zinc-200 dark:border-zinc-700 p-2 rounded-md bg-white dark:bg-zinc-950 text-blue-900 dark:text-blue-100 cursor-pointer w-full text-sm"
-          />
-          <button 
-            type="submit" 
-            disabled={loading || isUploading}
-            className="w-full bg-blue-600 text-white py-2.5 px-4 rounded-lg font-medium hover:bg-blue-700 disabled:bg-zinc-400 dark:disabled:bg-zinc-700 disabled:cursor-not-allowed transition shadow-sm text-sm"
-          >
-            {loading ? 'กำลังประมวลผลและอ่านไฟล์...' : 'พรีวิวข้อมูล (ยังไม่บันทึก)'}
-          </button>
-        </div>
-      </form>
+      {/* 📦 File Selection Card Container (Full Width) */}
+      <div className={styles.Container} style={{ maxWidth: '100%', width: '100%', marginBottom: '1.5rem', padding: '1.25rem sm:1.5rem' }}>
+        <form onSubmit={handlePreview}>
+          <div className="flex flex-col gap-4">
+            <label className={styles.Label} style={{ fontSize: '1.1rem' }}>
+              เลือกไฟล์ Excel หรือ Word (.xlsx, .xls, .docx)
+            </label>
+            <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
+              <input 
+                type="file" 
+                accept=".xlsx, .xls, .docx" 
+                onChange={handleFileChange}
+                className={styles.Input}
+                style={{ padding: '0.65rem 0.85rem', fontSize: '1rem', cursor: 'pointer' }}
+              />
+              <button 
+                type="submit" 
+                disabled={loading || isUploading}
+                className={styles.SecondaryButton}
+                style={{ 
+                  color: 'var(--blueText)', 
+                  borderColor: 'var(--blueText)', 
+                  borderWidth: '2px', 
+                  whiteSpace: 'nowrap',
+                  padding: '0.65rem 1.5rem',
+                  fontSize: '1rem',
+                  opacity: (loading || isUploading) ? 0.5 : 1,
+                  cursor: (loading || isUploading) ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {loading ? 'กำลังอ่านไฟล์...' : '🔍 พรีวิวข้อมูล (ยังไม่บันทึก)'}
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
 
       {error && (
-        <div className="p-4 mb-6 bg-red-50 text-red-700 border border-red-200 rounded-lg dark:bg-red-950/30 dark:text-red-400 dark:border-red-900 text-sm font-medium">
-          ⚠️ {error}
+        <div className="p-4 mb-6 bg-[var(--redBG)]/20 text-[var(--redText)] border-2 border-[var(--redBorder)] rounded-lg text-base font-bold flex items-center gap-2">
+          <span>⚠️</span> <span>{error}</span>
         </div>
       )}
 
       {result && (
-        <div className="space-y-6 animate-fadeIn">
+        <div className="space-y-6 animate-fadeIn w-full">
           
-          <div className="p-6 border rounded-xl bg-blue-50 dark:bg-blue-900/20 shadow-sm border-blue-100 dark:border-blue-800">
-             <h3 className="font-bold text-lg mb-2 text-blue-800 dark:text-blue-300">ยืนยันการนำเข้าข้อมูล</h3>
-             <p className="text-sm mb-4 text-blue-600 dark:text-blue-400">เมื่อกดปุ่มนี้ ระบบจะเริ่มบันทึกข้อมูลสร้าง Task และผูกผู้ปฏิบัติงานทันที</p>
-             {isUploading ? (
-                 <div className="w-full mt-4">
-                     <div className="flex justify-between text-sm mb-1 font-semibold text-blue-800 dark:text-blue-300">
-                         <span>กำลังบันทึกลง Database...</span>
-                         <span>{progress.current} / {progress.total || result.total_rows} รายการ</span>
-                     </div>
-                     <div className="w-full bg-blue-200 rounded-full h-3 dark:bg-blue-950">
-                         <div className="bg-blue-600 h-3 rounded-full transition-all duration-300" style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }}></div>
-                     </div>
-                 </div>
-             ) : (
-                 <button onClick={handleConfirmUpload} className="w-full bg-green-600 text-white py-3 px-4 rounded-lg font-bold hover:bg-green-700 transition shadow-md">
-                     ยืนยันบันทึกลงฐานข้อมูล ({result.total_rows} รายการ)
-                 </button>
-             )}
-          </div>
+          {/* ⚡ Confirm Upload Section */}
+          <div className={styles.AssignmentWrapper} style={{ marginBottom: '1.5rem', border: '2px solid var(--blueText)', padding: '1.25rem' }}>
+            <h3 className="font-bold text-xl text-[var(--blueText)] mb-1">ยืนยันการนำเข้าข้อมูลลงฐานข้อมูล</h3>
+            <p className="text-sm text-[var(--header)]/80 mb-4 font-medium">
+              อ่านข้อมูลได้ทั้งหมด <strong className="text-[var(--blueText)] text-base">{result.total_rows}</strong> รายการ — เมื่อกดยืนยัน ระบบจะเริ่มบันทึกข้อมูลสร้าง Task และผูกผู้ปฏิบัติงานทันที
+            </p>
 
-          <div className="p-5 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900 flex justify-between items-center shadow-sm">
-            <div>
-              <p className="font-bold text-lg text-emerald-700 dark:text-emerald-400">✨ {result.message}</p>
-              <p className="text-sm mt-1">ข้อมูลพร้อมสำหรับนำเข้าฐานข้อมูลจริง</p>
-            </div>
-            <div className="text-right">
-              <span className="text-2xl font-black">{result.total_rows}</span>
-              <p className="text-xs opacity-80">แถวที่อ่านได้</p>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="font-bold text-xl mb-4 text-blue-900 dark:text-blue-100">
-              🔍 ตารางพรีวิวข้อมูล
-            </h3>
-
-            {totalPages > 1 && (
-              <div className="flex justify-between items-center bg-white dark:bg-zinc-900 p-4 border border-zinc-200 dark:border-zinc-800 rounded-xl mb-4 shadow-sm">
-                <button disabled={currentPage === 1} onClick={() => setCurrentPage(p => p - 1)} className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md disabled:opacity-50 text-sm font-medium hover:bg-zinc-200 dark:hover:bg-zinc-700 text-blue-900 dark:text-blue-100 transition">
-                  ก่อนหน้า
-                </button>
-                <span className="text-sm font-medium text-blue-900 dark:text-blue-100">หน้า {currentPage} จาก {totalPages}</span>
-                <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(p => p + 1)} className="px-4 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md disabled:opacity-50 text-sm font-medium hover:bg-zinc-200 dark:hover:bg-zinc-700 text-blue-900 dark:text-blue-100 transition">
-                  ถัดไป
-                </button>
+            {isUploading ? (
+              <div className="w-full mt-3">
+                <div className="flex justify-between text-sm font-bold text-[var(--blueText)] mb-1.5">
+                  <span>กำลังบันทึกลง Database...</span>
+                  <span>{progress.current} / {progress.total || result.total_rows} รายการ</span>
+                </div>
+                <div className="w-full bg-[var(--container)] rounded-full h-4 overflow-hidden border border-[var(--wrapper)]">
+                  <div className="bg-[var(--blueText)] h-4 rounded-full transition-all duration-300" style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }}></div>
+                </div>
               </div>
+            ) : (
+              <button 
+                onClick={handleConfirmUpload} 
+                className={styles.SubmitButton}
+                style={{ marginTop: '0.5rem', fontSize: '1.1rem', padding: '0.85rem' }}
+              >
+                ✅ ยืนยันบันทึกลงฐานข้อมูล ({result.total_rows} รายการ)
+              </button>
             )}
+          </div>
 
-            <div className="overflow-x-auto border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-md bg-white dark:bg-zinc-950">
-              <table className="w-full text-sm text-left border-collapse min-w-175">
-                <thead className="bg-zinc-100 dark:bg-zinc-900 font-bold border-b border-zinc-200 dark:border-zinc-800 text-xs text-zinc-700 dark:text-zinc-300 uppercase">
-                  <tr>
-                    <th className="p-4 border-r border-zinc-200 dark:border-zinc-800 w-16 text-center">สำนักงาน (Sheet)</th>
-                    <th className="p-4 border-r border-zinc-200 dark:border-zinc-800 bg-blue-50/50 dark:bg-blue-950/20 text-blue-800 dark:text-blue-300 w-3/5">ข้อมูลที่จะบันทึก</th>
-                    <th className="p-4 text-amber-800 dark:text-amber-300 bg-amber-50/50 dark:bg-amber-950/20 w-2/5">ข้อมูลดิบจาก Excel</th>
+          {/* 📊 Preview Data Table Card (Full Width & Enlarged Text) */}
+          <div className={styles.Container} style={{ maxWidth: '100%', width: '100%', padding: '1.25rem' }}>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+              <h3 className={styles.Header} style={{ fontSize: '1.4rem', marginBottom: 0 }}>
+                🔍 ตารางพรีวิวข้อมูลที่จะนำเข้า
+              </h3>
+
+              {totalPages > 1 && (
+                <div className="flex items-center gap-3 text-sm font-bold text-[var(--header)]">
+                  <button 
+                    disabled={currentPage === 1} 
+                    onClick={() => setCurrentPage(p => p - 1)} 
+                    className={styles.SecondaryButton}
+                    style={{ padding: '0.35rem 0.85rem', fontSize: '0.95rem', opacity: currentPage === 1 ? 0.4 : 1 }}
+                  >
+                    ก่อนหน้า
+                  </button>
+                  <span>หน้า {currentPage} / {totalPages}</span>
+                  <button 
+                    disabled={currentPage === totalPages} 
+                    onClick={() => setCurrentPage(p => p + 1)} 
+                    className={styles.SecondaryButton}
+                    style={{ padding: '0.35rem 0.85rem', fontSize: '0.95rem', opacity: currentPage === totalPages ? 0.4 : 1 }}
+                  >
+                    ถัดไป
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="overflow-x-auto border-2 border-[var(--wrapper)] rounded-lg w-full">
+              <table className="w-full text-sm sm:text-base text-left border-collapse min-w-[900px]">
+                <thead>
+                  <tr className="bg-[var(--wrapper)]/50 text-[var(--header)] font-bold border-b-2 border-[var(--wrapper)] text-sm sm:text-base">
+                    <th className="p-4 w-32 sm:w-44 text-center border-r-2 border-[var(--wrapper)] select-none">สำนักงาน (Sheet)</th>
+                    <th className="p-4 border-r-2 border-[var(--wrapper)] select-none">ข้อมูลที่จะบันทึก</th>
+                    <th className="p-4 w-2/5 select-none">ข้อมูลดิบจาก Excel</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                <tbody className="divide-y divide-[var(--wrapper)] text-sm sm:text-base">
                   {paginatedData?.map((row: any, idx: number) => (
-                    <tr key={idx} className="hover:bg-zinc-50 dark:hover:bg-zinc-900/50 transition">
-                      <td className="p-4 font-bold border-r border-zinc-200 dark:border-zinc-800 text-center align-top text-zinc-500 dark:text-zinc-400">
-
-                        <div className="text-[10px] text-zinc-400 mt-2">แถวที่ {row.original_row}</div>
+                    <tr key={idx} className="hover:bg-[var(--wrapper)]/20 transition-colors">
+                      {/* 🏢 Sheet Name Column */}
+                      <td className="p-4 font-bold border-r-2 border-[var(--wrapper)] text-center align-top text-[var(--header)]">
+                        <span className="inline-block px-3 py-1.5 rounded-lg bg-[var(--button)] border border-[var(--wrapper)] text-sm font-bold text-[var(--blueText)] mb-1">
+                          {row.sheet_name || '-'}
+                        </span>
+                        <div className="text-xs text-[var(--header)]/60 font-mono mt-1">แถวที่ {row.original_row}</div>
                       </td>
-                      <td className="p-4 border-r border-zinc-200 dark:border-zinc-800 bg-blue-50/10 dark:bg-blue-950/5 align-top text-blue-900 dark:text-blue-100">
-                        <div className="mb-2 pb-2 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
-                            <span className="font-bold text-base">{row.title || renderNull()}</span>
-                        </div>
-                        
-                        <div className="grid grid-cols-2 gap-4 mb-3 pb-3 border-b border-zinc-200 dark:border-zinc-800">
-                            <div>
-                                <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1">ข้อมูลหนังสือ</span>
-                                <div className="text-sm"><span className="text-zinc-500 mr-2">[เลขที่หนังสือ]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.memo_no || renderNull()}</span></div>
-                                <div className="text-sm"><span className="text-zinc-500 mr-2">[จาก]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.sender || renderNull()}</span></div>
-                                <div className="text-sm"><span className="text-zinc-500 mr-2">[ถึง]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.recipient_to || renderNull()}</span></div>
-                                {row.parsed_docs && row.parsed_docs.length > 0 ? (
-                                  <div className="text-sm my-1 p-2 bg-blue-50/50 dark:bg-zinc-800/50 rounded-lg border border-blue-100 dark:border-zinc-700">
-                                    <span className="text-xs font-bold text-blue-800 dark:text-blue-300 block mb-1">📎 เอกสารประกอบเพิ่มเติม ({row.parsed_docs.length} รายการ):</span>
-                                    <ul className="space-y-1 text-xs">
-                                      {row.parsed_docs.map((doc: any, docIdx: number) => (
-                                        <li key={docIdx} className="flex items-center flex-wrap gap-1">
-                                          <span className="font-semibold text-zinc-700 dark:text-zinc-200">• {doc.filename}</span>
-                                          {doc.notes && <span className="bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-300 px-1.5 py-0.5 rounded text-[10px]">หน้า {doc.notes}</span>}
-                                          {getValidExternalUrl(doc.link) && (
-                                            <a href={getValidExternalUrl(doc.link)!} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline hover:text-blue-800 dark:text-blue-400 font-medium ml-1">
-                                              [เปิดดูไฟล์]
-                                            </a>
-                                          )}
-                                        </li>
-                                      ))}
-                                    </ul>
-                                  </div>
-                                ) : (
-                                  row.additional_docs && <div className="text-sm"><span className="text-zinc-500 mr-2">[เอกสารแนบ]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.additional_docs}</span></div>
-                                )}
-                                {getValidExternalUrl(row.document_link) && (
-                                  <div className="text-sm">
-                                    <span className="text-zinc-500 mr-2">[ลิงก์ต้นฉบับ]</span> 
-                                    <a href={getValidExternalUrl(row.document_link)!} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 underline hover:text-blue-800 dark:text-blue-400 break-all">
-                                      {row.document_link}
-                                    </a>
-                                  </div>
-                                )}
-                                <div className="text-sm"><span className="text-zinc-500 mr-2">[ลงวันที่]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.memo_date || renderNull()}</span></div>
-                                <div className="text-sm"><span className="text-zinc-500 mr-2">[เลขรับ]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.receive_no ? `${row.receive_no}/${row.receive_year}` : renderNull()}</span></div>
-                            </div>
-                            <div>
-                                <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1">สถานะวันที่</span>
-                                <div className="text-sm"><span className="text-zinc-500 mr-2">[วันที่รับ]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.received_date || renderNull()}</span></div>
-                                <div className="text-sm"><span className="text-zinc-500 mr-2">[วันที่ลงนาม]</span> <span className="font-medium text-blue-700 dark:text-blue-400">{row.signed_date || renderNull()}</span></div>
-                            </div>
+
+                      {/* 📋 Processed Task Data Column */}
+                      <td className="p-4 border-r-2 border-[var(--wrapper)] align-top text-[var(--header)] space-y-3">
+                        <div className="font-bold text-base sm:text-lg text-[var(--header)] pb-2 border-b border-[var(--wrapper)]">
+                          {row.title || renderNull()}
                         </div>
 
-                        <div className="mb-3 pb-3 border-b border-zinc-200 dark:border-zinc-800">
-                            <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1">เนื้อหา:</span>
-                            <div className="text-sm whitespace-pre-wrap">
-                                {row.main_text || renderNull()}
-                            </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-3 border-b border-[var(--wrapper)]">
+                          <div className="space-y-1.5">
+                            <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[เลขที่หนังสือ]</span> <span className="font-bold text-[var(--blueText)]">{row.memo_no || renderNull()}</span></div>
+                            <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[จาก]</span> <span className="font-semibold">{row.sender || renderNull()}</span></div>
+                            <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[ถึง]</span> <span className="font-semibold">{row.recipient_to || renderNull()}</span></div>
+                            <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[ลงวันที่]</span> <span className="font-semibold">{row.memo_date || renderNull()}</span></div>
+                            <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[เลขรับ]</span> <span className="font-semibold">{row.receive_no ? `${row.receive_no}/${row.receive_year}` : renderNull()}</span></div>
+                            
+                            {row.parsed_docs && row.parsed_docs.length > 0 && (
+                              <div className="mt-2 p-3 rounded-lg bg-[var(--wrapper)]/40 border border-[var(--wrapper)]">
+                                <span className="font-bold text-sm text-[var(--blueText)] block mb-1">📎 เอกสารประกอบเพิ่มเติม ({row.parsed_docs.length} รายการ):</span>
+                                <ul className="space-y-1.5 text-xs sm:text-sm">
+                                  {row.parsed_docs.map((doc: any, docIdx: number) => (
+                                    <li key={docIdx} className="flex items-center flex-wrap gap-1.5">
+                                      <span className="font-semibold">• {doc.filename}</span>
+                                      {doc.notes && <span className="px-2 py-0.5 rounded text-xs font-bold bg-[var(--yellowBG)] text-[var(--yellowText)] border border-[var(--yellowBorder)]">หน้า {doc.notes}</span>}
+                                      {getValidExternalUrl(doc.link) && (
+                                        <a href={getValidExternalUrl(doc.link)!} target="_blank" rel="noopener noreferrer" className="text-[var(--blueText)] underline font-bold ml-1 hover:opacity-80">
+                                          [เปิดดูไฟล์]
+                                        </a>
+                                      )}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="space-y-1.5">
+                            <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[ชั้นความเร็ว]</span> <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs sm:text-sm font-bold border ${getUrgencyBadgeStyle(row.urgency_level)}`}>{row.urgency_level || 'ปกติ'}</span></div>
+                            <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[ชั้นความลับ]</span> <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs sm:text-sm font-bold border ${getSecretBadgeStyle(row.secret_level)}`}>{row.secret_level || 'ปกติ'}</span></div>
+                            <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[วันกำหนดส่ง]</span> <span className="font-bold text-[var(--yellowText)]">{row.due_date_str || renderNull()}</span></div>
+                            <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[วันประชุม]</span> <span className="font-bold text-[var(--blueText)]">{row.meeting_date || renderNull()}</span></div>
+                          </div>
                         </div>
+
+                        {row.main_text && (
+                          <div className="pb-3 border-b border-[var(--wrapper)]">
+                            <span className="font-bold text-sm text-[var(--header)]/70 block mb-1">เนื้อหา:</span>
+                            <div className="whitespace-pre-wrap leading-relaxed text-sm sm:text-base text-[var(--header)] font-normal">{row.main_text}</div>
+                          </div>
+                        )}
 
                         {row.command_text && row.command_text.length > 0 && (
-                            <div className="mb-3 pb-3 border-b border-zinc-200 dark:border-zinc-800">
-                                <span className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1">สิ่งที่ต้องดำเนินการ:</span>
-                                <div className="text-sm bg-zinc-50 dark:bg-zinc-800/50 p-2 rounded">
-                                    <ul className="list-disc ml-4 text-blue-800 dark:text-blue-300">
-                                        {row.command_text.map((cmd: string, cmdIdx: number) => (
-                                            <li key={cmdIdx}>{cmd}</li>
-                                        ))}
-                                    </ul>
-                                </div>
+                          <div className="pb-3 border-b border-[var(--wrapper)]">
+                            <span className="font-bold text-sm text-[var(--header)]/70 block mb-1">สิ่งที่ต้องดำเนินการ:</span>
+                            <div className="bg-[var(--wrapper)]/30 p-3 rounded-lg border border-[var(--wrapper)]">
+                              <ul className="list-disc ml-5 text-[var(--blueText)] font-semibold text-sm sm:text-base space-y-1">
+                                {row.command_text.map((cmd: string, cmdIdx: number) => (
+                                  <li key={cmdIdx}>{cmd}</li>
+                                ))}
+                              </ul>
                             </div>
+                          </div>
                         )}
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <span className="text-[10px] font-semibold text-zinc-400 uppercase block mb-1">ความเร็ว / ความลับ</span>
-                                <div className="text-sm"><span className="text-zinc-500 mr-2">[ชั้นความเร็ว]</span> <span className="font-medium text-red-600 dark:text-red-400">{row.urgency_level || renderNull()}</span></div>
-                                <div className="text-sm"><span className="text-zinc-500 mr-2">[ชั้นความลับ]</span> <span className="font-medium text-purple-600 dark:text-purple-400">{row.secret_level || renderNull()}</span></div>
-                            </div>
-                            <div>
-                                <span className="text-[10px] font-semibold text-zinc-400 uppercase block mb-1">สถานะวันที่ติดตาม</span>
-                                <div className="text-sm"><span className="text-zinc-500 mr-2">[วันกำหนดส่ง]</span> <span className="font-medium text-amber-600 dark:text-amber-400">{row.due_date_str || renderNull()}</span></div>
-                                <div className="text-sm"><span className="text-zinc-500 mr-2">[วันประชุม]</span> <span className="font-medium text-blue-600 dark:text-blue-400">{row.meeting_date || renderNull()}</span></div>
-                                <div className="text-sm"><span className="text-zinc-500 mr-2">[ส่งตอบรับ]</span> <span className="font-medium text-teal-600 dark:text-teal-400">{row.reply_due_date || renderNull()}</span></div>
-                            </div>
-                        </div>
 
                         {row.notes && (
-                            <div className="mt-3 text-xs text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-950/30 p-2 rounded">
-                                <strong>หมายเหตุ:</strong> {row.notes}
-                            </div>
+                          <div className="text-[var(--redText)] bg-[var(--redBG)]/20 border border-[var(--redBorder)]/40 p-3 rounded-lg font-bold text-sm sm:text-base">
+                            <strong>หมายเหตุ:</strong> {row.notes}
+                          </div>
                         )}
                       </td>
-                      <td className="p-4 align-top bg-amber-50/10 dark:bg-amber-950/5">
-                        <pre className="text-xs font-mono bg-slate-100 dark:bg-zinc-900 text-blue-900 dark:text-blue-100 p-3 border border-zinc-200 dark:border-zinc-800 rounded-lg max-h-screen overflow-y-auto shadow-inner whitespace-pre-wrap sticky top-4">
+
+                      {/* 📄 Raw Excel Data Column */}
+                      <td className="p-4 align-top bg-[var(--wrapper)]/10">
+                        <pre className="text-xs sm:text-sm font-mono bg-[var(--button)] text-[var(--header)] p-4 border border-[var(--wrapper)] rounded-lg max-h-[450px] overflow-y-auto whitespace-pre-wrap leading-relaxed shadow-inner">
                           {JSON.stringify(row.raw_data, null, 2)}
                         </pre>
                       </td>
@@ -346,6 +398,6 @@ export default function TaskExcelUploadPage() {
           </div>
         </div>
       )}
-    </div>
+    </main>
   );
 }
