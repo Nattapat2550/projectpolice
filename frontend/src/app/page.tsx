@@ -149,7 +149,24 @@ export default function HomePage() {
 
   const handleStatusChange = async (taskId: string, newStatus: string) => {
       try {
-          const token = localStorage.getItem('token');
+          const localToken = typeof window !== 'undefined' ? localStorage.getItem("token") : null;
+          const cookieToken = typeof document !== 'undefined' ? document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1] : null;
+          const token = (localToken && localToken !== "undefined") ? localToken : (cookieToken || null);
+
+          if (!token) {
+              Swal.fire({
+                  icon: 'warning',
+                  title: 'ไม่อนุญาต',
+                  text: 'กรุณาเข้าสู่ระบบก่อนทำการเปลี่ยนสถานะงาน',
+                  confirmButtonText: 'เข้าสู่ระบบ',
+                  showCancelButton: true,
+                  cancelButtonText: 'ยกเลิก'
+              }).then((result) => {
+                  if (result.isConfirmed) router.push('/login');
+              });
+              return;
+          }
+
           const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5003';
           const response = await fetch(`${backendUrl}/api/v1/tasks/${taskId}/status`, {
               method: 'PUT',
@@ -161,10 +178,30 @@ export default function HomePage() {
           });
 
           if (!response.ok) {
-              throw new Error('ไม่สามารถอัปเดตสถานะได้');
+              const errData = await response.json().catch(() => ({}));
+              throw new Error(errData.message || 'ไม่สามารถอัปเดตสถานะได้');
           }
 
           setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+
+          const statusLabelMap: Record<string, string> = {
+              following: 'กำลังติดตาม',
+              problem: 'ติดปัญหา',
+              completed: 'เสร็จสิ้น',
+              success: 'เสร็จสิ้น',
+          };
+          const label = statusLabelMap[newStatus] || newStatus;
+
+          Swal.fire({
+              icon: 'success',
+              title: 'อัปเดตสถานะสำเร็จ',
+              text: `เปลี่ยนสถานะเป็น "${label}" เรียบร้อยแล้ว`,
+              toast: true,
+              position: 'top-end',
+              showConfirmButton: false,
+              timer: 2000,
+              timerProgressBar: true,
+          });
       } catch (error: any) {
           Swal.fire('ข้อผิดพลาด', error.message, 'error');
       }
@@ -416,7 +453,11 @@ export default function HomePage() {
       const matchSender = !s || normalizeDigits(task.sender?.toLowerCase()).includes(s);
       const matchRecipientTo = !recTo || normalizeDigits(task.recipient_to?.toLowerCase()).includes(recTo);
       const matchAdditionalDocs = !addDocs || normalizeDigits(task.additional_docs?.toLowerCase()).includes(addDocs);
-      const matchStatus = !status || task.status === status;
+      const matchStatus =
+        !status ||
+        task.status === status ||
+        (status === 'completed' && task.status === 'success') ||
+        (status === 'success' && task.status === 'completed');
       const matchUrgency = !urgency || task.urgency_level === urgency;
       const matchSecret = !secret || task.secret_level === secret;
 

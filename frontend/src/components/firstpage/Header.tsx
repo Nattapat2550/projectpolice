@@ -46,7 +46,8 @@ const URGENCY_OPTIONS = ['ปกติ', 'ด่วน', 'ด่วนมาก'
 const SECRET_OPTIONS = ['ปกติ', 'ลับ', 'ลับมาก', 'ลับที่สุด'];
 const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'following', label: 'กำลังติดตาม' },
-  { value: 'success', label: 'เสร็จสิ้น' },
+  { value: 'problem', label: 'ติดปัญหา' },
+  { value: 'completed', label: 'เสร็จสิ้น' },
 ];
 
 export const normalizeDigits = (str?: string | null): string => {

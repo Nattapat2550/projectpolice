@@ -111,12 +111,30 @@ export default function AllTask() {
                     detail: { id, status: newStatus },
                 })
             );
-        } catch (error) {
+
+            const statusLabelMap: Record<string, string> = {
+                following: 'กำลังติดตาม',
+                problem: 'ติดปัญหา',
+                completed: 'เสร็จสิ้น',
+            };
+            const label = statusLabelMap[newStatus] || newStatus;
+
+            Swal.fire({
+                icon: "success",
+                title: "อัปเดตสถานะสำเร็จ",
+                text: `เปลี่ยนสถานะเป็น "${label}" เรียบร้อยแล้ว`,
+                toast: true,
+                position: "top-end",
+                showConfirmButton: false,
+                timer: 2000,
+                timerProgressBar: true,
+            });
+        } catch (error: any) {
             console.error("Failed to update task", error);
             Swal.fire({
                 icon: 'error',
                 title: 'เกิดข้อผิดพลาด',
-                text: 'ไม่สามารถอัปเดตสถานะได้'
+                text: error.message || 'ไม่สามารถอัปเดตสถานะได้'
             });
         }
     };
@@ -203,8 +221,10 @@ export default function AllTask() {
 
     const filteredTasks = tasks
     .filter((task) => {
-        // 💡 Updated to support multi-status arrays
-        const matchStatus = statusFilter.length === 0 || statusFilter.includes(task.status);
+        const matchStatus =
+            statusFilter.length === 0 ||
+            statusFilter.includes(task.status) ||
+            (statusFilter.includes("completed") && task.status === "success");
         
         const taskPersons = task.personInCharge 
             ? task.personInCharge.split(',').map((s: string) => s.trim()) 

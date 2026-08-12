@@ -1,6 +1,6 @@
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { FileText } from 'lucide-react';
+import { FileText, ChevronDown } from 'lucide-react';
 
 export interface Assignee {
   assignment_id: string;
@@ -20,6 +20,17 @@ export function getAssigneeColor(seed: string, color?: string): string {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) hash = seed.charCodeAt(i) + ((hash << 5) - hash);
   return USER_COLORS[Math.abs(hash) % USER_COLORS.length];
+}
+
+export function getStatusBadgeStyle(status?: string): string {
+  const s = status?.toLowerCase();
+  if (s === 'completed' || s === 'success') {
+    return 'bg-[var(--greenBG)]/40 text-[var(--greenText)] border-[var(--greenBorder)]/60';
+  }
+  if (s === 'problem') {
+    return 'bg-[var(--redBG)]/40 text-[var(--redText)] border-[var(--redBorder)]/60';
+  }
+  return 'bg-[var(--yellowBG)]/40 text-[var(--yellowText)] border-[var(--yellowBorder)]/60';
 }
 
 // 💡 อัปเดตให้ตรงกับคอลัมน์จริงในตาราง `tasks` ของ DB
@@ -120,7 +131,7 @@ const COLUMNS_AFTER_ASSIGNEE: { key: SortKey; label: string; className?: string 
   { key: 'sender', label: 'จาก (หน่วยงาน)', className: 'w-[95px]' },
   { key: 'recipient_to', label: 'ถึง', className: 'w-[80px]' },
   { key: 'urgency_level', label: 'ชั้นความเร็ว', className: 'w-[80px] text-center' },
-  { key: 'status', label: 'สถานะ', className: 'w-[95px] text-center' },
+  { key: 'status', label: 'สถานะ', className: 'w-[118px] text-center' },
   { key: 'secret_level', label: 'ชั้นความลับ', className: 'w-[75px] text-center' },
   { key: 'memo_date', label: 'วันที่หนังสือ', className: 'w-[78px]' },
   { key: 'meeting_date', label: 'วันประชุม', className: 'w-[78px]' },
@@ -369,20 +380,37 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                       </span>
                     </td>
 
-                    <td className="px-2 py-3 text-center overflow-hidden">
-                      <select
-                        value={task.status === 'completed' || task.status === 'success' ? 'completed' : 'following'}
-                        onChange={(e) => onStatusChange?.(task.id, e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        className={`appearance-none cursor-pointer inline-block px-2 py-0.5 text-xs rounded-md text-center focus:outline-none focus:ring-1 focus:ring-[var(--blueText)] ${
-                          task.status === 'completed' || task.status === 'success'
-                            ? 'bg-[var(--greenBG)]/30 text-[var(--greenText)] border border-[var(--greenBorder)]/30'
-                            : 'bg-[var(--wrapper)]/60 text-[var(--foreground)]/70 border border-[var(--shadow)]/40'
-                        }`}
-                      >
-                        <option value="following">กำลังติดตาม</option>
-                        <option value="completed">เสร็จสิ้น</option>
-                      </select>
+                    <td className="px-1 py-3 text-center">
+                      <div className="relative inline-flex items-center justify-center shrink-0">
+                        <select
+                          value={
+                            task.status === 'completed' || task.status === 'success'
+                              ? 'completed'
+                              : task.status === 'problem'
+                              ? 'problem'
+                              : 'following'
+                          }
+                          onChange={(e) => onStatusChange?.(task.id, e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          className={`appearance-none cursor-pointer pl-2.5 pr-5.5 py-0.5 text-xs font-semibold rounded-full border transition-all text-center focus:outline-none focus:ring-2 focus:ring-[var(--blueText)]/40 hover:opacity-90 ${getStatusBadgeStyle(
+                            task.status
+                          )}`}
+                        >
+                          <option value="following" className="bg-[var(--container)] text-[var(--foreground)] font-semibold">
+                            กำลังติดตาม
+                          </option>
+                          <option value="problem" className="bg-[var(--container)] text-[var(--foreground)] font-semibold">
+                            ติดปัญหา
+                          </option>
+                          <option value="completed" className="bg-[var(--container)] text-[var(--foreground)] font-semibold">
+                            เสร็จสิ้น
+                          </option>
+                        </select>
+                        <ChevronDown
+                          size={11}
+                          className="absolute right-1.5 pointer-events-none opacity-70 shrink-0"
+                        />
+                      </div>
                     </td>
 
                     <td className="px-2 py-3 text-center overflow-hidden">
@@ -528,19 +556,36 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                       <span>เอกสาร</span>
                     </a>
                   )}
-                  <select
-                    value={task.status === 'completed' || task.status === 'success' ? 'completed' : 'following'}
-                    onChange={(e) => onStatusChange?.(task.id, e.target.value)}
-                    onClick={(e) => e.stopPropagation()}
-                    className={`appearance-none cursor-pointer px-2 py-0.5 text-[11px] rounded focus:outline-none focus:ring-1 focus:ring-[var(--blueText)] text-center ${
-                      task.status === 'completed' || task.status === 'success'
-                        ? 'bg-[var(--greenBG)]/20 text-[var(--greenText)]'
-                        : 'bg-[var(--wrapper)]/60 text-[var(--foreground)]/70'
-                    }`}
-                  >
-                    <option value="following">ติดตามอยู่</option>
-                    <option value="completed">เสร็จสิ้น</option>
-                  </select>
+                  <div className="relative inline-flex items-center justify-center">
+                    <select
+                      value={
+                        task.status === 'completed' || task.status === 'success'
+                          ? 'completed'
+                          : task.status === 'problem'
+                          ? 'problem'
+                          : 'following'
+                      }
+                      onChange={(e) => onStatusChange?.(task.id, e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                      className={`appearance-none cursor-pointer pl-3 pr-6 py-0.5 text-[11px] font-semibold rounded-full border transition-all text-center focus:outline-none focus:ring-2 focus:ring-[var(--blueText)]/40 ${getStatusBadgeStyle(
+                        task.status
+                      )}`}
+                    >
+                      <option value="following" className="bg-[var(--container)] text-[var(--foreground)] font-semibold">
+                        กำลังติดตาม
+                      </option>
+                      <option value="problem" className="bg-[var(--container)] text-[var(--foreground)] font-semibold">
+                        ติดปัญหา
+                      </option>
+                      <option value="completed" className="bg-[var(--container)] text-[var(--foreground)] font-semibold">
+                        เสร็จสิ้น
+                      </option>
+                    </select>
+                    <ChevronDown
+                      size={11}
+                      className="absolute right-1.5 pointer-events-none opacity-70 shrink-0"
+                    />
+                  </div>
 
                 </div>
               </div>
