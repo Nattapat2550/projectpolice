@@ -3,10 +3,26 @@
  * (e.g. from Google Sheet Webhook or Excel upload or direct update)
  */
 
+const cleanAdditionalDocs = (text) => {
+  if (!text) return null;
+  let str = String(text).trim();
+  if (!str) return null;
+  if (/^(?:เอกสาร\s*[๐-๙0-9]+(?:\s*[,;\n\s]*|\s*$))+$/i.test(str)) {
+    return null;
+  }
+  const parts = str.split(/(?:,\s*|\r?\n)+/).map(p => p.trim()).filter(p => {
+    if (!p) return false;
+    if (p.includes('เอกสารต้นฉบับ')) return false;
+    if (/^เอกสาร\s*[๐-๙0-9]+$/i.test(p)) return false;
+    return true;
+  });
+  return parts.length > 0 ? parts.join(', ') : null;
+};
+
 function parseAdditionalDocsText(text) {
-  if (!text) return [];
-  const str = String(text).trim();
-  if (!str) return [];
+  const cleaned = cleanAdditionalDocs(text);
+  if (!cleaned) return [];
+  const str = String(cleaned).trim();
 
   const items = [];
   // Split by comma or newline
@@ -14,7 +30,7 @@ function parseAdditionalDocsText(text) {
 
   for (const part of rawParts) {
     const trimmed = part.trim();
-    if (!trimmed) continue;
+    if (!trimmed || trimmed.includes('เอกสารต้นฉบับ') || /^เอกสาร\s*[๐-๙0-9]+$/i.test(trimmed)) continue;
 
     let link = null;
     let filename = null;
@@ -58,13 +74,17 @@ function parseAdditionalDocsText(text) {
   return items;
 }
 
+exports.cleanAdditionalDocs = cleanAdditionalDocs;
 exports.parseAdditionalDocsText = parseAdditionalDocsText;
 
 exports.syncTaskDocumentNotesFromText = async (dbQueryable, taskId, additionalDocsText, userId = null) => {
   if (additionalDocsText === undefined || taskId == null) return;
 
   try {
-    const rawText = additionalDocsText !== null ? String(additionalDocsText).trim() : '';
+    const rawText = cleanAdditionalDocs(additionalDocsText) || '';
+
+    // ลบแถวเอกสารต้นฉบับและเอกสารตัวเลขอันลอยๆ ออกจาก task_documents
+    await dbQueryable.query(`DELETE FROM task_documents WHERE task_id = $1 AND (filename = 'เอกสารต้นฉบับ' OR LOWER(filename) LIKE '%เอกสารต้นฉบับ%' OR filename ~ '^เอกสาร\\s*[๐-๙0-9]+$')`, [taskId]);
 
     if (!rawText) {
       await dbQueryable.query(`UPDATE task_documents SET notes = NULL WHERE task_id = $1`, [taskId]);

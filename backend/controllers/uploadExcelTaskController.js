@@ -394,15 +394,20 @@ exports.uploadExcelTasks = async (req, res) => {
             const chunk = allData.slice(i, i + CHUNK_SIZE);
             
             try {
-                // Step 1: Pre-fetch existing tasks for this chunk
+                // Step 1: Pre-fetch existing tasks for this chunk by (receive_no, receive_year, round)
                 const conditions = [];
                 const params = [];
                 let paramIdx = 1;
+                const setKeys = new Set();
                 
                 chunk.forEach(item => {
                     if (item.receive_no && item.receive_year) {
-                        conditions.push(`(receive_no = $${paramIdx++} AND receive_year = $${paramIdx++} AND COALESCE(round, 1) = $${paramIdx++})`);
-                        params.push(item.receive_no, item.receive_year, item.round || 1);
+                        const key = `${item.receive_no}_${item.receive_year}_${item.round || 1}`;
+                        if (!setKeys.has(key)) {
+                            setKeys.add(key);
+                            conditions.push(`(receive_no = $${paramIdx++} AND receive_year = $${paramIdx++} AND COALESCE(round, 1) = $${paramIdx++})`);
+                            params.push(item.receive_no, item.receive_year, item.round || 1);
+                        }
                     }
                 });
                 
@@ -418,12 +423,21 @@ exports.uploadExcelTasks = async (req, res) => {
                 // Step 2: Separate into inserts and updates
                 const toInsert = [];
                 const toUpdate = [];
+                const pendingInsertKeys = new Map();
 
                 chunk.forEach(item => {
-                    const key = `${item.receive_no}_${item.receive_year}_${item.round || 1}`;
-                    if (existingMap[key]) {
-                        toUpdate.push({ ...item, id: existingMap[key] });
+                    const key = (item.receive_no && item.receive_year) ? `${item.receive_no}_${item.receive_year}_${item.round || 1}` : null;
+                    const existingId = key ? existingMap[key] : null;
+
+                    if (existingId) {
+                        toUpdate.push({ ...item, id: existingId });
+                    } else if (key && pendingInsertKeys.has(key)) {
+                        const insertIdx = pendingInsertKeys.get(key);
+                        toUpdate.push({ ...item, _deferredKeyIndex: insertIdx });
                     } else {
+                        if (key) {
+                            pendingInsertKeys.set(key, toInsert.length);
+                        }
                         toInsert.push(item);
                     }
                 });
@@ -476,6 +490,13 @@ exports.uploadExcelTasks = async (req, res) => {
                         const taskId = row.id;
                         createdTaskIds.push(taskId);
                         const item = toInsert[idx];
+                        
+                        toUpdate.forEach(uItem => {
+                            if (uItem._deferredKeyIndex === idx) {
+                                uItem.id = taskId;
+                            }
+                        });
+                        
                         const assignee = item.assignee_name;
                         if (assignee) {
                             const processed = await processExcelAssignees(String(assignee), pool);
@@ -504,13 +525,6 @@ exports.uploadExcelTasks = async (req, res) => {
                             }
                             if (docId) {
                                 await pool.query('UPDATE tasks SET document_id = $1 WHERE id = $2', [docId, taskId]);
-                            }
-                            const taskDocCheck = await pool.query('SELECT id FROM task_documents WHERE task_id = $1 AND drive_web_view_link = $2 LIMIT 1', [taskId, linkStr]);
-                            if (taskDocCheck.rows.length === 0) {
-                                await pool.query(
-                                    'INSERT INTO task_documents (task_id, filename, drive_web_view_link, doc_type, notes, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
-                                    [taskId, 'เอกสารต้นฉบับ', linkStr, 'attachment', item.additional_docs || null, created_by]
-                                );
                             }
                         }
                     }));
@@ -562,13 +576,6 @@ exports.uploadExcelTasks = async (req, res) => {
                                 }
                                 if (docId) {
                                     await pool.query('UPDATE tasks SET document_id = COALESCE(document_id, $1) WHERE id = $2', [docId, taskId]);
-                                }
-                                const taskDocCheck = await pool.query('SELECT id FROM task_documents WHERE task_id = $1 AND drive_web_view_link = $2 LIMIT 1', [taskId, linkStr]);
-                                if (taskDocCheck.rows.length === 0) {
-                                    await pool.query(
-                                        'INSERT INTO task_documents (task_id, filename, drive_web_view_link, doc_type, notes, created_by) VALUES ($1, $2, $3, $4, $5, $6)',
-                                        [taskId, 'เอกสารต้นฉบับ', linkStr, 'attachment', safeAdditionalDocs, created_by]
-                                    );
                                 }
                             }
 

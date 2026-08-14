@@ -286,7 +286,7 @@ const fetchTaskDataForSheet = async (taskIdOrIds) => {
         CASE WHEN td.drive_web_view_link IS NOT NULL AND td.drive_web_view_link != '' THEN CONCAT(': ', td.drive_web_view_link) ELSE '' END
       ),
       ', '
-    ) FROM task_documents td WHERE td.task_id = t.id) as attachment_info
+    ) FROM task_documents td WHERE td.task_id = t.id AND td.filename != 'เอกสารต้นฉบับ' AND LOWER(td.filename) NOT LIKE '%เอกสารต้นฉบับ%') as attachment_info
     FROM tasks t 
     LEFT JOIN documents d ON t.document_id = d.id
     WHERE t.id = ANY($1)
@@ -294,15 +294,13 @@ const fetchTaskDataForSheet = async (taskIdOrIds) => {
   const { rows } = await pool.query(query, [ids]);
 
   const processed = rows.map(row => {
-    if (row.attachment_info && row.attachment_info.trim()) {
-      row.additional_docs = row.attachment_info.trim();
-    } else {
-      let docs = (row.additional_docs || '').trim();
-      if (/^เอกสาร\s*[๑-๙1-9]/i.test(docs)) {
-        docs = '';
-      }
-      row.additional_docs = docs;
+    let docs = (row.attachment_info && row.attachment_info.trim()) ? row.attachment_info.trim() : (row.additional_docs || '').trim();
+    if (docs) {
+      docs = docs.split(/(?:,\s*|\r?\n)+/)
+                 .filter(part => !part.includes('เอกสารต้นฉบับ'))
+                 .join(', ');
     }
+    row.additional_docs = docs;
     return row;
   });
 
@@ -550,7 +548,11 @@ exports.confirmTasks = async (req, res) => {
           const memoAdditionalDocs = memo.additional_docs || memo.เอกสารข้อมูลเพิ่มเติม || null;
           const memoNotes = memo.notes || memo.หมายเหตุ || null;
 
-          const existingRes = await client.query('SELECT id, document_id FROM tasks WHERE receive_no = $1 AND receive_year = $2 AND COALESCE(round, 1) = $3', [receiveNo, receiveYear, round]);
+          const memoMemoNo = memo.ที่ || memo.memo_no || null;
+          const existingRes = await client.query(
+              'SELECT id, document_id FROM tasks WHERE receive_no = $1 AND receive_year = $2 AND COALESCE(round, 1) = $3 LIMIT 1',
+              [receiveNo, receiveYear, round]
+          );
           let taskId;
           
           if (existingRes.rows.length > 0) {
@@ -965,7 +967,10 @@ exports.createTask = async (req, res) => {
 
     const { receiveNo, receiveYear, round } = await handleReceiveNoAndYear(client, req.body.receive_no, parsedReceiveDate);
 
-    const existingRes = await client.query('SELECT id FROM tasks WHERE receive_no = $1 AND receive_year = $2 AND COALESCE(round, 1) = $3', [receiveNo, receiveYear, round]);
+    const existingRes = await client.query(
+        'SELECT id FROM tasks WHERE receive_no = $1 AND receive_year = $2 AND COALESCE(round, 1) = $3 LIMIT 1',
+        [receiveNo, receiveYear, round]
+    );
     let taskId;
 
     if (existingRes.rows.length > 0) {

@@ -75,25 +75,80 @@ async function ensureSheetExists(sheets, spreadsheetId, sheetName) {
   }
 }
 
+const normalizeDateString = (str) => {
+  if (!str) return '';
+  let s = String(str).trim();
+  if (!s) return '';
+
+  if (s.includes('T')) {
+    s = s.split('T')[0];
+  } else if (s.includes(' ')) {
+    s = s.split(' ')[0];
+  }
+
+  // 1. DD/MM/YYYY or DD-MM-YYYY
+  const dmyMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+  if (dmyMatch) {
+    let day = parseInt(dmyMatch[1], 10);
+    let month = parseInt(dmyMatch[2], 10);
+    let year = parseInt(dmyMatch[3], 10);
+    if (year > 2500) year -= 543;
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
+  // 2. YYYY-MM-DD or YYYY/MM/DD
+  const ymdMatch = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (ymdMatch) {
+    let year = parseInt(ymdMatch[1], 10);
+    let month = parseInt(ymdMatch[2], 10);
+    let day = parseInt(ymdMatch[3], 10);
+    if (year > 2500) year -= 543;
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    let year = d.getFullYear();
+    if (year > 2500) year -= 543;
+    return `${year}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+
+  return s;
+};
+
+const normalizeYear = (yearInput) => {
+  if (!yearInput) return '';
+  const num = parseInt(yearInput, 10);
+  if (isNaN(num)) return String(yearInput).trim();
+  return num < 2500 ? String(num + 543) : String(num);
+};
+
 const isMatchingRow = (row, taskData) => {
   if (!row || row.length === 0) return false;
 
   const rowId = row[0] ? String(row[0]).trim() : '';
   const rowReceiveNo = row[1] ? String(row[1]).trim() : '';
-  const rowReceiveYear = row[2] ? String(row[2]).trim() : '';
+  const rowReceiveYear = normalizeYear(row[2]);
+  const rowReceivedDate = row[3] ? String(row[3]).trim() : '';
   const rowMemoNo = row[4] ? String(row[4]).trim() : '';
 
   const targetId = taskData.id ? String(taskData.id).trim() : '';
   const targetReceiveNo = taskData.receive_no ? String(taskData.receive_no).trim() : '';
-  const targetReceiveYear = taskData.receive_year ? String(taskData.receive_year).trim() : '';
+  const targetReceiveYear = normalizeYear(taskData.receive_year);
+  const targetReceivedDate = taskData.created_at || taskData.received_date || '';
   const targetMemoNo = taskData.memo_no ? String(taskData.memo_no).trim() : '';
 
-  // 1. Check ID exact match first
-  if (targetId && rowId && targetId === rowId) {
-    return true;
+  // 1. Strict ID match first (If both IDs exist, they MUST match exactly)
+  if (targetId && rowId) {
+    if (targetId === rowId) {
+      return true;
+    }
+    // 🔒 Critical Fix: If both IDs exist and do not match, they belong to different DB records!
+    // Never overwrite a row that has a different database ID.
+    return false;
   }
 
-  // 2. Check receive_no + receive_year match
+  // 2. Check receive_no + receive_year match (when ID is missing on either side)
   if (targetReceiveNo && targetReceiveYear && rowReceiveNo === targetReceiveNo && rowReceiveYear === targetReceiveYear) {
     return true;
   }
@@ -113,8 +168,8 @@ const isMatchingRow = (row, taskData) => {
 const buildRowData = (taskData) => [
   taskData.id || '',
   taskData.receive_no || '',
-  taskData.receive_year || '',
-  formatDateTH(taskData.created_at) || '',
+  normalizeYear(taskData.receive_year),
+  formatDateTH(taskData.created_at || taskData.received_date) || '',
   taskData.memo_no || '',
   formatDateTH(taskData.memo_date) || '',
   taskData.sender || '',
