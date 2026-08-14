@@ -52,9 +52,17 @@ exports.processDocuments = async (req, res) => {
       const engine = req.body.engine || 'gemini'; // Default to gemini if not provided
       const fnInfo = parseFilenameInfo(file.originalname);
 
-      // เช็คว่ามีเลขรับจากชื่อไฟล์ และตรงกับรอบตัดของวันที่อัพโหลดหรือไม่
-      const uploadDate = new Date();
-      const { round, fiscalYear } = calculateFiscalRoundAndYear(uploadDate);
+      // ดึงวันที่สร้าง/แก้ไขไฟล์ หรือวันที่สแกนเพื่อใช้เป็นวันที่รับ (receive_date)
+      let computedReceiveDate = new Date().toISOString().split('T')[0];
+      try {
+        const stats = await fs.stat(safePath);
+        if (stats && stats.mtime) {
+          computedReceiveDate = new Date(stats.mtime).toISOString().split('T')[0];
+        }
+      } catch (e) {}
+
+      const targetDate = fnInfo.date || computedReceiveDate;
+      const { round, fiscalYear } = calculateFiscalRoundAndYear(targetDate);
 
       let existingTask = null;
       if (fnInfo.receive_no) {
@@ -72,15 +80,6 @@ exports.processDocuments = async (req, res) => {
           }
         }
       }
-
-      // ดึงวันที่สร้าง/แก้ไขไฟล์ หรือวันที่สแกนปัจจุบันเพื่อใช้เป็นวันที่รับ (receive_date)
-      let computedReceiveDate = new Date().toISOString().split('T')[0];
-      try {
-        const stats = await fs.stat(safePath);
-        if (stats && stats.mtime) {
-          computedReceiveDate = new Date(stats.mtime).toISOString().split('T')[0];
-        }
-      } catch (e) {}
 
       let geminiResult;
       let isDuplicate = false;
