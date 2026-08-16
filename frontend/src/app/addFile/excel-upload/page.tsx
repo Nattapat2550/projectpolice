@@ -75,45 +75,7 @@ export default function TaskExcelUploadPage() {
   // 💡 ตัวแปรสำหรับเก็บ Progress
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [currentPage, setCurrentPage] = useState(1);
-  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
   const itemsPerPage = 50;
-
-  const handleDownloadTemplate = async () => {
-    setIsDownloadingTemplate(true);
-    try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5003';
-      const token = localStorage.getItem("token");
-      const response = await fetch(`${backendUrl}/api/v1/tasks/template-excel`, {
-        method: 'GET',
-        headers: {
-          ...(token && token !== "null" ? { Authorization: `Bearer ${token}` } : {})
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('ไม่สามารถดาวน์โหลดไฟล์ตัวอย่างได้');
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'police_task_template.xlsx';
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch (err: any) {
-      Swal.fire({
-        icon: 'error',
-        title: 'ดาวน์โหลดไม่สำเร็จ',
-        text: err.message || 'เกิดข้อผิดพลาดในการดาวน์โหลดไฟล์ตัวอย่าง',
-        confirmButtonColor: 'var(--blueText)'
-      });
-    } finally {
-      setIsDownloadingTemplate(false);
-    }
-  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -270,34 +232,11 @@ export default function TaskExcelUploadPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <button 
-            type="button"
-            onClick={handleDownloadTemplate}
-            disabled={isDownloadingTemplate}
-            className={styles.SecondaryButton}
-            style={{ 
-              padding: '0.5rem 1.25rem', 
-              fontSize: '1rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              color: 'var(--blueText)',
-              borderColor: 'var(--blueText)',
-              fontWeight: 600,
-              cursor: isDownloadingTemplate ? 'not-allowed' : 'pointer',
-              opacity: isDownloadingTemplate ? 0.7 : 1
-            }}
-          >
-            {isDownloadingTemplate ? '⏳ กำลังดาวน์โหลด...' : '📥 ดาวน์โหลดตัวอย่างไฟล์ Excel (Template)'}
+        <Link href="/">
+          <button className={styles.SecondaryButton} style={{ padding: '0.5rem 1.25rem', fontSize: '1.05rem' }}>
+            กลับหน้าหลัก
           </button>
-
-          <Link href="/">
-            <button className={styles.SecondaryButton} style={{ padding: '0.5rem 1.25rem', fontSize: '1rem' }}>
-              กลับหน้าหลัก
-            </button>
-          </Link>
-        </div>
+        </Link>
       </div>
 
       {/* 📦 File Selection Card Container (Full Width) */}
