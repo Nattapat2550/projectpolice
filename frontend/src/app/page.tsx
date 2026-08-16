@@ -108,6 +108,7 @@ function normalizeTask(raw: any, usersMap: Map<string, UserMeta>, userByNameMap:
     drive_web_view_link: raw.drive_web_view_link || raw.document_link || null,
     has_document: !!(raw.document_link || raw.drive_web_view_link || raw.document_id),
     createdAt: raw.createdAt ?? raw.created_at ?? null,
+    updatedAt: raw.updatedAt ?? raw.updated_at ?? null,
     assignments,
   };
 }
@@ -118,6 +119,10 @@ const SECRET_RANK: Record<string, number> = { 'ปกติ': 0, 'ลับ': 1,
 
 function getSortValue(task: Task, key: SortKey): number | string {
   switch (key) {
+    case 'createdAt': {
+      const v = task.createdAt;
+      return v ? new Date(v).getTime() : 0;
+    }
     case 'receive_no':
       return task.receive_no ?? 0;
     case 'memo_no':
@@ -286,8 +291,8 @@ export default function HomePage() {
   const [usersList, setUsersList] = useState<UserOption[]>([]);
   const [quickFilter, setQuickFilter] = useState<'all' | 'urgent' | 'following'>('all');
 
-  // เรียงตาม receive_year ก่อน แล้วต่อด้วย receive_no จากน้อยไปมาก เป็นค่าเริ่มต้น
-  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'receive_no', direction: 'asc' });
+  // เรียงตามวันที่รับล่าสุดจากมากไปน้อย (ล่าสุดขึ้นก่อน) เป็นค่าเริ่มต้น
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'createdAt', direction: 'desc' });
   const [currentPage, setCurrentPage] = useState(1);
 
   useEffect(() => {
@@ -493,28 +498,56 @@ export default function HomePage() {
     });
   }, [tasks, filters, usersList, quickFilter]);
 
-  // ↕️ เรียงข้อมูล: ถ้าไม่มีการเลือกคอลัมน์เอง ใช้ค่าเริ่มต้น receive_year -> receive_no
+  // ↕️ เรียงข้อมูล: เรียงวันที่รับล่าสุด (มากไปน้อย) -> อัปเดตล่าสุด -> เลขรับมากสุดขึ้นก่อน
   const sortedTasks = useMemo(() => {
     const list = [...filteredTasks];
     list.sort((a, b) => {
-      // 💡 เรียงตาม receive_year ก่อนเป็นอันดับแรกเสมอ
-      const yearA = a.receive_year || 0;
-      const yearB = b.receive_year || 0;
-      if (yearA !== yearB) {
-        return sortConfig.direction === 'asc' ? yearA - yearB : yearB - yearA;
+      // 1. ถ้าผู้ใช้คลิกเลือกเรียงตามคอลัมน์ใดคอลัมน์หนึ่งเป็นการเฉพาะ (ที่ไม่ใช่ createdAt)
+      if (sortConfig.key !== 'createdAt') {
+        const valA = getSortValue(a, sortConfig.key);
+        const valB = getSortValue(b, sortConfig.key);
+
+        if (typeof valA === 'number' && typeof valB === 'number') {
+          if (valA !== valB) {
+            return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+          }
+        } else {
+          const strA = String(valA);
+          const strB = String(valB);
+          const cmp = strA.localeCompare(strB, 'th');
+          if (cmp !== 0) {
+            return sortConfig.direction === 'asc' ? cmp : -cmp;
+          }
+        }
       }
 
-      const valA = getSortValue(a, sortConfig.key);
-      const valB = getSortValue(b, sortConfig.key);
-
-      if (typeof valA === 'number' && typeof valB === 'number') {
-        return sortConfig.direction === 'asc' ? valA - valB : valB - valA;
+      // 2. เรียงตามวันที่รับล่าสุด (มากไปน้อย / ล่าสุดขึ้นก่อน)
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (timeA !== timeB) {
+        return sortConfig.key === 'createdAt' && sortConfig.direction === 'asc'
+          ? timeA - timeB
+          : timeB - timeA;
       }
 
-      const strA = String(valA);
-      const strB = String(valB);
-      const cmp = strA.localeCompare(strB, 'th');
-      return sortConfig.direction === 'asc' ? cmp : -cmp;
+      // 3. อันไหนอัปเดตล่าสุดก็ขึ้นก่อน
+      const updA = a.updatedAt ? new Date(a.updatedAt).getTime() : timeA;
+      const updB = b.updatedAt ? new Date(b.updatedAt).getTime() : timeB;
+      if (updA !== updB) {
+        return updB - updA;
+      }
+
+      // 4. ถ้าวันที่รับและอัปเดตเท่ากัน เรียงตามเลขรับจากมากไปน้อย (มากสุดขึ้นก่อน)
+      const noA = Number(a.receive_no || 0);
+      const noB = Number(b.receive_no || 0);
+      if (noA !== noB) {
+        return noB - noA;
+      }
+
+      // 5. ถ้าเลขรับเท่ากัน เรียงตามปีทะเบียน (มากไปน้อย)
+      const yearA = Number(a.receive_year || 0);
+      const yearB = Number(b.receive_year || 0);
+      return yearB - yearA;
     });
     return list;
   }, [filteredTasks, sortConfig]);

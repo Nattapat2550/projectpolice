@@ -313,6 +313,7 @@ exports.getAllTasks = async (req, res) => {
         COALESCE(aa."assigneesData", '[]'::json) AS "assigneesData",
         TO_CHAR(t.due_date, 'YYYY-MM-DD') AS date, 
         t.created_at AS "createdAt",
+        t.updated_at AS "updatedAt",
         t.status,
         t.is_urgent AS "isUrgent",
         t.urgency_level,
@@ -339,7 +340,10 @@ exports.getAllTasks = async (req, res) => {
       FROM tasks t
       LEFT JOIN agg_assignees aa ON t.id = aa.task_id
       LEFT JOIN documents d ON t.document_id = d.id
-      ORDER BY t.due_date ASC NULLS LAST
+      ORDER BY 
+        t.created_at DESC NULLS LAST,
+        COALESCE(t.updated_at, t.created_at) DESC NULLS LAST,
+        t.receive_no DESC NULLS LAST
     `;
     const { rows } = await pool.query(query);
     const enriched = await enrichTasksWithAssignees(rows, pool);
@@ -382,6 +386,7 @@ exports.getUrgentTasks = async (req, res) => {
         COALESCE(aa."assigneesData", '[]'::json) AS "assigneesData",
         TO_CHAR(t.due_date, 'YYYY-MM-DD') AS date, 
         t.created_at AS "createdAt",
+        t.updated_at AS "updatedAt",
         t.status,
         t.is_urgent AS "isUrgent",
         t.urgency_level,
@@ -409,7 +414,10 @@ exports.getUrgentTasks = async (req, res) => {
       LEFT JOIN agg_assignees aa ON t.id = aa.task_id
       LEFT JOIN documents d ON t.document_id = d.id
       WHERE t.is_urgent = true
-      ORDER BY t.due_date ASC NULLS LAST
+      ORDER BY 
+        t.created_at DESC NULLS LAST,
+        COALESCE(t.updated_at, t.created_at) DESC NULLS LAST,
+        t.receive_no DESC NULLS LAST
     `;
     const { rows } = await pool.query(query);
     const enriched = await enrichTasksWithAssignees(rows, pool);

@@ -58,10 +58,12 @@ export interface Task {
   drive_web_view_link?: string;
   has_document?: boolean;
   createdAt?: string | null;
+  updatedAt?: string | null;
   assignments?: Assignee[];
 }
 
 export type SortKey =
+  | 'createdAt'
   | 'receive_no'
   | 'memo_no'
   | 'memo_date'
