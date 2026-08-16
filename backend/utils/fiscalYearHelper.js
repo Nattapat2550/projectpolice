@@ -33,7 +33,7 @@ function parseAnyDateToIso(dateInput) {
 
     // Handle Excel serial date numbers (e.g. 45488 -> 2024-07-15)
     const num = Number(dateInput);
-    if (!isNaN(num) && typeof dateInput !== 'string' && num > 20000 && num < 300000) {
+    if (!isNaN(num) && num > 20000 && num < 300000 && !String(dateInput).includes('-') && !String(dateInput).includes('/')) {
         const dateObj = new Date(Math.round((num - 25569) * 86400 * 1000));
         if (!isNaN(dateObj.getTime())) {
             let y = dateObj.getFullYear();
@@ -165,7 +165,19 @@ function getFormattedRoundString(round, fiscalYear) {
 function formatDateTH(dateInput) {
     if (!dateInput) return '';
     const iso = parseAnyDateToIso(dateInput);
-    if (!iso) return '';
+    if (!iso) {
+        const s = String(dateInput).trim();
+        const dmy = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+        if (dmy) {
+            const day = dmy[1].padStart(2, '0');
+            const month = dmy[2].padStart(2, '0');
+            let year = parseInt(dmy[3], 10);
+            if (year < 100) year += 2500;
+            const yearBE = year < 2400 ? year + 543 : year;
+            return `${day}/${month}/${yearBE}`;
+        }
+        return '';
+    }
     const [y, m, d] = iso.split('-');
     let yearNum = parseInt(y, 10);
     const yearBE = yearNum < 2400 ? yearNum + 543 : yearNum;

@@ -273,6 +273,10 @@ exports.uploadExcelTasks = async (req, res) => {
                 let excelAdditionalDocs = null;
                 let excelDocumentLink = null;
                 let excelMemoNo = null;
+                let excelMemoDate = null;
+                let excelSignedDate = null;
+                let excelMeetingDate = null;
+                let excelReplyDueDate = null;
                 let excelUrgencyLevel = null;
                 let excelSecretLevel = null;
 
@@ -347,11 +351,27 @@ exports.uploadExcelTasks = async (req, res) => {
                     if (cleanKey === "ที่หนังสือ" || cleanKey === "เลขที่หนังสือ" || cleanKey === "ที่") {
                         if (!excelMemoNo) excelMemoNo = strVal;
                     }
-                    // 6. ความเร่งด่วน
+                    // 6. ลงวันที่
+                    if (cleanKey === "ลงวันที่" || cleanKey === "วันที่ลง" || cleanKey === "วันที่หนังสือ" || cleanKey === "วันที่เอกสาร" || cleanKey === "memo_date") {
+                        if (!excelMemoDate) excelMemoDate = strVal || val;
+                    }
+                    // 7. วันที่ลงนาม
+                    if (cleanKey === "วันที่ลงนาม" || cleanKey === "วันลงนาม" || cleanKey === "ลงนาม" || cleanKey === "sign_date") {
+                        if (!excelSignedDate) excelSignedDate = strVal || val;
+                    }
+                    // 8. วันประชุม
+                    if (cleanKey === "วันประชุม" || cleanKey === "วันที่ประชุม" || cleanKey === "meeting_date") {
+                        if (!excelMeetingDate) excelMeetingDate = strVal || val;
+                    }
+                    // 9. กำหนดส่งตอบรับ
+                    if (cleanKey === "กำหนดส่งตอบรับ" || cleanKey === "กำหนดตอบกลับ" || cleanKey === "วันกำหนดตอบกลับ" || cleanKey === "reply_due_date") {
+                        if (!excelReplyDueDate) excelReplyDueDate = strVal || val;
+                    }
+                    // 10. ความเร่งด่วน
                     if (cleanKey === "ความเร่งด่วน" || cleanKey === "ระดับความเร่งด่วน" || cleanKey === "ชั้นความเร่งด่วน" || cleanKey === "ชั้นความเร็ว") {
                         if (!excelUrgencyLevel) excelUrgencyLevel = strVal;
                     }
-                    // 7. ความลับ
+                    // 11. ความลับ
                     if (cleanKey === "ความลับ" || cleanKey === "ชั้นความลับ" || cleanKey === "ระดับความลับ") {
                         if (!excelSecretLevel) excelSecretLevel = strVal;
                     }
@@ -369,7 +389,7 @@ exports.uploadExcelTasks = async (req, res) => {
                     receive_year: receiveYear,
                     round: round,
                     memo_no: excelMemoNo || (row["ที่หนังสือ"] ? String(row["ที่หนังสือ"]).trim() : null),
-                    memo_date: formatDateTH(row["ลงวันที่"]),
+                    memo_date: formatDateTH(excelMemoDate || row["ลงวันที่"]),
                     sender: excelSender || (row["จาก"] ? String(row["จาก"]).trim() : null),
                     recipient_to: excelRecipientTo || (row["ถึง"] || row["เรียน"] ? String(row["ถึง"] || row["เรียน"]).trim() : null),
                     additional_docs: excelAdditionalDocs || null,
@@ -380,9 +400,9 @@ exports.uploadExcelTasks = async (req, res) => {
                     due_date_str: formatDateTH(dueDate),
                     main_text: subject || null,
                     command_text: commandTopics, // Send array of topics
-                    signed_date: formatDateTH(row["วันที่ลงนาม"]),
-                    meeting_date: formatDateTH(row["วันประชุม"]),
-                    reply_due_date: formatDateTH(row["กำหนดส่งตอบรับ"]),
+                    signed_date: formatDateTH(excelSignedDate || row["วันที่ลงนาม"]),
+                    meeting_date: formatDateTH(excelMeetingDate || row["วันประชุม"]),
+                    reply_due_date: formatDateTH(excelReplyDueDate || row["กำหนดส่งตอบรับ"]),
                     urgency_level: computedUrgency,
                     secret_level: computedSecret,
                     notes: row["หมายเหตุ"] ? String(row["หมายเหตุ"]).trim() : null,
