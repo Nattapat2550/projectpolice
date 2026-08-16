@@ -6,7 +6,7 @@ const { appendTaskToSheet, appendMultipleTasksToSheet, updateTaskInSheet, delete
 const { generateHash } = require('../utils/duplicateChecker');
 const { parseFilenameInfo, formatStandardFilename, cleanToOnlyName } = require('../utils/filenameParser');
 const { extractDataWithGemini } = require('../services/ocrService');
-const { calculateFiscalRoundAndYear } = require('../utils/fiscalYearHelper');
+const { calculateFiscalRoundAndYear, parseAnyDateToIso } = require('../utils/fiscalYearHelper');
 const { syncTaskDocumentNotesFromText } = require('../utils/attachmentSync');
 
 const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID; 
@@ -48,7 +48,7 @@ const canUserEditTask = async (user, taskId, dbClient = pool) => {
 };
 exports.canUserEditTask = canUserEditTask;
 
-// Helper function to parse Thai date string into YYYY-MM-DD
+// Helper function to parse Thai date string into YYYY-MM-DD (or YYYY-MM-DD HH:mm:ss if time present)
 const parseThaiDateToIso = (dateStr) => {
   if (!dateStr) return null;
   if (typeof dateStr !== 'string') {
@@ -69,49 +69,23 @@ const parseThaiDateToIso = (dateStr) => {
   const thaiNumerals = { '๐':'0', '๑':'1', '๒':'2', '๓':'3', '๔':'4', '๕':'5', '๖':'6', '๗':'7', '๘':'8', '๙':'9' };
   let normalizedStr = trimmed.replace(/[๐-๙]/g, match => thaiNumerals[match]);
 
-  // Check ISO format YYYY-MM-DD or YYYY-MM-DDTHH:mm / YYYY-MM-DD HH:mm:ss
+  // Check ISO format YYYY-MM-DD or YYYY-MM-DDTHH:mm / YYYY-MM-DD HH:mm:ss with time
   const isoMatch = normalizedStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
-  if (isoMatch) {
+  if (isoMatch && isoMatch[4] !== undefined && isoMatch[5] !== undefined) {
     let y = parseInt(isoMatch[1], 10);
     if (y > 2400) y -= 543;
     const m = isoMatch[2].padStart(2, '0');
     const d = isoMatch[3].padStart(2, '0');
     const datePart = `${y}-${m}-${d}`;
-    if (isoMatch[4] !== undefined && isoMatch[5] !== undefined) {
-      const hh = isoMatch[4].padStart(2, '0');
-      const mm = isoMatch[5].padStart(2, '0');
-      const ss = isoMatch[6] ? isoMatch[6].padStart(2, '0') : null;
-      return `${datePart} ${hh}:${mm}${ss ? `:${ss}` : ''}`;
-    }
-    return datePart;
+    const hh = isoMatch[4].padStart(2, '0');
+    const mm = isoMatch[5].padStart(2, '0');
+    const ss = isoMatch[6] ? isoMatch[6].padStart(2, '0') : null;
+    return `${datePart} ${hh}:${mm}${ss ? `:${ss}` : ''}`;
   }
 
-  // Check Thai text date format
-  const thaiMonths = ["มกราคม", "กุมภาพันธ์", "มีนาคม", "เมษายน", "พฤษภาคม", "มิถุนายน", "กรกฎาคม", "สิงหาคม", "กันยายน", "ตุลาคม", "พฤศจิกายน", "ธันวาคม"];
-  const thaiMonthsAbbr = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
-  
-  const regex = /(\d{1,2})\s*(.+?)\s*(\d{2,4})/;
-  const match = normalizedStr.match(regex);
-  
-  if (!match) return null;
-  
-  const day = parseInt(match[1], 10).toString().padStart(2, '0');
-  const monthStr = match[2].trim();
-  let year = parseInt(match[3], 10);
-
-  if (year < 100) year += 2500;
-  if (year > 2400) year -= 543;
-  
-  let monthIndex = thaiMonths.findIndex(m => m === monthStr);
-  if (monthIndex === -1) monthIndex = thaiMonthsAbbr.findIndex(m => m === monthStr);
-  if (monthIndex === -1) monthIndex = thaiMonths.findIndex(m => monthStr.includes(m));
-  if (monthIndex === -1) monthIndex = thaiMonthsAbbr.findIndex(m => monthStr.includes(m.replace('.', '')));
-  
-  if (monthIndex === -1) return null;
-  
-  const month = (monthIndex + 1).toString().padStart(2, '0');
-  
-  return `${year}-${month}-${day}`;
+  // Use universal parser
+  const parsed = parseAnyDateToIso(normalizedStr);
+  return parsed;
 };
 
 // Helper function to log task actions
@@ -1349,6 +1323,11 @@ exports.attachTaskDocument = async (req, res) => {
     if (!files || files.length === 0) {
       await client.query('ROLLBACK');
       return res.status(400).json({ success: false, message: 'กรุณาเลือกไฟล์เอกสารที่ต้องการแนบเพิ่มเติม' });
+    }
+
+    if (files.length > 3) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ success: false, message: 'ระบบรองรับการแนบเอกสารเพิ่มเติมได้สูงสุดครั้งละไม่เกิน 3 ไฟล์เท่านั้น' });
     }
 
     const taskRes = await client.query('SELECT id FROM tasks WHERE id = $1', [id]);

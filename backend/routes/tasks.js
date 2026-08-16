@@ -53,7 +53,7 @@ router.put('/:id', updateTaskDetail);
 router.put('/:id/details', updateTaskDetail);
 router.post('/:id/overwrite-doc', upload.single('file'), overwriteTaskDocument);
 router.post('/:id/confirm-overwrite-doc', confirmOverwriteTaskDocument);
-router.post('/:id/attach-doc', upload.array('files', 10), attachTaskDocument);
+router.post('/:id/attach-doc', upload.array('files', 3), attachTaskDocument);
 router.put('/:id/attach-doc/:docId/note', updateTaskAttachmentNote);
 router.put('/:id/attachments/:docId/note', updateTaskAttachmentNote);
 router.delete('/:id/attach-doc/:docId', deleteTaskAttachment);

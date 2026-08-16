@@ -1,7 +1,7 @@
 const xlsx = require("xlsx");
 const pool = require("../config/db");
 const { appendMultipleTasksToSheet, appendTaskToSheet } = require('../services/googleSheetsService');
-const { calculateFiscalRoundAndYear } = require("../utils/fiscalYearHelper");
+const { calculateFiscalRoundAndYear, parseAnyDateToIso } = require("../utils/fiscalYearHelper");
 const { syncTaskDocumentNotesFromText, parseAdditionalDocsText } = require("../utils/attachmentSync");
 const { cleanToOnlyName } = require("../utils/filenameParser");
 
@@ -148,41 +148,33 @@ exports.uploadExcelTasks = async (req, res) => {
 
         const parseDateSafe = (d) => {
             if (!d) return null;
-            
-            // Handle Excel serial date numbers (e.g. 45488 -> 2024-07-15, 244460 -> 2569-04-21)
-            const num = Number(d);
-            let dateObj;
-            if (!isNaN(num) && num > 20000 && num < 300000) {
-                dateObj = new Date(Math.round((num - 25569) * 86400 * 1000));
-            } else {
-                const t = Date.parse(d);
-                if (isNaN(t)) return null;
-                dateObj = new Date(t);
-            }
-
-            let year = dateObj.getFullYear();
-            
-            // Convert Buddhist Era to AD
-            if (year >= 2500 && year <= 2650) {
-                year -= 543;
-            }
-            // Reject absurd years
-            if (year < 1900 || year > 2150) {
-                return null;
-            }
-            
-            return year + '-' + String(dateObj.getMonth()+1).padStart(2, '0') + '-' + String(dateObj.getDate()).padStart(2, '0');
+            return parseAnyDateToIso(d);
         };
 
         workbook.SheetNames.forEach(sheetName => {
             const rawData = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: null });
             
             rawData.forEach((row, index) => {
-                if (!row["เรื่อง"] && !row["ที่หนังสือ"] && !row["ข้อสั่งการ"]) return;
+                // Find subject/title from multiple possible header keys
+                let subject = null;
+                for (const key of Object.keys(row)) {
+                    if (!key) continue;
+                    const cleanKey = key.trim().replace(/\s+/g, '');
+                    if (cleanKey === "เรื่อง" || cleanKey === "ชื่อเรื่อง" || cleanKey === "หัวข้อ" || cleanKey === "เรื่อง/งาน" || cleanKey === "ชื่อเอกสาร" || cleanKey === "title") {
+                        if (row[key] !== null && row[key] !== undefined && String(row[key]).trim()) {
+                            subject = String(row[key]).trim();
+                            break;
+                        }
+                    }
+                }
 
-                const subject = row["เรื่อง"] ? String(row["เรื่อง"]).trim() : "";
+                if (!subject) {
+                    if (row["ที่หนังสือ"]) subject = String(row["ที่หนังสือ"]).trim();
+                    else if (row["ข้อสั่งการ"]) subject = String(row["ข้อสั่งการ"]).trim();
+                    else if (row["เรื่อง"]) subject = String(row["เรื่อง"]).trim();
+                }
                 
-                // ถ้าไม่มีเรื่อง (subject ว่างหรือเป็น null) ให้คัดออกเลย
+                // ถ้าไม่มีเรื่องหรือข้อมูลงานเลย ให้คัดออก
                 if (!subject) return;
 
                 // นำเข้าข้อมูลปกติ ไม่ผูกมัดสีแดงกับงานด่วน
@@ -195,24 +187,38 @@ exports.uploadExcelTasks = async (req, res) => {
                     ? command.split(/\r?\n/).map(c => c.trim()).filter(c => c.length > 0)
                     : [];
 
-                let receivedDate = parseDateSafe(row["วันที่รับ"]);
-                // ถ้าไม่มีวันที่รับ ให้ข้ามแถวนี้ไปเลยตามเงื่อนไข
-                if (!receivedDate) return;
+                // ค้นหาวันที่รับจากคอลัมน์ที่เป็นไปได้
+                let receivedDateInput = null;
+                for (const key of Object.keys(row)) {
+                    if (!key) continue;
+                    const cleanKey = key.trim().replace(/\s+/g, '');
+                    if (cleanKey === "วันที่รับ" || cleanKey === "วันที่ลงรับ" || cleanKey === "วันรับ" || cleanKey === "ลงรับ" || cleanKey === "created_at" || cleanKey === "วันที่สร้าง") {
+                        receivedDateInput = row[key];
+                        break;
+                    }
+                }
+                let receivedDate = parseDateSafe(receivedDateInput);
+                // ถ้าไม่มีวันที่รับ ให้ fallback ไปใช้วันที่เอกสาร หรือวันที่ปัจจุบัน เพื่อป้องกันข้อมูลงานสูญหาย
+                if (!receivedDate) {
+                    receivedDate = parseDateSafe(row["ลงวันที่"]) || parseDateSafe(row["วันที่"]) || new Date().toISOString().split('T')[0];
+                }
 
-                let dueDate = parseDateSafe(row["วันที่"]);
+                let dueDate = parseDateSafe(row["วันที่"]) || parseDateSafe(row["วันครบกำหนด"]) || parseDateSafe(row["กำหนดส่ง"]);
                 
                 // ค้นหาเลขรับ (Registration Number) จากคอลัมน์ที่เป็นไปได้
                 let receiveNoInput = null;
                 for (const key of Object.keys(row)) {
-                    const cleanKey = key.replace(/\s+/g, '');
-                    if (cleanKey === "เลขทะเบียน" || cleanKey === "ทะเบียนรับ" || cleanKey === "ทะเบียน" || cleanKey === "เลขรับ" || cleanKey === "เลขทะเบียนรับ" || cleanKey === "ที่" || cleanKey.includes("เลขทะเบียน") || cleanKey.includes("ทะเบียนรับ")) {
-                        receiveNoInput = row[key];
-                        break;
+                    if (!key) continue;
+                    const cleanKey = key.trim().replace(/\s+/g, '');
+                    if (cleanKey === "เลขทะเบียน" || cleanKey === "ทะเบียนรับ" || cleanKey === "ทะเบียน" || cleanKey === "เลขรับ" || cleanKey === "เลขทะเบียนรับ" || cleanKey === "ที่" || cleanKey === "ลำดับ" || cleanKey.includes("เลขทะเบียน") || cleanKey.includes("ทะเบียนรับ")) {
+                        if (row[key] !== null && row[key] !== undefined && String(row[key]).trim() !== '') {
+                            receiveNoInput = row[key];
+                            break;
+                        }
                     }
                 }
                 
                 let receiveNo = null;
-                let receiveYear = null;
                 if (receiveNoInput !== null && receiveNoInput !== undefined) {
                     if (typeof receiveNoInput === 'string') {
                         const thaiNumerals = { '๐':'0', '๑':'1', '๒':'2', '๓':'3', '๔':'4', '๕':'5', '๖':'6', '๗':'7', '๘':'8', '๙':'9' };
@@ -224,12 +230,33 @@ exports.uploadExcelTasks = async (req, res) => {
                     receiveNo = isNaN(parsedNum) ? null : parsedNum;
                 }
 
-                // ถ้าไม่มีเลขทะเบียน ให้ข้ามแถวนี้ไปเลยตามเงื่อนไข
+                // ถ้าไม่มีเลขทะเบียน ให้ข้ามแถวนี้ไป
                 if (!receiveNo) return;
 
-                const { round, fiscalYear } = calculateFiscalRoundAndYear(receivedDate);
-                if (receiveNo) {
-                    receiveYear = fiscalYear;
+                // ค้นหาปีทะเบียนจากคอลัมน์ที่เป็นไปได้
+                let receiveYearInput = null;
+                for (const key of Object.keys(row)) {
+                    if (!key) continue;
+                    const cleanKey = key.trim().replace(/\s+/g, '');
+                    if (cleanKey === "ปีทะเบียน" || cleanKey === "ปี" || cleanKey === "ปีงบประมาณ" || cleanKey === "ปีพ.ศ." || cleanKey === "พ.ศ." || cleanKey === "ปีงบ" || cleanKey === "receive_year") {
+                        if (row[key] !== null && row[key] !== undefined && String(row[key]).trim() !== '') {
+                            receiveYearInput = row[key];
+                            break;
+                        }
+                    }
+                }
+
+                const { round, fiscalYear, fiscalYearBE } = calculateFiscalRoundAndYear(receivedDate);
+                let receiveYear = null;
+                if (receiveYearInput !== null && receiveYearInput !== undefined) {
+                    let yearClean = String(receiveYearInput).replace(/[๐-๙]/g, match => ({ '๐':'0', '๑':'1', '๒':'2', '๓':'3', '๔':'4', '๕':'5', '๖':'6', '๗':'7', '๘':'8', '๙':'9' }[match])).replace(/\D/g, '');
+                    let yearNum = parseInt(yearClean, 10);
+                    if (!isNaN(yearNum) && yearNum > 0) {
+                        receiveYear = yearNum;
+                    }
+                }
+                if (!receiveYear) {
+                    receiveYear = fiscalYearBE; // e.g. 2569
                 }
 
                 // ถ้าไม่มีข้อมูลช่อง วันที่ (due date) ให้บวกเพิ่ม 14 วันจาก วันที่รับ (received date) หรือวันที่ปัจจุบัน

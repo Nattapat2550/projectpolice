@@ -1,4 +1,5 @@
 const { google } = require('googleapis');
+const { calculateFiscalRoundAndYear, parseAnyDateToIso } = require('../utils/fiscalYearHelper');
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -19,13 +20,19 @@ if (GOOGLE_REFRESH_TOKEN) {
 
 const formatDateTH = (dateStr) => {
   if (!dateStr) return '';
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return dateStr;
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const yearAD = date.getFullYear();
-  const yearBE = yearAD < 2500 ? yearAD + 543 : yearAD; // Prevent double conversion
-  return `${day}/${month}/${yearBE}`;
+  const iso = parseAnyDateToIso(dateStr);
+  if (!iso) {
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return String(dateStr);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const yearAD = date.getFullYear();
+    const yearBE = yearAD < 2500 ? yearAD + 543 : yearAD;
+    return `${day}/${month}/${yearBE}`;
+  }
+  const [y, m, d] = iso.split('-');
+  const yearBE = parseInt(y, 10) + 543;
+  return `${d}/${m}/${yearBE}`;
 };
 
 const cleanToOnlyName = (str) => {
@@ -150,13 +157,37 @@ const isMatchingRow = (row, taskData) => {
 
   // 2. Check receive_no + receive_year match (when ID is missing on either side)
   if (targetReceiveNo && targetReceiveYear && rowReceiveNo === targetReceiveNo && rowReceiveYear === targetReceiveYear) {
+    // 🔒 Check Evaluation Round (รอบที่ 1 ต.ค.-ธ.ค. vs รอบที่ 2 ม.ค.-ก.ย.)
+    if (rowReceivedDate && targetReceivedDate) {
+      const rowRound = calculateFiscalRoundAndYear(rowReceivedDate).round;
+      const targetRound = calculateFiscalRoundAndYear(targetReceivedDate).round;
+      if (rowRound !== targetRound) {
+        // Different rounds: DO NOT MATCH, DO NOT OVERWRITE (e.g. 556 Round 1 vs 556 Round 2)
+        return false;
+      }
+    }
+
+    // Check memo_no (ที่หนังสือ) if both exist
+    if (rowMemoNo && targetMemoNo && rowMemoNo !== targetMemoNo) {
+      return false;
+    }
+
     return true;
   }
 
   // 3. Check memo_no match (if receive_no is not available or as fallback)
   if (targetMemoNo && rowMemoNo === targetMemoNo) {
     if (targetReceiveYear && rowReceiveYear) {
-      if (rowReceiveYear === targetReceiveYear) return true;
+      if (rowReceiveYear === targetReceiveYear) {
+        if (rowReceivedDate && targetReceivedDate) {
+          const rowRound = calculateFiscalRoundAndYear(rowReceivedDate).round;
+          const targetRound = calculateFiscalRoundAndYear(targetReceivedDate).round;
+          if (rowRound !== targetRound) {
+            return false;
+          }
+        }
+        return true;
+      }
     } else {
       return true;
     }

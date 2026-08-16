@@ -608,6 +608,19 @@ export default function TaskDetailPage() {
         if (!fileList || fileList.length === 0 || !id) return;
         const files = Array.from(fileList);
 
+        // 🔒 จำกัดการอัปโหลดเอกสารแนบเพิ่มเติมไม่เกิน 3 ไฟล์
+        if (files.length > 3) {
+            Swal.fire({
+                icon: "warning",
+                title: "จำกัดการอัปโหลดสูงสุด 3 ไฟล์",
+                text: `คุณเลือกไฟล์ทั้งหมด ${files.length} ไฟล์ ระบบรองรับการแนบเอกสารเพิ่มเติมได้สูงสุดครั้งละไม่เกิน 3 ไฟล์เท่านั้น กรุณาเลือกใหม่อีกครั้ง`,
+                confirmButtonText: "ตกลง",
+                confirmButtonColor: "#2563eb",
+            });
+            if (e.target) e.target.value = "";
+            return;
+        }
+
         let htmlContent = `
             <div style="text-align: left; font-size: 0.88rem; max-height: 350px; overflow-y: auto; padding: 4px;">
                 <p style="margin-bottom: 12px; opacity: 0.8; font-weight: 500;">
@@ -670,16 +683,17 @@ export default function TaskDetailPage() {
                 headers: token ? { Authorization: `Bearer ${token}` } : {},
                 body: formData,
             });
-            const data = await res.json();
-            if (res.ok && data.success) {
+            const data = await res.json().catch(() => null);
+            if (res.ok && data?.success) {
                 Swal.fire({ icon: "success", title: "อัปโหลดเอกสารเพิ่มเติมสำเร็จ", timer: 2000, showConfirmButton: false });
                 fetchTask();
             } else {
-                throw new Error(data.message || "Upload failed");
+                const errorMsg = data?.message || "ไม่สามารถอัปโหลดเอกสารเพิ่มเติมได้ กรุณาลองใหม่อีกครั้ง";
+                Swal.fire({ icon: "warning", title: "ไม่สามารถอัปโหลดได้", text: errorMsg });
             }
         } catch (err: any) {
             console.error("Attach doc error:", err);
-            Swal.fire({ icon: "error", title: "เกิดข้อผิดพลาด", text: err.message || "ไม่สามารถอัปโหลดเอกสารเพิ่มเติมได้" });
+            Swal.fire({ icon: "error", title: "เกิดข้อผิดพลาด", text: err.message || "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์เพื่ออัปโหลดเอกสารได้" });
         } finally {
             setUploadingDoc(false);
             if (e.target) e.target.value = "";
