@@ -58,30 +58,44 @@ function parseAnyDateToIso(dateInput) {
     }
 
     // 1. YYYY-MM-DD or YYYY/MM/DD (4 digits first)
-    const ymdMatch = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    const ymdMatch = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
     if (ymdMatch) {
         let year = parseInt(ymdMatch[1], 10);
         if (year > 2400) year -= 543;
-        const month = String(parseInt(ymdMatch[2], 10)).padStart(2, '0');
-        const day = String(parseInt(ymdMatch[3], 10)).padStart(2, '0');
-        return `${year}-${month}-${day}`;
+        const month = parseInt(ymdMatch[2], 10);
+        const day = parseInt(ymdMatch[3], 10);
+
+        if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2150) {
+            const dObj = new Date(Date.UTC(year, month - 1, day));
+            if (dObj.getUTCFullYear() === year && dObj.getUTCMonth() === month - 1 && dObj.getUTCDate() === day) {
+                return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            }
+        }
+        return null;
     }
 
     // 2. DD/MM/YYYY or DD-MM-YYYY or D/M/YYYY or DD/MM/YY
-    const dmyMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+    const dmyMatch = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
     if (dmyMatch) {
-        let day = String(parseInt(dmyMatch[1], 10)).padStart(2, '0');
-        let month = String(parseInt(dmyMatch[2], 10)).padStart(2, '0');
+        const day = parseInt(dmyMatch[1], 10);
+        const month = parseInt(dmyMatch[2], 10);
         let year = parseInt(dmyMatch[3], 10);
         if (year < 100) year += 2500;
         if (year > 2400) year -= 543;
-        return `${year}-${month}-${day}`;
+
+        if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2150) {
+            const dObj = new Date(Date.UTC(year, month - 1, day));
+            if (dObj.getUTCFullYear() === year && dObj.getUTCMonth() === month - 1 && dObj.getUTCDate() === day) {
+                return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            }
+        }
+        return null;
     }
 
     // 3. Thai text date (e.g. 25 ธ.ค. 2568, 25 ธันวาคม 2568, 25 ธ.ค. 68)
-    const thaiMatch = s.match(/^(\d{1,2})\s+([^\s\d]+)\s+(\d{2,4})/);
+    const thaiMatch = s.match(/^(\d{1,2})\s+([^\s\d]+)\s+(\d{2,4})$/);
     if (thaiMatch) {
-        const day = String(parseInt(thaiMatch[1], 10)).padStart(2, '0');
+        const day = parseInt(thaiMatch[1], 10);
         const monthStr = thaiMatch[2].trim();
         let year = parseInt(thaiMatch[3], 10);
         if (year < 100) year += 2500;
@@ -93,22 +107,18 @@ function parseAnyDateToIso(dateInput) {
         if (monthIndex === -1) monthIndex = THAI_MONTHS_ABBR.findIndex(m => monthStr.includes(m.replace('.', '')));
 
         if (monthIndex !== -1) {
-            const month = String(monthIndex + 1).padStart(2, '0');
-            return `${year}-${month}-${day}`;
+            const month = monthIndex + 1;
+            if (day >= 1 && day <= 31 && year >= 1900 && year <= 2150) {
+                const dObj = new Date(Date.UTC(year, monthIndex, day));
+                if (dObj.getUTCFullYear() === year && dObj.getUTCMonth() === monthIndex && dObj.getUTCDate() === day) {
+                    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                }
+            }
         }
+        return null;
     }
 
-    // 4. Fallback Date.parse
-    const t = Date.parse(s);
-    if (!isNaN(t)) {
-        const dObj = new Date(t);
-        let year = dObj.getFullYear();
-        if (year > 2400) year -= 543;
-        const month = String(dObj.getMonth() + 1).padStart(2, '0');
-        const day = String(dObj.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    }
-
+    // Reject all other non-date text
     return null;
 }
 
