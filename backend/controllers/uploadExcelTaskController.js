@@ -697,7 +697,7 @@ exports.uploadExcelTasks = async (req, res) => {
             }
         }
 
-        // Sync to Google Sheets asynchronously in background without blocking HTTP response
+        // Sync to Google Sheets
         try {
             const allAffectedIds = [...createdTaskIds, ...updatedTaskIds];
             if (allAffectedIds.length > 0) {
@@ -713,9 +713,10 @@ exports.uploadExcelTasks = async (req, res) => {
                     return rows;
                 };
 
-                getFullData(allAffectedIds)
-                    .then(data => appendMultipleTasksToSheet(data))
-                    .catch(e => console.error("[Google Sheets Sync Error]", e.message));
+                const fullDataToSync = await getFullData(allAffectedIds);
+                if (fullDataToSync && fullDataToSync.length > 0) {
+                    await appendMultipleTasksToSheet(fullDataToSync);
+                }
             }
         } catch (e) {
             console.error("Sheet sync error in uploadExcelTasks", e.message);

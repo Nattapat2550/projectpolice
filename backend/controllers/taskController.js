@@ -703,15 +703,10 @@ exports.confirmTasks = async (req, res) => {
 
     // Sync to Google Sheets
     try {
-        if (createdTaskIds.length > 0) {
-            const createdData = await fetchTaskDataForSheet(createdTaskIds);
-            appendMultipleTasksToSheet(createdData).catch(e => console.error(e));
-        }
-        if (updatedTaskIds.length > 0) {
-            const updatedData = await fetchTaskDataForSheet(updatedTaskIds);
-            for (const row of updatedData) {
-                updateTaskInSheet(row).catch(e => console.error(e));
-            }
+        const allSyncIds = [...createdTaskIds, ...updatedTaskIds];
+        if (allSyncIds.length > 0) {
+            const syncData = await fetchTaskDataForSheet(allSyncIds);
+            await appendMultipleTasksToSheet(syncData);
         }
     } catch (e) {
         console.error("Sheet sync error in confirmTasks", e.message);

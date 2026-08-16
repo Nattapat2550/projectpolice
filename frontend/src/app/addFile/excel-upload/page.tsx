@@ -246,39 +246,42 @@ export default function TaskExcelUploadPage() {
             <label className={styles.Label} style={{ fontSize: '1.1rem' }}>
               เลือกไฟล์ Excel หรือ Word (.xlsx, .xls, .docx)
             </label>
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
               <input 
                 type="file" 
                 accept=".xlsx, .xls, .docx" 
                 onChange={handleFileChange}
                 className={styles.Input}
-                style={{ flex: 1, padding: '0.65rem', fontSize: '1rem', cursor: 'pointer' }}
+                style={{ padding: '0.65rem 0.85rem', fontSize: '1rem', cursor: 'pointer' }}
               />
               <button 
                 type="submit" 
-                disabled={loading || !file}
-                className={styles.SubmitButton}
+                disabled={loading || isUploading}
+                className={styles.SecondaryButton}
                 style={{ 
-                  minWidth: '160px',
-                  opacity: (loading || !file) ? 0.6 : 1,
-                  cursor: (loading || !file) ? 'not-allowed' : 'pointer'
+                  color: 'var(--blueText)', 
+                  borderColor: 'var(--blueText)', 
+                  borderWidth: '2px', 
+                  whiteSpace: 'nowrap',
+                  padding: '0.65rem 1.5rem',
+                  fontSize: '1rem',
+                  opacity: (loading || isUploading) ? 0.5 : 1,
+                  cursor: (loading || isUploading) ? 'not-allowed' : 'pointer'
                 }}
               >
-                {loading ? 'กำลังอ่านไฟล์...' : '🔍 ดูตัวอย่างข้อมูล'}
+                {loading ? 'กำลังอ่านไฟล์...' : '🔍 พรีวิวข้อมูล (ยังไม่บันทึก)'}
               </button>
             </div>
           </div>
         </form>
       </div>
 
-      {/* ⚠️ Error Alert Banner */}
       {error && (
-        <div className="bg-red-500/10 border-2 border-red-500/40 text-red-500 rounded-xl p-4 mb-6 text-sm font-semibold flex items-center gap-2">
-          <span>❌ {error}</span>
+        <div className="p-4 mb-6 bg-[var(--redBG)]/20 text-[var(--redText)] border-2 border-[var(--redBorder)] rounded-lg text-base font-bold flex items-center gap-2">
+          <span>⚠️</span> <span>{error}</span>
         </div>
       )}
 
-      {/* 📋 Result Section */}
       {result && (
         <div className="space-y-6 animate-fadeIn w-full">
           
