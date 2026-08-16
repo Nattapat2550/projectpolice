@@ -133,11 +133,14 @@ export default function TaskExcelUploadPage() {
     if (!file) return;
     setIsUploading(true);
     
+    const totalCount = result?.total_rows || result?.preview_data?.length || 1;
+    setProgress({ current: 0, total: totalCount });
+
     // 💡 สร้าง Job ID เพื่อติดตามสถานะ
     const jobId = Date.now().toString();
     const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5003';
     
-    // 💡 ตั้ง Interval เพื่อยิงเช็ค Progress ทุกๆ 1 วินาที
+    // 💡 ตั้ง Interval เพื่อยิงเช็ค Progress ทุกๆ 500ms
     const interval = setInterval(async () => {
       try {
         const token = localStorage.getItem("token");
@@ -146,11 +149,21 @@ export default function TaskExcelUploadPage() {
             ...(token && token !== "null" ? { Authorization: `Bearer ${token}` } : {})
           }
         });
-        const data = await res.json();
-        setProgress({ current: data.current, total: data.total });
-        if (data.status === 'completed') clearInterval(interval);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && typeof data.current === 'number') {
+            setProgress(prev => {
+              const newTotal = (data.total && data.total > 0) ? data.total : (prev.total || totalCount);
+              const newCurrent = data.current > prev.current ? data.current : prev.current;
+              return { current: Math.min(newCurrent, newTotal), total: newTotal };
+            });
+          }
+          if (data.status === 'completed') {
+            clearInterval(interval);
+          }
+        }
       } catch (e) {}
-    }, 1000);
+    }, 500);
 
     const formData = new FormData();
     formData.append('file', file);
@@ -169,6 +182,7 @@ export default function TaskExcelUploadPage() {
       const data = await response.json();
       
       if (data.success) {
+        setProgress({ current: totalCount, total: totalCount });
         Swal.fire({
           icon: 'success',
           title: 'อัปโหลดสำเร็จ!',
@@ -191,7 +205,6 @@ export default function TaskExcelUploadPage() {
     } finally {
       clearInterval(interval);
       setIsUploading(false);
-      setProgress({ current: 0, total: 0 });
     }
   };
 
@@ -201,6 +214,10 @@ export default function TaskExcelUploadPage() {
 
   const paginatedData = result?.preview_data?.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPages = Math.ceil((result?.preview_data?.length || 0) / itemsPerPage);
+
+  const displayTotal = progress.total > 0 ? progress.total : (result?.total_rows || 1);
+  const displayCurrent = Math.min(progress.current, displayTotal);
+  const percent = Math.min(100, Math.round((displayCurrent / displayTotal) * 100));
 
   return (
     <main className="w-full min-h-screen px-4 sm:px-8 py-6">
@@ -229,42 +246,39 @@ export default function TaskExcelUploadPage() {
             <label className={styles.Label} style={{ fontSize: '1.1rem' }}>
               เลือกไฟล์ Excel หรือ Word (.xlsx, .xls, .docx)
             </label>
-            <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center">
+            <div className="flex flex-col sm:flex-row gap-3">
               <input 
                 type="file" 
                 accept=".xlsx, .xls, .docx" 
                 onChange={handleFileChange}
                 className={styles.Input}
-                style={{ padding: '0.65rem 0.85rem', fontSize: '1rem', cursor: 'pointer' }}
+                style={{ flex: 1, padding: '0.65rem', fontSize: '1rem', cursor: 'pointer' }}
               />
               <button 
                 type="submit" 
-                disabled={loading || isUploading}
-                className={styles.SecondaryButton}
+                disabled={loading || !file}
+                className={styles.SubmitButton}
                 style={{ 
-                  color: 'var(--blueText)', 
-                  borderColor: 'var(--blueText)', 
-                  borderWidth: '2px', 
-                  whiteSpace: 'nowrap',
-                  padding: '0.65rem 1.5rem',
-                  fontSize: '1rem',
-                  opacity: (loading || isUploading) ? 0.5 : 1,
-                  cursor: (loading || isUploading) ? 'not-allowed' : 'pointer'
+                  minWidth: '160px',
+                  opacity: (loading || !file) ? 0.6 : 1,
+                  cursor: (loading || !file) ? 'not-allowed' : 'pointer'
                 }}
               >
-                {loading ? 'กำลังอ่านไฟล์...' : '🔍 พรีวิวข้อมูล (ยังไม่บันทึก)'}
+                {loading ? 'กำลังอ่านไฟล์...' : '🔍 ดูตัวอย่างข้อมูล'}
               </button>
             </div>
           </div>
         </form>
       </div>
 
+      {/* ⚠️ Error Alert Banner */}
       {error && (
-        <div className="p-4 mb-6 bg-[var(--redBG)]/20 text-[var(--redText)] border-2 border-[var(--redBorder)] rounded-lg text-base font-bold flex items-center gap-2">
-          <span>⚠️</span> <span>{error}</span>
+        <div className="bg-red-500/10 border-2 border-red-500/40 text-red-500 rounded-xl p-4 mb-6 text-sm font-semibold flex items-center gap-2">
+          <span>❌ {error}</span>
         </div>
       )}
 
+      {/* 📋 Result Section */}
       {result && (
         <div className="space-y-6 animate-fadeIn w-full">
           
@@ -279,10 +293,10 @@ export default function TaskExcelUploadPage() {
               <div className="w-full mt-3">
                 <div className="flex justify-between text-sm font-bold text-[var(--blueText)] mb-1.5">
                   <span>กำลังบันทึกลง Database...</span>
-                  <span>{progress.current} / {progress.total || result.total_rows} รายการ</span>
+                  <span>{displayCurrent} / {displayTotal} รายการ ({percent}%)</span>
                 </div>
                 <div className="w-full bg-[var(--container)] rounded-full h-4 overflow-hidden border border-[var(--wrapper)]">
-                  <div className="bg-[var(--blueText)] h-4 rounded-full transition-all duration-300" style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }}></div>
+                  <div className="bg-[var(--blueText)] h-4 rounded-full transition-all duration-300" style={{ width: `${percent}%` }}></div>
                 </div>
               </div>
             ) : (

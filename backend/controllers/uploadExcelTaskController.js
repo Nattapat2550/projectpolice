@@ -5,20 +5,10 @@ const { calculateFiscalRoundAndYear, parseAnyDateToIso, formatDateTH } = require
 const { syncTaskDocumentNotesFromText, parseAdditionalDocsText } = require("../utils/attachmentSync");
 const { cleanToOnlyName } = require("../utils/filenameParser");
 
-const processExcelAssignees = async (assigneeStr, dbClient = pool) => {
+const processExcelAssigneesWithMaps = (assigneeStr, userByNameMap, userByCleanNameMap) => {
     if (!assigneeStr || typeof assigneeStr !== 'string') return [];
     const names = assigneeStr.split(/[,;\n]/).map(s => s.trim()).filter(Boolean);
     if (names.length === 0) return [];
-
-    const { rows: allUsers } = await dbClient.query('SELECT id, name FROM users');
-    const userByNameMap = new Map();
-    const userByCleanNameMap = new Map();
-
-    for (const u of allUsers) {
-        userByNameMap.set(u.name.trim().toLowerCase(), u);
-        const clean = cleanToOnlyName(u.name).trim().toLowerCase();
-        if (clean) userByCleanNameMap.set(clean, u);
-    }
 
     const results = [];
     const addedKeys = new Set();
@@ -432,11 +422,21 @@ exports.uploadExcelTasks = async (req, res) => {
             global.uploadProgress[jobId] = { current: 0, total: allData.length, status: 'processing' };
         }
 
+        // Cache users once in memory for high-performance assignee mapping
+        const { rows: allUsers } = await pool.query('SELECT id, name FROM users');
+        const userByNameMap = new Map();
+        const userByCleanNameMap = new Map();
+        for (const u of allUsers) {
+            userByNameMap.set(u.name.trim().toLowerCase(), u);
+            const clean = cleanToOnlyName(u.name).trim().toLowerCase();
+            if (clean) userByCleanNameMap.set(clean, u);
+        }
+
         let processedCount = 0;
         const createdTaskIds = [];
         const updatedTaskIds = [];
         
-        const CHUNK_SIZE = 500; // Process 500 items at a time for performance
+        const CHUNK_SIZE = 500; // Process 500 items at a time per chunk
 
         for (let i = 0; i < allData.length; i += CHUNK_SIZE) {
             const chunk = allData.slice(i, i + CHUNK_SIZE);
@@ -453,8 +453,8 @@ exports.uploadExcelTasks = async (req, res) => {
                         const key = `${item.receive_no}_${item.receive_year}_${item.round || 1}`;
                         if (!setKeys.has(key)) {
                             setKeys.add(key);
-                            conditions.push(`(receive_no = $${paramIdx++} AND receive_year = $${paramIdx++} AND COALESCE(round, 1) = $${paramIdx++})`);
-                            params.push(item.receive_no, item.receive_year, item.round || 1);
+                            conditions.push(`(receive_no = $${paramIdx++} AND (receive_year = $${paramIdx++} OR receive_year = $${paramIdx++}) AND COALESCE(round, 1) = $${paramIdx++})`);
+                            params.push(item.receive_no, item.receive_year, item.receive_year > 2400 ? item.receive_year - 543 : item.receive_year + 543, item.round || 1);
                         }
                     }
                 });
@@ -465,6 +465,8 @@ exports.uploadExcelTasks = async (req, res) => {
                     const { rows } = await pool.query(query, params);
                     rows.forEach(r => {
                         existingMap[`${r.receive_no}_${r.receive_year}_${r.round}`] = r.id;
+                        const altYear = r.receive_year > 2400 ? r.receive_year - 543 : r.receive_year + 543;
+                        existingMap[`${r.receive_no}_${altYear}_${r.round}`] = r.id;
                     });
                 }
 
@@ -551,7 +553,7 @@ exports.uploadExcelTasks = async (req, res) => {
                         
                         const assignee = item.assignee_name;
                         if (assignee) {
-                            const processed = await processExcelAssignees(String(assignee), pool);
+                            const processed = processExcelAssigneesWithMaps(String(assignee), userByNameMap, userByCleanNameMap);
                             for (const ass of processed) {
                                 assignPlaceholders.push(`($${assignCounter++}, $${assignCounter++}, $${assignCounter++})`);
                                 assignFlatValues.push(taskId, ass.user_id, ass.role_or_name);
@@ -559,7 +561,7 @@ exports.uploadExcelTasks = async (req, res) => {
                         }
 
                         if (item.additional_docs !== null) {
-                            await syncTaskDocumentNotesFromText(pool, taskId, item.additional_docs);
+                            syncTaskDocumentNotesFromText(pool, taskId, item.additional_docs).catch(e => console.error(e));
                         }
 
                         if (item.document_link) {
@@ -582,71 +584,106 @@ exports.uploadExcelTasks = async (req, res) => {
                     }));
 
                     if (assignPlaceholders.length > 0) {
-                        await pool.query(`INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ${assignPlaceholders.join(', ')}`, assignFlatValues);
+                        const BATCH_SIZE = 500;
+                        for (let a = 0; a < assignPlaceholders.length; a += BATCH_SIZE) {
+                            const slicePlaceholders = assignPlaceholders.slice(a, a + BATCH_SIZE);
+                            const sliceFlat = assignFlatValues.slice(a * 3, (a + BATCH_SIZE) * 3);
+                            let reindexedPlaceholders = [];
+                            let reCounter = 1;
+                            for (let p = 0; p < slicePlaceholders.length; p++) {
+                                reindexedPlaceholders.push(`($${reCounter++}, $${reCounter++}, $${reCounter++})`);
+                            }
+                            await pool.query(`INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ${reindexedPlaceholders.join(', ')}`, sliceFlat);
+                        }
                     }
                 }
 
-                // Step 4: Process Updates concurrently
+                // Step 4: Process Updates in sub-batches of 25 to preserve DB pool connections
                 if (toUpdate.length > 0) {
-                    await Promise.all(toUpdate.map(async (item) => {
-                        try {
-                            const taskId = item.id;
-                            let parsedDueDate = parseDateSafe(item.due_date_str);
-                            let parsedMemoDate = parseDateSafe(item.memo_date);
-                            let parsedSignedDate = parseDateSafe(item.signed_date);
-                            let parsedMeetingDate = parseDateSafe(item.meeting_date);
-                            let parsedReplyDueDate = parseDateSafe(item.reply_due_date);
+                    const UPDATE_SUB_BATCH = 25;
+                    for (let u = 0; u < toUpdate.length; u += UPDATE_SUB_BATCH) {
+                        const updateSlice = toUpdate.slice(u, u + UPDATE_SUB_BATCH);
+                        await Promise.all(updateSlice.map(async (item) => {
+                            try {
+                                const taskId = item.id;
+                                let parsedDueDate = parseDateSafe(item.due_date_str);
+                                let parsedMemoDate = parseDateSafe(item.memo_date);
+                                let parsedSignedDate = parseDateSafe(item.signed_date);
+                                let parsedMeetingDate = parseDateSafe(item.meeting_date);
+                                let parsedReplyDueDate = parseDateSafe(item.reply_due_date);
 
-                            let safeTitle = item.title ? String(item.title) : 'ไม่มีชื่อเรื่อง';
-                            let safeMemoNo = item.memo_no ? String(item.memo_no) : null;
-                            let safeSender = item.sender ? String(item.sender) : null;
-                            let safeTaskDetail = item.command_text && item.command_text.length > 0 ? item.command_text.join('\n') : null;
+                                let safeTitle = item.title ? String(item.title) : 'ไม่มีชื่อเรื่อง';
+                                let safeMemoNo = item.memo_no ? String(item.memo_no) : null;
+                                let safeSender = item.sender ? String(item.sender) : null;
+                                let safeTaskDetail = item.command_text && item.command_text.length > 0 ? item.command_text.join('\n') : null;
 
-                            let safeRecipientTo = item.recipient_to ? String(item.recipient_to) : null;
-                            let safeAdditionalDocs = item.additional_docs ? String(item.additional_docs) : null;
+                                let safeRecipientTo = item.recipient_to ? String(item.recipient_to) : null;
+                                let safeAdditionalDocs = item.additional_docs ? String(item.additional_docs) : null;
 
-                            await pool.query(
-                                `UPDATE tasks SET title = COALESCE(title, $1), memo_no = COALESCE(memo_no, $2), memo_date = COALESCE(memo_date, $3), main_text = COALESCE($4, main_text), notes = COALESCE($5, notes), sender = COALESCE(sender, $6), due_date = COALESCE($7, due_date), task_detail = COALESCE($8, task_detail), is_urgent = COALESCE(is_urgent, $9), sign_date = COALESCE(sign_date, $10), meeting_date = COALESCE($11, meeting_date), reply_due_date = COALESCE($12, reply_due_date), urgency_level = COALESCE(urgency_level, $13), secret_level = COALESCE(secret_level, $14), recipient_to = COALESCE(recipient_to, $15), additional_docs = COALESCE($16, additional_docs), round = COALESCE(round, $17), updated_at = NOW() WHERE id = $18`,
-                                [safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, safeSender, parsedDueDate, safeTaskDetail, item.is_urgent, parsedSignedDate, parsedMeetingDate, parsedReplyDueDate, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ', safeRecipientTo, safeAdditionalDocs, item.round || 1, taskId]
-                            );
-                            await pool.query(
-                                `INSERT INTO task_logs (task_id, user_id, action, details) VALUES ($1, $2, 'reuploaded_excel_task', $3)`,
-                                [taskId, created_by, JSON.stringify({ filename, original_row: item.original_row })]
-                            );
-                            if (safeAdditionalDocs !== null) {
-                                await syncTaskDocumentNotesFromText(pool, taskId, safeAdditionalDocs);
-                            }
+                                await pool.query(
+                                    `UPDATE tasks SET 
+                                       title = COALESCE($1, title), 
+                                       memo_no = COALESCE($2, memo_no), 
+                                       memo_date = COALESCE($3, memo_date), 
+                                       main_text = COALESCE($4, main_text), 
+                                       notes = COALESCE($5, notes), 
+                                       sender = COALESCE($6, sender), 
+                                       due_date = COALESCE($7, due_date), 
+                                       task_detail = COALESCE($8, task_detail), 
+                                       is_urgent = COALESCE($9, is_urgent), 
+                                       sign_date = COALESCE($10, sign_date), 
+                                       meeting_date = COALESCE($11, meeting_date), 
+                                       reply_due_date = COALESCE($12, reply_due_date), 
+                                       urgency_level = COALESCE($13, urgency_level), 
+                                       secret_level = COALESCE($14, secret_level), 
+                                       recipient_to = COALESCE($15, recipient_to), 
+                                       additional_docs = COALESCE($16, additional_docs), 
+                                       round = COALESCE($17, round), 
+                                       updated_at = NOW() 
+                                     WHERE id = $18`,
+                                    [safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, safeSender, parsedDueDate, safeTaskDetail, item.is_urgent, parsedSignedDate, parsedMeetingDate, parsedReplyDueDate, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ', safeRecipientTo, safeAdditionalDocs, item.round || 1, taskId]
+                                );
+                                
+                                pool.query(
+                                    `INSERT INTO task_logs (task_id, user_id, action, details) VALUES ($1, $2, 'reuploaded_excel_task', $3)`,
+                                    [taskId, created_by, JSON.stringify({ filename, original_row: item.original_row })]
+                                ).catch(e => console.error(e));
 
-                            if (item.document_link) {
-                                const linkStr = String(item.document_link).trim();
-                                let docId = null;
-                                const docCheck = await pool.query('SELECT id FROM documents WHERE drive_web_view_link = $1 LIMIT 1', [linkStr]);
-                                if (docCheck.rows.length > 0) {
-                                    docId = docCheck.rows[0].id;
-                                } else {
-                                    const newDoc = await pool.query(
-                                        'INSERT INTO documents (filename, drive_web_view_link, created_by) VALUES ($1, $2, $3) RETURNING id',
-                                        [safeTitle || 'เอกสารต้นฉบับ', linkStr, created_by]
-                                    );
-                                    docId = newDoc.rows[0].id;
+                                if (safeAdditionalDocs !== null) {
+                                    syncTaskDocumentNotesFromText(pool, taskId, safeAdditionalDocs).catch(e => console.error(e));
                                 }
-                                if (docId) {
-                                    await pool.query('UPDATE tasks SET document_id = COALESCE(document_id, $1) WHERE id = $2', [docId, taskId]);
-                                }
-                            }
 
-                            updatedTaskIds.push(taskId);
-                            await pool.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
-                            if (item.assignee_name) {
-                                const processed = await processExcelAssignees(String(item.assignee_name), pool);
-                                for (const ass of processed) {
-                                    await pool.query(`INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ($1, $2, $3)`, [taskId, ass.user_id, ass.role_or_name]);
+                                if (item.document_link) {
+                                    const linkStr = String(item.document_link).trim();
+                                    let docId = null;
+                                    const docCheck = await pool.query('SELECT id FROM documents WHERE drive_web_view_link = $1 LIMIT 1', [linkStr]);
+                                    if (docCheck.rows.length > 0) {
+                                        docId = docCheck.rows[0].id;
+                                    } else {
+                                        const newDoc = await pool.query(
+                                            'INSERT INTO documents (filename, drive_web_view_link, created_by) VALUES ($1, $2, $3) RETURNING id',
+                                            [safeTitle || 'เอกสารต้นฉบับ', linkStr, created_by]
+                                        );
+                                        docId = newDoc.rows[0].id;
+                                    }
+                                    if (docId) {
+                                        await pool.query('UPDATE tasks SET document_id = COALESCE(document_id, $1) WHERE id = $2', [docId, taskId]);
+                                    }
                                 }
+
+                                updatedTaskIds.push(taskId);
+                                if (item.assignee_name) {
+                                    await pool.query('DELETE FROM task_assignments WHERE task_id = $1', [taskId]);
+                                    const processed = processExcelAssigneesWithMaps(String(item.assignee_name), userByNameMap, userByCleanNameMap);
+                                    for (const ass of processed) {
+                                        await pool.query(`INSERT INTO task_assignments (task_id, user_id, role_or_name) VALUES ($1, $2, $3)`, [taskId, ass.user_id, ass.role_or_name]);
+                                    }
+                                }
+                            } catch (err) {
+                                errors.push(`ข้อผิดพลาดแถวที่ ${item.original_row} (Update): ${err.message}`);
                             }
-                        } catch (err) {
-                            errors.push(`ข้อผิดพลาดแถวที่ ${item.original_row} (Update): ${err.message}`);
-                        }
-                    }));
+                        }));
+                    }
                 }
 
                 successCount += chunk.length;
@@ -660,30 +697,25 @@ exports.uploadExcelTasks = async (req, res) => {
             }
         }
 
-        // Sync to Google Sheets
+        // Sync to Google Sheets asynchronously in background without blocking HTTP response
         try {
-            const getFullData = async (ids) => {
-                if (ids.length === 0) return [];
-                const query = `
-                    SELECT t.*, d.drive_web_view_link as document_link,
-                    (SELECT string_agg(role_or_name, ', ') FROM task_assignments ta WHERE ta.task_id = t.id) as "personInCharge"
-                    FROM tasks t 
-                    LEFT JOIN documents d ON t.document_id = d.id
-                    WHERE t.id = ANY($1)
-                `;
-                const { rows } = await pool.query(query, [ids]);
-                return rows;
-            };
+            const allAffectedIds = [...createdTaskIds, ...updatedTaskIds];
+            if (allAffectedIds.length > 0) {
+                const getFullData = async (ids) => {
+                    const query = `
+                        SELECT t.*, d.drive_web_view_link as document_link,
+                        (SELECT string_agg(role_or_name, ', ') FROM task_assignments ta WHERE ta.task_id = t.id) as "personInCharge"
+                        FROM tasks t 
+                        LEFT JOIN documents d ON t.document_id = d.id
+                        WHERE t.id = ANY($1)
+                    `;
+                    const { rows } = await pool.query(query, [ids]);
+                    return rows;
+                };
 
-            if (createdTaskIds.length > 0) {
-                const createdData = await getFullData(createdTaskIds);
-                appendMultipleTasksToSheet(createdData).catch(e => console.error(e));
-            }
-            if (updatedTaskIds.length > 0) {
-                const updatedData = await getFullData(updatedTaskIds);
-                for (const row of updatedData) {
-                    updateTaskInSheet(row).catch(e => console.error(e));
-                }
+                getFullData(allAffectedIds)
+                    .then(data => appendMultipleTasksToSheet(data))
+                    .catch(e => console.error("[Google Sheets Sync Error]", e.message));
             }
         } catch (e) {
             console.error("Sheet sync error in uploadExcelTasks", e.message);
@@ -692,6 +724,7 @@ exports.uploadExcelTasks = async (req, res) => {
         // เมื่อทำงานเสร็จ เปลี่ยนสถานะเป็น completed
         if (jobId && global.uploadProgress[jobId]) {
             global.uploadProgress[jobId].status = 'completed';
+            global.uploadProgress[jobId].current = allData.length;
         }
 
         if (successCount === 0 && allData.length > 0) {

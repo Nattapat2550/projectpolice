@@ -290,22 +290,32 @@ exports.appendMultipleTasksToSheet = async (tasksArray) => {
         }
 
         const rowsToAppend = [];
+        const updateData = [];
+
         for (const taskData of tasks) {
           const rowIndex = existingRows.findIndex(row => isMatchingRow(row, taskData));
           const rowData = buildRowData(taskData);
 
           if (rowIndex !== -1) {
             const sheetRowNumber = rowIndex + 1;
-            await sheets.spreadsheets.values.update({
-              spreadsheetId: SPREADSHEET_ID,
+            updateData.push({
               range: `${sheetName}!A${sheetRowNumber}:R${sheetRowNumber}`,
-              valueInputOption: 'RAW',
-              resource: { values: [rowData] },
+              values: [rowData]
             });
             existingRows[rowIndex] = rowData;
           } else {
             rowsToAppend.push(rowData);
           }
+        }
+
+        if (updateData.length > 0) {
+          await sheets.spreadsheets.values.batchUpdate({
+            spreadsheetId: SPREADSHEET_ID,
+            resource: {
+              valueInputOption: 'RAW',
+              data: updateData
+            }
+          });
         }
 
         if (rowsToAppend.length > 0) {
