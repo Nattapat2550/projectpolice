@@ -523,20 +523,83 @@ exports.confirmTasks = async (req, res) => {
           const memoNotes = memo.notes || memo.หมายเหตุ || null;
 
           const memoMemoNo = memo.ที่ || memo.memo_no || null;
-          const existingRes = await client.query(
-              'SELECT id, document_id FROM tasks WHERE receive_no = $1 AND receive_year = $2 AND COALESCE(round, 1) = $3 LIMIT 1',
-              [receiveNo, receiveYear, round]
-          );
-          let taskId;
           
-          if (existingRes.rows.length > 0) {
-              taskId = existingRes.rows[0].id;
-              const oldDocumentId = existingRes.rows[0].document_id;
+          let taskId = null;
+          let oldDocumentId = null;
 
-              // 1. อัปเดตงานในตาราง tasks ก่อนเพื่อให้ document_id ชี้ไปที่เอกสารใหม่
+          // 1. ตรวจสอบจาก existing_task_id หรือ id ของงานเดิมเป็นอันดับแรก
+          const targetTaskId = memo.existing_task_id || memo.id || memo.taskId;
+          if (targetTaskId && isValidUUID(targetTaskId)) {
+            const byIdRes = await client.query('SELECT id, document_id FROM tasks WHERE id = $1 LIMIT 1', [targetTaskId]);
+            if (byIdRes.rows.length > 0) {
+              taskId = byIdRes.rows[0].id;
+              oldDocumentId = byIdRes.rows[0].document_id;
+            }
+          }
+
+          // 2. ถ้าไม่พบจาก id ให้ตรวจสอบจาก receive_no + receive_year + round
+          if (!taskId && receiveNo) {
+            const byNoRes = await client.query(
+              `SELECT id, document_id FROM tasks 
+               WHERE receive_no = $1 
+                 AND (receive_year = $2 OR receive_year = $3 OR receive_year = $2 - 543 OR receive_year = $2 + 543)
+               ORDER BY 
+                 CASE WHEN COALESCE(round, 1) = $4 THEN 0 ELSE 1 END,
+                 created_at DESC
+               LIMIT 1`,
+              [receiveNo, receiveYear, (receiveYear > 2400 ? receiveYear - 543 : receiveYear + 543), round]
+            );
+            if (byNoRes.rows.length > 0) {
+              taskId = byNoRes.rows[0].id;
+              oldDocumentId = byNoRes.rows[0].document_id;
+            }
+          }
+          
+          if (taskId) {
+              // 1. เขียนทับ (Overwrite) ข้อมูลงานเดิมในตาราง tasks
               await client.query(
-                  `UPDATE tasks SET document_id = COALESCE($1, document_id), title = COALESCE(title, $2), memo_no = COALESCE(memo_no, $3), memo_date = COALESCE(memo_date, $4), main_text = COALESCE($5, main_text), task_detail = COALESCE($6, task_detail), due_date = COALESCE($7, due_date), is_urgent = COALESCE(is_urgent, $8), urgency_level = COALESCE(urgency_level, $9), secret_level = COALESCE(secret_level, $10), sign_date = COALESCE(sign_date, $11), meeting_date = COALESCE($12, meeting_date), reply_due_date = COALESCE($13, reply_due_date), sender = COALESCE(sender, $15), recipient_to = COALESCE(recipient_to, $16), additional_docs = COALESCE($17, additional_docs), round = COALESCE(round, $18), notes = COALESCE($19, notes), updated_at = NOW() WHERE id = $14`,
-                  [documentId, memo.เรื่อง || 'ไม่ระบุชื่อเรื่อง', memo.ที่, parsedMemoDate, memo.main_text, memo.task_detail || null, finalDueDate, memo.isUrgent || false, memo.urgency_level || null, memo.secret_level || null, parsedSignDate, parsedMeetingDate, parsedReplyDueDate, taskId, memoSender, memoRecipient, memoAdditionalDocs, round, memoNotes]
+                  `UPDATE tasks SET 
+                     document_id = COALESCE($1, document_id), 
+                     title = COALESCE($2, title), 
+                     memo_no = COALESCE($3, memo_no), 
+                     memo_date = COALESCE($4, memo_date), 
+                     main_text = COALESCE($5, main_text), 
+                     task_detail = COALESCE($6, task_detail), 
+                     due_date = COALESCE($7, due_date), 
+                     is_urgent = COALESCE($8, is_urgent), 
+                     urgency_level = COALESCE($9, urgency_level), 
+                     secret_level = COALESCE($10, secret_level), 
+                     sign_date = COALESCE($11, sign_date), 
+                     meeting_date = COALESCE($12, meeting_date), 
+                     reply_due_date = COALESCE($13, reply_due_date), 
+                     sender = COALESCE($15, sender), 
+                     recipient_to = COALESCE($16, recipient_to), 
+                     additional_docs = COALESCE($17, additional_docs), 
+                     round = COALESCE($18, round), 
+                     notes = COALESCE($19, notes), 
+                     updated_at = NOW() 
+                   WHERE id = $14`,
+                  [
+                    documentId, 
+                    memo.เรื่อง || memo.title || null, 
+                    memoMemoNo, 
+                    parsedMemoDate, 
+                    memo.main_text || null, 
+                    memo.task_detail || null, 
+                    finalDueDate, 
+                    memo.isUrgent !== undefined ? memo.isUrgent : (memo.urgency_level && memo.urgency_level !== 'ปกติ'), 
+                    memo.urgency_level || null, 
+                    memo.secret_level || null, 
+                    parsedSignDate, 
+                    parsedMeetingDate, 
+                    parsedReplyDueDate, 
+                    taskId, 
+                    memoSender, 
+                    memoRecipient, 
+                    memoAdditionalDocs, 
+                    round, 
+                    memoNotes
+                  ]
               );
 
               // 2. ลบเอกสารเก่าและไฟล์เก่าใน Drive หากไม่มีงานอื่นใช้อยู่
