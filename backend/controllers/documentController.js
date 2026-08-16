@@ -50,7 +50,14 @@ exports.processDocuments = async (req, res) => {
       safePath = path.join(path.dirname(file.path), safeFileName);
 
       const engine = req.body.engine || 'gemini'; // Default to gemini if not provided
-      const fnInfo = parseFilenameInfo(file.originalname);
+      const cleanOriginalName = (() => {
+        try {
+          return decodeURIComponent(file.originalname || '');
+        } catch (e) {
+          return file.originalname || '';
+        }
+      })();
+      const fnInfo = parseFilenameInfo(cleanOriginalName);
 
       // ดึงวันที่สร้าง/แก้ไขไฟล์ หรือวันที่สแกนเพื่อใช้เป็นวันที่รับ (receive_date)
       let computedReceiveDate = new Date().toISOString().split('T')[0];
@@ -62,18 +69,23 @@ exports.processDocuments = async (req, res) => {
       } catch (e) {}
 
       const targetDate = fnInfo.date || computedReceiveDate;
-      const { round, fiscalYear } = calculateFiscalRoundAndYear(targetDate);
+      const { round, fiscalYear, fiscalYearBE } = calculateFiscalRoundAndYear(targetDate);
 
       let existingTask = null;
       if (fnInfo.receive_no) {
-        const receiveNoNum = parseInt(fnInfo.receive_no, 10);
+        const receiveNoClean = String(fnInfo.receive_no).replace(/[๐-๙]/g, d => '0123456789'['๐๑๒๓๔๕๖๗๘๙'.indexOf(d)]);
+        const receiveNoNum = parseInt(receiveNoClean, 10);
         if (!isNaN(receiveNoNum)) {
           const taskRes = await pool.query(
-            `SELECT id, receive_no, receive_year, round, memo_no, memo_date, sender, recipient_to, title, notes, created_at
+            `SELECT id, receive_no, receive_year, round, memo_no, memo_date, sender, recipient_to, title, notes, created_at, sign_date
              FROM tasks 
-             WHERE receive_no = $1 AND receive_year = $2 AND COALESCE(round, 1) = $3
+             WHERE receive_no = $1 
+               AND (receive_year = $2 OR receive_year = $3 OR receive_year = $2 - 543 OR receive_year = $2 + 543)
+             ORDER BY 
+               CASE WHEN COALESCE(round, 1) = $4 THEN 0 ELSE 1 END,
+               created_at DESC
              LIMIT 1`,
-            [receiveNoNum, fiscalYear, round]
+            [receiveNoNum, fiscalYear, fiscalYearBE, round]
           );
           if (taskRes.rows.length > 0) {
             existingTask = taskRes.rows[0];
@@ -81,14 +93,7 @@ exports.processDocuments = async (req, res) => {
         }
       }
 
-      let geminiResult;
-      let isDuplicate = false;
-
-      if (existingTask) {
-        isDuplicate = true;
-      }
-      geminiResult = await extractDataWithGemini(safePath, file.mimetype, engine);
-
+      const geminiResult = await extractDataWithGemini(safePath, file.mimetype, engine);
       const { text, extractedData } = geminiResult;
 
       let memos = Array.isArray(extractedData) ? extractedData : [];
@@ -96,13 +101,41 @@ exports.processDocuments = async (req, res) => {
         memos = [{}];
       }
 
-      const processedMemos = memos.map(memo => {
-        const receive_no = fnInfo.receive_no || memo.receive_no || (existingTask ? existingTask.receive_no : null);
-        const sender = fnInfo.sender || memo.จาก || memo.sender || (existingTask ? existingTask.sender : null);
-        const recDate = isDuplicate && existingTask.created_at
-          ? new Date(existingTask.created_at).toISOString().split('T')[0]
+      const processedMemos = await Promise.all(memos.map(async (memo) => {
+        let memoExistingTask = existingTask;
+        if (!memoExistingTask) {
+          const rawRecNo = memo.receive_no || memo.เลขรับ || memo.เลขทะเบียน;
+          if (rawRecNo) {
+            const recNoClean = String(rawRecNo).replace(/[๐-๙]/g, d => '0123456789'['๐๑๒๓๔๕๖๗๘๙'.indexOf(d)]);
+            const parsedRecNo = parseInt(recNoClean, 10);
+            if (!isNaN(parsedRecNo)) {
+              const memoDateTarget = memo.วันที่ || memo.memo_date || memo.date || targetDate;
+              const memoCal = calculateFiscalRoundAndYear(memoDateTarget);
+              const taskRes = await pool.query(
+                `SELECT id, receive_no, receive_year, round, memo_no, memo_date, sender, recipient_to, title, notes, created_at, sign_date
+                 FROM tasks 
+                 WHERE receive_no = $1 
+                   AND (receive_year = $2 OR receive_year = $3 OR receive_year = $2 - 543 OR receive_year = $2 + 543)
+                 ORDER BY 
+                   CASE WHEN COALESCE(round, 1) = $4 THEN 0 ELSE 1 END,
+                   created_at DESC
+                 LIMIT 1`,
+                [parsedRecNo, memoCal.fiscalYear, memoCal.fiscalYearBE, memoCal.round]
+              );
+              if (taskRes.rows.length > 0) {
+                memoExistingTask = taskRes.rows[0];
+              }
+            }
+          }
+        }
+
+        const isDup = !!memoExistingTask;
+        const finalReceiveNo = fnInfo.receive_no || memo.receive_no || (memoExistingTask ? memoExistingTask.receive_no : null);
+        const finalSender = fnInfo.sender || memo.จาก || memo.sender || (memoExistingTask ? memoExistingTask.sender : null);
+        const recDate = isDup && memoExistingTask.created_at
+          ? new Date(memoExistingTask.created_at).toISOString().split('T')[0]
           : computedReceiveDate;
-        
+
         let assignments = [];
         if (fnInfo.assignee) {
           assignments = [{ responsible_person: fnInfo.assignee, role_or_name: fnInfo.assignee }];
@@ -110,29 +143,35 @@ exports.processDocuments = async (req, res) => {
           assignments = memo.assignments;
         }
 
-        if (isDuplicate) {
+        if (isDup) {
           return {
             ...memo,
             is_duplicate: true,
-            existing_task_id: existingTask.id,
-            receive_no: receive_no,
+            existing_task_id: memoExistingTask.id,
+            receive_no: finalReceiveNo,
             receive_date: recDate,
-            จาก: sender,
-            sender: sender,
+            จาก: finalSender,
+            sender: finalSender,
+            ที่: memo.ที่ || memoExistingTask.memo_no || null,
+            memo_no: memo.ที่ || memoExistingTask.memo_no || null,
+            เรื่อง: memo.เรื่อง || memoExistingTask.title || null,
+            title: memo.เรื่อง || memoExistingTask.title || null,
+            recipient_to: memo.recipient_to || memo.ถึง || memoExistingTask.recipient_to || null,
+            notes: memo.notes || memo.หมายเหตุ || memoExistingTask.notes || null,
             assignments: assignments
           };
         } else {
           return {
             ...memo,
             is_duplicate: false,
-            receive_no: receive_no,
+            receive_no: finalReceiveNo,
             receive_date: recDate,
-            จาก: sender,
-            sender: sender,
+            จาก: finalSender,
+            sender: finalSender,
             assignments: assignments
           };
         }
-      });
+      }));
 
       results.push({
         filename: file.originalname,
