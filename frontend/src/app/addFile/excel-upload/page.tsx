@@ -34,6 +34,37 @@ const getSecretBadgeStyle = (level?: string) => {
   }
 };
 
+const formatToThaiDate = (dateStr?: string | null) => {
+  if (!dateStr) return null;
+  const s = String(dateStr).trim();
+  if (!s) return null;
+
+  // If already DD/MM/YYYY
+  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) return s;
+
+  // If YYYY-MM-DD or YYYY/MM/DD
+  const ymd = s.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
+  if (ymd) {
+    let year = parseInt(ymd[1], 10);
+    const yearBE = year < 2400 ? year + 543 : year;
+    const m = ymd[2].padStart(2, '0');
+    const d = ymd[3].padStart(2, '0');
+    return `${d}/${m}/${yearBE}`;
+  }
+
+  // If DD-MM-YYYY
+  const dmy = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
+  if (dmy) {
+    const d = dmy[1].padStart(2, '0');
+    const m = dmy[2].padStart(2, '0');
+    let year = parseInt(dmy[3], 10);
+    const yearBE = year < 2400 ? year + 543 : year;
+    return `${d}/${m}/${yearBE}`;
+  }
+
+  return s;
+};
+
 export default function TaskExcelUploadPage() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
@@ -326,7 +357,8 @@ export default function TaskExcelUploadPage() {
                             <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[เลขที่หนังสือ]</span> <span className="font-bold text-[var(--blueText)]">{row.memo_no || renderNull()}</span></div>
                             <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[จาก]</span> <span className="font-semibold">{row.sender || renderNull()}</span></div>
                             <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[ถึง]</span> <span className="font-semibold">{row.recipient_to || renderNull()}</span></div>
-                            <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[ลงวันที่]</span> <span className="font-semibold">{row.memo_date || renderNull()}</span></div>
+                            <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[วันที่รับ]</span> <span className="font-semibold">{formatToThaiDate(row.received_date) || renderNull()}</span></div>
+                            <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[ลงวันที่]</span> <span className="font-semibold">{formatToThaiDate(row.memo_date) || renderNull()}</span></div>
                             <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[เลขรับ]</span> <span className="font-semibold">{row.receive_no ? `${row.receive_no}/${row.receive_year}` : renderNull()}</span></div>
                             
                             {row.parsed_docs && row.parsed_docs.length > 0 && (
@@ -352,8 +384,8 @@ export default function TaskExcelUploadPage() {
                           <div className="space-y-1.5">
                             <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[ชั้นความเร็ว]</span> <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs sm:text-sm font-bold border ${getUrgencyBadgeStyle(row.urgency_level)}`}>{row.urgency_level || 'ปกติ'}</span></div>
                             <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[ชั้นความลับ]</span> <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs sm:text-sm font-bold border ${getSecretBadgeStyle(row.secret_level)}`}>{row.secret_level || 'ปกติ'}</span></div>
-                            <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[วันกำหนดส่ง]</span> <span className="font-bold text-[var(--yellowText)]">{row.due_date_str || renderNull()}</span></div>
-                            <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[วันประชุม]</span> <span className="font-bold text-[var(--blueText)]">{row.meeting_date || renderNull()}</span></div>
+                            <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[วันกำหนดส่ง]</span> <span className="font-bold text-[var(--yellowText)]">{formatToThaiDate(row.due_date_str) || renderNull()}</span></div>
+                            <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[วันประชุม]</span> <span className="font-bold text-[var(--blueText)]">{formatToThaiDate(row.meeting_date) || renderNull()}</span></div>
                           </div>
                         </div>
 

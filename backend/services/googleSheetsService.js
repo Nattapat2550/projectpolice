@@ -1,5 +1,5 @@
 const { google } = require('googleapis');
-const { calculateFiscalRoundAndYear, parseAnyDateToIso } = require('../utils/fiscalYearHelper');
+const { calculateFiscalRoundAndYear, parseAnyDateToIso, formatDateTH } = require('../utils/fiscalYearHelper');
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
@@ -17,23 +17,6 @@ if (GOOGLE_REFRESH_TOKEN) {
     refresh_token: GOOGLE_REFRESH_TOKEN
   });
 }
-
-const formatDateTH = (dateStr) => {
-  if (!dateStr) return '';
-  const iso = parseAnyDateToIso(dateStr);
-  if (!iso) {
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return String(dateStr);
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const yearAD = date.getFullYear();
-    const yearBE = yearAD < 2500 ? yearAD + 543 : yearAD;
-    return `${day}/${month}/${yearBE}`;
-  }
-  const [y, m, d] = iso.split('-');
-  const yearBE = parseInt(y, 10) + 543;
-  return `${d}/${m}/${yearBE}`;
-};
 
 const cleanToOnlyName = (str) => {
   if (!str || typeof str !== 'string') return '';

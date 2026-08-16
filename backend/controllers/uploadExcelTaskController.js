@@ -1,7 +1,7 @@
 const xlsx = require("xlsx");
 const pool = require("../config/db");
 const { appendMultipleTasksToSheet, appendTaskToSheet } = require('../services/googleSheetsService');
-const { calculateFiscalRoundAndYear, parseAnyDateToIso } = require("../utils/fiscalYearHelper");
+const { calculateFiscalRoundAndYear, parseAnyDateToIso, formatDateTH } = require("../utils/fiscalYearHelper");
 const { syncTaskDocumentNotesFromText, parseAdditionalDocsText } = require("../utils/attachmentSync");
 const { cleanToOnlyName } = require("../utils/filenameParser");
 
@@ -193,15 +193,16 @@ exports.uploadExcelTasks = async (req, res) => {
                     if (!key) continue;
                     const cleanKey = key.trim().replace(/\s+/g, '');
                     if (cleanKey === "วันที่รับ" || cleanKey === "วันที่ลงรับ" || cleanKey === "วันรับ" || cleanKey === "ลงรับ" || cleanKey === "created_at" || cleanKey === "วันที่สร้าง") {
-                        receivedDateInput = row[key];
-                        break;
+                        if (row[key] !== null && row[key] !== undefined && String(row[key]).trim() !== '') {
+                            receivedDateInput = row[key];
+                            break;
+                        }
                     }
                 }
                 let receivedDate = parseDateSafe(receivedDateInput);
-                // ถ้าไม่มีวันที่รับ ให้ fallback ไปใช้วันที่เอกสาร หรือวันที่ปัจจุบัน เพื่อป้องกันข้อมูลงานสูญหาย
-                if (!receivedDate) {
-                    receivedDate = parseDateSafe(row["ลงวันที่"]) || parseDateSafe(row["วันที่"]) || new Date().toISOString().split('T')[0];
-                }
+
+                // 🔒 ข้อ 1: ถ้าไม่มีวันที่รับ ให้ข้ามแถวนี้ไปเลย (ไม่นำเข้า)
+                if (!receivedDate) return;
 
                 let dueDate = parseDateSafe(row["วันที่"]) || parseDateSafe(row["วันครบกำหนด"]) || parseDateSafe(row["กำหนดส่ง"]);
                 
@@ -363,12 +364,12 @@ exports.uploadExcelTasks = async (req, res) => {
 
                 allData.push({
                     original_row: index + 1,
-                    received_date: receivedDate,
+                    received_date: formatDateTH(receivedDate),
                     receive_no: receiveNo,
                     receive_year: receiveYear,
                     round: round,
                     memo_no: excelMemoNo || (row["ที่หนังสือ"] ? String(row["ที่หนังสือ"]).trim() : null),
-                    memo_date: parseDateSafe(row["ลงวันที่"]),
+                    memo_date: formatDateTH(row["ลงวันที่"]),
                     sender: excelSender || (row["จาก"] ? String(row["จาก"]).trim() : null),
                     recipient_to: excelRecipientTo || (row["ถึง"] || row["เรียน"] ? String(row["ถึง"] || row["เรียน"]).trim() : null),
                     additional_docs: excelAdditionalDocs || null,
@@ -376,12 +377,12 @@ exports.uploadExcelTasks = async (req, res) => {
                     document_link: excelDocumentLink || null,
                     title: subject || "ไม่มีชื่องาน",
                     assignee_name: row["ผู้ปฏิบัติ"] ? String(row["ผู้ปฏิบัติ"]).trim() : null,
-                    due_date_str: dueDate,
+                    due_date_str: formatDateTH(dueDate),
                     main_text: subject || null,
                     command_text: commandTopics, // Send array of topics
-                    signed_date: parseDateSafe(row["วันที่ลงนาม"]),
-                    meeting_date: parseDateSafe(row["วันประชุม"]),
-                    reply_due_date: parseDateSafe(row["กำหนดส่งตอบรับ"]),
+                    signed_date: formatDateTH(row["วันที่ลงนาม"]),
+                    meeting_date: formatDateTH(row["วันประชุม"]),
+                    reply_due_date: formatDateTH(row["กำหนดส่งตอบรับ"]),
                     urgency_level: computedUrgency,
                     secret_level: computedSecret,
                     notes: row["หมายเหตุ"] ? String(row["หมายเหตุ"]).trim() : null,
@@ -476,9 +477,13 @@ exports.uploadExcelTasks = async (req, res) => {
                     let counter = 1;
 
                     toInsert.forEach(item => {
-                        let parsedDueDate = item.due_date_str;
-                        let parsedMemoDate = item.signed_date || item.memo_date;
-                        let parsedCreatedAt = item.received_date || new Date().toISOString();
+                        let parsedDueDate = parseDateSafe(item.due_date_str);
+                        let parsedMemoDate = parseDateSafe(item.memo_date);
+                        let parsedCreatedAt = parseDateSafe(item.received_date) || new Date().toISOString().split('T')[0];
+                        let parsedSignedDate = parseDateSafe(item.signed_date);
+                        let parsedMeetingDate = parseDateSafe(item.meeting_date);
+                        let parsedReplyDueDate = parseDateSafe(item.reply_due_date);
+
                         let safeTitle = item.title ? String(item.title) : 'ไม่มีชื่อเรื่อง';
                         let safeMemoNo = item.memo_no ? String(item.memo_no) : null;
                         let safeSender = item.sender ? String(item.sender) : null;
@@ -494,8 +499,8 @@ exports.uploadExcelTasks = async (req, res) => {
                         flatValues.push(
                             safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, 
                             safeSender, parsedDueDate, created_by, parsedCreatedAt, safeTaskDetail, item.is_urgent,
-                            item.receive_no, item.receive_year, item.round || 1, item.signed_date, 
-                            item.meeting_date || null, item.reply_due_date || null, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ',
+                            item.receive_no, item.receive_year, item.round || 1, parsedSignedDate, 
+                            parsedMeetingDate, parsedReplyDueDate, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ',
                             safeRecipientTo, safeAdditionalDocs
                         );
                     });
@@ -566,8 +571,12 @@ exports.uploadExcelTasks = async (req, res) => {
                     await Promise.all(toUpdate.map(async (item) => {
                         try {
                             const taskId = item.id;
-                            let parsedDueDate = item.due_date_str;
-                            let parsedMemoDate = item.signed_date || item.memo_date;
+                            let parsedDueDate = parseDateSafe(item.due_date_str);
+                            let parsedMemoDate = parseDateSafe(item.memo_date);
+                            let parsedSignedDate = parseDateSafe(item.signed_date);
+                            let parsedMeetingDate = parseDateSafe(item.meeting_date);
+                            let parsedReplyDueDate = parseDateSafe(item.reply_due_date);
+
                             let safeTitle = item.title ? String(item.title) : 'ไม่มีชื่อเรื่อง';
                             let safeMemoNo = item.memo_no ? String(item.memo_no) : null;
                             let safeSender = item.sender ? String(item.sender) : null;
@@ -578,7 +587,7 @@ exports.uploadExcelTasks = async (req, res) => {
 
                             await pool.query(
                                 `UPDATE tasks SET title = COALESCE(title, $1), memo_no = COALESCE(memo_no, $2), memo_date = COALESCE(memo_date, $3), main_text = COALESCE($4, main_text), notes = COALESCE($5, notes), sender = COALESCE(sender, $6), due_date = COALESCE($7, due_date), task_detail = COALESCE($8, task_detail), is_urgent = COALESCE(is_urgent, $9), sign_date = COALESCE(sign_date, $10), meeting_date = COALESCE($11, meeting_date), reply_due_date = COALESCE($12, reply_due_date), urgency_level = COALESCE(urgency_level, $13), secret_level = COALESCE(secret_level, $14), recipient_to = COALESCE(recipient_to, $15), additional_docs = COALESCE($16, additional_docs), round = COALESCE(round, $17), updated_at = NOW() WHERE id = $18`,
-                                [safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, safeSender, parsedDueDate, safeTaskDetail, item.is_urgent, item.signed_date, item.meeting_date || null, item.reply_due_date || null, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ', safeRecipientTo, safeAdditionalDocs, item.round || 1, taskId]
+                                [safeTitle, safeMemoNo, parsedMemoDate, item.main_text, item.notes, safeSender, parsedDueDate, safeTaskDetail, item.is_urgent, parsedSignedDate, parsedMeetingDate, parsedReplyDueDate, item.urgency_level || 'ปกติ', item.secret_level || 'ปกติ', safeRecipientTo, safeAdditionalDocs, item.round || 1, taskId]
                             );
                             await pool.query(
                                 `INSERT INTO task_logs (task_id, user_id, action, details) VALUES ($1, $2, 'reuploaded_excel_task', $3)`,

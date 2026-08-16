@@ -158,8 +158,23 @@ function getFormattedRoundString(round, fiscalYear) {
     return `รอบ ${round}/${yearBE}`;
 }
 
+/**
+ * Format any date input into Thai format: DD/MM/YYYY (วว/ดด/ปปปป)
+ * Example: 2026-03-23 -> "23/03/2569"
+ */
+function formatDateTH(dateInput) {
+    if (!dateInput) return '';
+    const iso = parseAnyDateToIso(dateInput);
+    if (!iso) return '';
+    const [y, m, d] = iso.split('-');
+    let yearNum = parseInt(y, 10);
+    const yearBE = yearNum < 2400 ? yearNum + 543 : yearNum;
+    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${yearBE}`;
+}
+
 module.exports = {
     parseAnyDateToIso,
+    formatDateTH,
     calculateFiscalRoundAndYear,
     getFormattedRoundString
 };
