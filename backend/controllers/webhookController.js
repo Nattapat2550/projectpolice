@@ -24,6 +24,8 @@ exports.handleSheetUpdate = async (req, res) => {
   const due_date = data.due_date !== undefined ? data.due_date : (data['วันที่'] || null);
   const task_detail = data.task_detail !== undefined ? data.task_detail : (data['ข้อสั่งการ'] || null);
   const sign_date = data.sign_date !== undefined ? data.sign_date : (data['วันที่ลงนาม'] || null);
+  const meeting_date = data.meeting_date !== undefined ? data.meeting_date : (data['วันประชุม'] || data['วันที่ประชุม'] || null);
+  const reply_due_date = data.reply_due_date !== undefined ? data.reply_due_date : (data['กำหนดส่งตอบรับ'] || data['กำหนดตอบกลับ'] || null);
   const notes = data.notes !== undefined ? data.notes : (data['หมายเหตุ'] || null);
   const urgency_level = data.urgency_level || data.urgencyLevel || data['ชั้นความเร็ว'] || data['ความเร่งด่วน'] || null;
   const secret_level = data.secret_level || data.secretLevel || data['ชั้นความลับ'] || data['ความลับ'] || null;
@@ -98,13 +100,15 @@ exports.handleSheetUpdate = async (req, res) => {
           due_date = COALESCE($8, due_date),
           task_detail = COALESCE($9, task_detail),
           sign_date = COALESCE($10, sign_date),
-          notes = COALESCE($11, notes),
-          additional_docs = COALESCE($12, additional_docs),
-          urgency_level = COALESCE($13, urgency_level),
-          secret_level = COALESCE($14, secret_level),
-          created_at = COALESCE(CAST($15 AS timestamp), created_at),
+          meeting_date = COALESCE($11, meeting_date),
+          reply_due_date = COALESCE($12, reply_due_date),
+          notes = COALESCE($13, notes),
+          additional_docs = COALESCE($14, additional_docs),
+          urgency_level = COALESCE($15, urgency_level),
+          secret_level = COALESCE($16, secret_level),
+          created_at = COALESCE(CAST($17 AS timestamp), created_at),
           updated_at = NOW()
-        WHERE id = $16
+        WHERE id = $18
       `;
 
       await client.query(updateQuery, [
@@ -118,6 +122,8 @@ exports.handleSheetUpdate = async (req, res) => {
         parseDate(due_date),
         parseStr(task_detail),
         parseDate(sign_date),
+        parseDate(meeting_date),
+        parseDate(reply_due_date),
         parseStr(notes),
         parseStr(additional_docs),
         parseStr(urgency_level),

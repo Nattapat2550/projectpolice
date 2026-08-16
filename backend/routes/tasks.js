@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { uploadExcelTasks, getUploadProgress } = require('../controllers/uploadExcelTaskController');
+const { uploadExcelTasks, getUploadProgress, downloadExcelTemplate } = require('../controllers/uploadExcelTaskController');
 const { protect, authorize } = require('../middleware/auth');
 const multer = require('multer');
 const uploadExcel = multer({ storage: multer.memoryStorage() });
@@ -39,6 +39,9 @@ router.post('/', createTask);
 router.get('/next-reserve-no', getNextReserveNo);
 router.post('/reserve', reserveTask);
 router.post('/confirm', confirmTasks); 
+
+// 📥 ดาวน์โหลดไฟล์ตัวอย่าง Excel Template
+router.get('/template-excel', downloadExcelTemplate);
 
 // 🚀 เพิ่มเส้นทางสำหรับเช็คหลอด Progress (ต้องอยู่ก่อน /:id)
 router.get('/upload-progress/:jobId', getUploadProgress);

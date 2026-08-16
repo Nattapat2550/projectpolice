@@ -746,3 +746,192 @@ exports.uploadExcelTasks = async (req, res) => {
         res.status(500).json({ success: false, message: "เกิดข้อผิดพลาด: " + error.message });
     }
 };
+
+/**
+ * 📥 สร้างและดาวน์โหลดไฟล์ตัวอย่าง Excel Template (.xlsx)
+ */
+exports.downloadExcelTemplate = async (req, res) => {
+    try {
+        const ExcelJS = require('exceljs');
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'Police Task Management System';
+        workbook.created = new Date();
+
+        const worksheet = workbook.addWorksheet('บันทึกงาน (Tasks)', {
+            views: [{ showGridLines: true }]
+        });
+
+        // กำหนดโครงสร้างคอลัมน์ทั้งหมดที่ระบบรองรับ
+        worksheet.columns = [
+            { header: 'เลขทะเบียน', key: 'receive_no', width: 14 },
+            { header: 'ปีทะเบียน', key: 'receive_year', width: 12 },
+            { header: 'วันที่รับ', key: 'received_date', width: 15 },
+            { header: 'ที่หนังสือ', key: 'memo_no', width: 22 },
+            { header: 'ลงวันที่', key: 'memo_date', width: 15 },
+            { header: 'จาก', key: 'sender', width: 25 },
+            { header: 'ถึง', key: 'recipient_to', width: 25 },
+            { header: 'เรื่อง', key: 'title', width: 40 },
+            { header: 'ผู้ปฏิบัติ', key: 'assignee_name', width: 25 },
+            { header: 'วันที่', key: 'due_date', width: 16 },
+            { header: 'ข้อสั่งการ', key: 'command_text', width: 35 },
+            { header: 'วันที่ลงนาม', key: 'signed_date', width: 15 },
+            { header: 'วันประชุม', key: 'meeting_date', width: 16 },
+            { header: 'กำหนดส่งตอบรับ', key: 'reply_due_date', width: 18 },
+            { header: 'ชั้นความเร็ว', key: 'urgency_level', width: 14 },
+            { header: 'ชั้นความลับ', key: 'secret_level', width: 14 },
+            { header: 'หมายเหตุ', key: 'notes', width: 30 },
+            { header: 'เอกสารข้อมูลเพิ่มเติม', key: 'additional_docs', width: 35 },
+            { header: 'ลิงก์ไฟล์ต้นฉบับ', key: 'document_link', width: 35 }
+        ];
+
+        // ตกแต่ง Header (แถวที่ 1)
+        const headerRow = worksheet.getRow(1);
+        headerRow.height = 28;
+        headerRow.eachCell((cell) => {
+            cell.fill = {
+                type: 'pattern',
+                pattern: 'solid',
+                fgColor: { argb: 'FF1E3A8A' } // สีน้ำเงินเข้ม
+            };
+            cell.font = {
+                name: 'Sarabun',
+                size: 11,
+                bold: true,
+                color: { argb: 'FFFFFFFF' }
+            };
+            cell.alignment = {
+                vertical: 'middle',
+                horizontal: 'center',
+                wrapText: true
+            };
+            cell.border = {
+                top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+                left: { style: 'thin', color: { argb: 'FF94A3B8' } },
+                bottom: { style: 'medium', color: { argb: 'FF0F172A' } },
+                right: { style: 'thin', color: { argb: 'FF94A3B8' } }
+            };
+        });
+
+        // แถวตัวอย่างข้อมูลที่ 1 (ตัวอย่างหนังสือนัดประชุม/สัมมนา)
+        const sampleRow1 = worksheet.addRow({
+            receive_no: 101,
+            receive_year: 2567,
+            received_date: '15/08/2567',
+            memo_no: 'ตช 0015.12/1234',
+            memo_date: '10/08/2567',
+            sender: 'ตร.',
+            recipient_to: 'ผบช.ก.',
+            title: 'โครงการฝึกอบรมพัฒนาประสิทธิภาพการปฏิบัติงาน ประจำปี 2567',
+            assignee_name: 'พ.ต.อ.สมชาย ใจดี',
+            due_date: '29/08/2567',
+            command_text: '1. มอบหมาย พ.ต.อ.สมชาย เข้าร่วมอบรม\n2. สรุปผลการอบรมให้ทราบ',
+            signed_date: '16/08/2567',
+            meeting_date: '25/08/2567',
+            reply_due_date: '20/08/2567',
+            urgency_level: 'ด่วนที่สุด',
+            secret_level: 'ปกติ',
+            notes: 'มีเอกสารแนบ 3 แผ่น',
+            additional_docs: 'เอกสารแนบ 1.pdf [1-3]',
+            document_link: 'https://drive.google.com/...'
+        });
+
+        // แถวตัวอย่างข้อมูลที่ 2 (ตัวอย่างหนังสือแจ้งเพื่อทราบทั่วไป)
+        const sampleRow2 = worksheet.addRow({
+            receive_no: 102,
+            receive_year: 2567,
+            received_date: '16/08/2567',
+            memo_no: 'กพ 0201/567',
+            memo_date: '12/08/2567',
+            sender: 'สำนักงาน ก.พ.',
+            recipient_to: 'ทุกส่วนราชการ',
+            title: 'แนวทางปฏิบัติตามระเบียบว่าด้วยการลาของข้าราชการ',
+            assignee_name: 'ฝอ.1',
+            due_date: '',
+            command_text: 'แจ้งเวียนทุกหน่วยงานเพื่อทราบและถือปฏิบัติ',
+            signed_date: '17/08/2567',
+            meeting_date: '',
+            reply_due_date: '',
+            urgency_level: 'ปกติ',
+            secret_level: 'ปกติ',
+            notes: '',
+            additional_docs: '',
+            document_link: ''
+        });
+
+        [sampleRow1, sampleRow2].forEach((row) => {
+            row.height = 24;
+            row.eachCell((cell) => {
+                cell.font = { name: 'Sarabun', size: 10 };
+                cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+                };
+            });
+        });
+
+        // เพิ่ม Sheet คำอธิบายฟิลด์ข้อมูล
+        const guideSheet = workbook.addWorksheet('คำอธิบายฟิลด์ข้อมูล');
+        guideSheet.columns = [
+            { header: 'ชื่อคอลัมน์', key: 'col', width: 22 },
+            { header: 'ความจำเป็น', key: 'req', width: 18 },
+            { header: 'คำอธิบายและรูปแบบที่รองรับ', key: 'desc', width: 65 }
+        ];
+
+        const guideHeader = guideSheet.getRow(1);
+        guideHeader.height = 28;
+        guideHeader.eachCell((cell) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E3A8A' } };
+            cell.font = { name: 'Sarabun', size: 11, bold: true, color: { argb: 'FFFFFFFF' } };
+            cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        });
+
+        const guideData = [
+            { col: 'เลขทะเบียน', req: 'จำเป็น (Required)', desc: 'เลขทะเบียนรับ เช่น 101, 102 (หากไม่มีแถวนี้จะถูกข้าม)' },
+            { col: 'ปีทะเบียน', req: 'ทางเลือก (Optional)', desc: 'ปี พ.ศ. เช่น 2567 (หากเว้นว่าง ระบบจะคำนวณตามปีงบประมาณอัตโนมัติ)' },
+            { col: 'วันที่รับ', req: 'จำเป็น (Required)', desc: 'วันที่หน่วยงานลงรับเอกสาร เช่น 15/08/2567 หรือ 2024-08-15' },
+            { col: 'ที่หนังสือ', req: 'ทางเลือก (Optional)', desc: 'เลขที่หนังสือต้นเรื่อง เช่น ตช 0015.12/1234' },
+            { col: 'ลงวันที่', req: 'ทางเลือก (Optional)', desc: 'วันที่ที่ระบุบนหัวหนังสือราชการ เช่น 10/08/2567' },
+            { col: 'จาก', req: 'ทางเลือก (Optional)', desc: 'หน่วยงานผู้ส่งหนังสือ เช่น ตร., บช.ก.' },
+            { col: 'ถึง', req: 'ทางเลือก (Optional)', desc: 'หน่วยงานผู้รับหนังสือ เช่น ผบช.ก., ผบก.ป.' },
+            { col: 'เรื่อง', req: 'จำเป็น (Required)', desc: 'ชื่อเรื่องหรือหัวข้อเอกสาร (หากไม่มีจะถูกข้าม)' },
+            { col: 'ผู้ปฏิบัติ', req: 'ทางเลือก (Optional)', desc: 'ชื่อผู้รับผิดชอบหรือหน่วยงาน เช่น พ.ต.อ.สมชาย หรือ ฝอ.1' },
+            { col: 'วันที่', req: 'ทางเลือก (Optional)', desc: 'วันครบกำหนดส่งงาน (หากเว้นว่าง ระบบจะคำนวณ +14 วันจากวันที่รับให้อัตโนมัติ)' },
+            { col: 'ข้อสั่งการ', req: 'ทางเลือก (Optional)', desc: 'รายละเอียดคำสั่งการ สามารถขึ้นบรรทัดใหม่เพื่อแยกข้อได้' },
+            { col: 'วันที่ลงนาม', req: 'ทางเลือก (Optional)', desc: 'วันที่ผู้บังคับบัญชาลงนามสั่งการ เช่น 16/08/2567' },
+            { col: 'วันประชุม', req: 'ทางเลือก (Optional)', desc: 'วันที่มีนัดหมายประชุม (ระบบจะแสดงแถบเตือนสีฟ้าบนการ์ดงาน)' },
+            { col: 'กำหนดส่งตอบรับ', req: 'ทางเลือก (Optional)', desc: 'วันครบกำหนดส่งแบบตอบรับ (ระบบจะแสดงแถบเตือนสีแดงบนการ์ดงาน)' },
+            { col: 'ชั้นความเร็ว', req: 'ทางเลือก (Optional)', desc: 'ปกติ, ด่วน, ด่วนมาก, ด่วนที่สุด' },
+            { col: 'ชั้นความลับ', req: 'ทางเลือก (Optional)', desc: 'ปกติ, ลับ, ลับมาก, ลับที่สุด' },
+            { col: 'หมายเหตุ', req: 'ทางเลือก (Optional)', desc: 'ข้อความหมายเหตุเพิ่มเติม' },
+            { col: 'เอกสารข้อมูลเพิ่มเติม', req: 'ทางเลือก (Optional)', desc: 'ชื่อไฟล์แนบหรือรายละเอียด เช่น เอกสารแนบ 1.pdf [1-3]' },
+            { col: 'ลิงก์ไฟล์ต้นฉบับ', req: 'ทางเลือก (Optional)', desc: 'URL หรือ ลิงก์ Google Drive ไปยังไฟล์ต้นฉบับ' }
+        ];
+
+        guideData.forEach(item => {
+            const row = guideSheet.addRow(item);
+            row.height = 22;
+            row.eachCell((cell, colNum) => {
+                cell.font = { name: 'Sarabun', size: 10 };
+                cell.alignment = { vertical: 'middle', horizontal: colNum === 2 ? 'center' : 'left' };
+                cell.border = {
+                    top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+                    right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+                };
+            });
+        });
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename="police_task_template.xlsx"');
+
+        await workbook.xlsx.write(res);
+        res.end();
+    } catch (error) {
+        console.error("Error generating Excel template:", error);
+        res.status(500).json({ success: false, message: "ไม่สามารถสร้างไฟล์แม่แบบได้: " + error.message });
+    }
+};

@@ -51,10 +51,10 @@ async function ensureSheetExists(sheets, spreadsheetId, sheetName) {
           console.log(`[Google Sheets] Created new sheet: ${sheetName}`);
           
           // 2. Add headers to the newly created sheet
-          const headers = ['ID', 'เลขทะเบียน', 'ปีทะเบียน', 'วันที่รับ', 'ที่หนังสือ', 'ลงวันที่', 'จาก', 'ถึง', 'เรื่อง', 'ผู้ปฏิบัติ', 'วันที่', 'ข้อสั่งการ', 'วันที่ลงนาม', 'หมายเหตุ', 'เอกสารข้อมูลเพิ่มเติม', 'ชั้นความเร็ว', 'ชั้นความลับ', 'ลิงก์ไฟล์ต้นฉบับ'];
+          const headers = ['ID', 'เลขทะเบียน', 'ปีทะเบียน', 'วันที่รับ', 'ที่หนังสือ', 'ลงวันที่', 'จาก', 'ถึง', 'เรื่อง', 'ผู้ปฏิบัติ', 'วันที่', 'ข้อสั่งการ', 'วันที่ลงนาม', 'วันประชุม', 'กำหนดส่งตอบรับ', 'หมายเหตุ', 'เอกสารข้อมูลเพิ่มเติม', 'ชั้นความเร็ว', 'ชั้นความลับ', 'ลิงก์ไฟล์ต้นฉบับ'];
           await sheets.spreadsheets.values.append({
               spreadsheetId,
-              range: `${sheetName}!A1:R1`,
+              range: `${sheetName}!A1:T1`,
               valueInputOption: 'RAW',
               resource: { values: [headers] }
           });
@@ -199,6 +199,8 @@ const buildRowData = (taskData) => [
   formatDateTH(taskData.due_date) || '',
   taskData.task_detail || '',
   formatDateTH(taskData.sign_date) || '',
+  formatDateTH(taskData.meeting_date) || '',
+  formatDateTH(taskData.reply_due_date) || '',
   taskData.notes || '',
   taskData.additional_docs || '',
   taskData.urgency_level || 'ปกติ',
