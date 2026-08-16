@@ -55,7 +55,7 @@ async function ensureSheetExists(sheets, spreadsheetId, sheetName) {
           await sheets.spreadsheets.values.append({
               spreadsheetId,
               range: `${sheetName}!A1:R1`,
-              valueInputOption: 'USER_ENTERED',
+              valueInputOption: 'RAW',
               resource: { values: [headers] }
           });
           console.log(`[Google Sheets] Added headers to new sheet: ${sheetName}`);
@@ -233,7 +233,7 @@ exports.appendTaskToSheet = async (taskData) => {
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
         range: `${sheetName}!A${sheetRowNumber}:R${sheetRowNumber}`,
-        valueInputOption: 'USER_ENTERED',
+        valueInputOption: 'RAW',
         resource: {
           values: [rowData],
         },
@@ -244,7 +244,7 @@ exports.appendTaskToSheet = async (taskData) => {
       await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
         range: `${sheetName}!A:R`,
-        valueInputOption: 'USER_ENTERED',
+        valueInputOption: 'RAW',
         resource: {
           values: [rowData],
         },
@@ -293,7 +293,7 @@ exports.appendMultipleTasksToSheet = async (tasksArray) => {
             await sheets.spreadsheets.values.update({
               spreadsheetId: SPREADSHEET_ID,
               range: `${sheetName}!A${sheetRowNumber}:R${sheetRowNumber}`,
-              valueInputOption: 'USER_ENTERED',
+              valueInputOption: 'RAW',
               resource: { values: [rowData] },
             });
             existingRows[rowIndex] = rowData;
@@ -306,7 +306,7 @@ exports.appendMultipleTasksToSheet = async (tasksArray) => {
           await sheets.spreadsheets.values.append({
             spreadsheetId: SPREADSHEET_ID,
             range: `${sheetName}!A:R`,
-            valueInputOption: 'USER_ENTERED',
+            valueInputOption: 'RAW',
             resource: { values: rowsToAppend },
           });
         }
@@ -354,7 +354,7 @@ exports.updateTaskInSheet = async (taskData) => {
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
       range: `${sheetName}!A${sheetRowNumber}:R${sheetRowNumber}`,
-      valueInputOption: 'USER_ENTERED',
+      valueInputOption: 'RAW',
       resource: {
         values: [rowData],
       },
@@ -453,7 +453,7 @@ exports.clearTaskLinksInSheet = async (taskId, receiveYear, receiveNo = '') => {
     await sheets.spreadsheets.values.batchUpdate({
       spreadsheetId: SPREADSHEET_ID,
       resource: {
-        valueInputOption: 'USER_ENTERED',
+        valueInputOption: 'RAW',
         data: [
           { range: `${sheetName}!O${sheetRowNumber}`, values: [['']] },
           { range: `${sheetName}!R${sheetRowNumber}`, values: [['']] }
