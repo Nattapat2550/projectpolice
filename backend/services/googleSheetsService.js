@@ -106,11 +106,17 @@ const normalizeDateString = (str) => {
   return s;
 };
 
+const normalizeReceiveNo = (noInput) => {
+  if (noInput === null || noInput === undefined || noInput === '') return '';
+  const num = parseInt(String(noInput).replace(/[๐-๙]/g, d => '0123456789'['๐๑๒๓๔๕๖๗๘๙'.indexOf(d)]), 10);
+  return isNaN(num) ? String(noInput).trim() : num;
+};
+
 const normalizeYear = (yearInput) => {
   if (!yearInput) return '';
-  const num = parseInt(yearInput, 10);
+  const num = parseInt(String(yearInput).replace(/[๐-๙]/g, d => '0123456789'['๐๑๒๓๔๕๖๗๘๙'.indexOf(d)]), 10);
   if (isNaN(num)) return String(yearInput).trim();
-  return num < 2500 ? String(num + 543) : String(num);
+  return num < 2500 ? (num + 543) : num;
 };
 
 const isMatchingRow = (row, taskData) => {
@@ -181,7 +187,7 @@ const isMatchingRow = (row, taskData) => {
 
 const buildRowData = (taskData) => [
   taskData.id || '',
-  taskData.receive_no || '',
+  normalizeReceiveNo(taskData.receive_no),
   normalizeYear(taskData.receive_year),
   formatDateTH(taskData.created_at || taskData.received_date) || '',
   taskData.memo_no || '',
