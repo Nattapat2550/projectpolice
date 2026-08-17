@@ -69,7 +69,6 @@ const corsOptions = {
   optionsSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
 
 if (process.env.NODE_ENV !== "test") app.use(morgan("dev"));
 app.use(express.json({ limit: "50mb" }));
