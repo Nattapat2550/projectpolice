@@ -124,7 +124,7 @@ export const getValidExternalUrl = (url?: string | null): string | null => {
 };
 
 const COLUMNS: { key: SortKey; label: string; className?: string }[] = [
-  { key: 'receive_no', label: 'เลขรับ / ปี', className: 'w-[80px]' },
+  { key: 'receive_no', label: 'เลขรับ / ปี', className: 'w-[110px]' },
   { key: 'memo_no', label: 'เลขที่หนังสือ', className: 'w-[95px]' },
   { key: 'title', label: 'ชื่อเรื่อง / รายละเอียด', className: 'w-auto min-w-[150px]' },
 ];
@@ -308,12 +308,12 @@ export const TaskTable: React.FC<TaskTableProps> = ({
                         : 'hover:bg-[var(--wrapper)]/20'
                     }`}
                   >
-                    <td className={`px-2 py-3 font-medium whitespace-nowrap overflow-hidden ${flagged ? 'text-[var(--redText)]' : ''}`}>
-                      <div className="truncate">
-                        {task.receive_no ?? '-'}
+                    <td className={`px-2 py-3 font-medium whitespace-nowrap ${flagged ? 'text-[var(--redText)]' : ''}`}>
+                      <div className="whitespace-nowrap flex items-center">
+                        <span>{task.receive_no ?? '-'}</span>
                         <span className={flagged ? 'font-normal opacity-70' : 'text-[var(--foreground)]/40 font-normal'}>/{formatReceiveYear(task.receive_year)}</span>
                         {task.round && (
-                          <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-[var(--blueText)]/10 text-[var(--blueText)] font-medium border border-[var(--blueText)]/20">
+                          <span className="ml-1 text-[10px] px-1 py-0.5 rounded bg-[var(--blueText)]/10 text-[var(--blueText)] font-medium border border-[var(--blueText)]/20 shrink-0">
                             ร.{task.round}
                           </span>
                         )}

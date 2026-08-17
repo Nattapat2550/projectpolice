@@ -23,7 +23,7 @@ export default function FileUploader({ setExtractedData, progress, setProgress }
     // Timer effect
     useEffect(() => {
         let timer: NodeJS.Timeout;
-        if (isUploading && progress === 100) {
+        if (isUploading) {
             timer = setInterval(() => {
                 setElapsedTime((prev) => prev + 1);
             }, 1000);
@@ -31,7 +31,7 @@ export default function FileUploader({ setExtractedData, progress, setProgress }
             setElapsedTime(0);
         }
         return () => clearInterval(timer);
-    }, [isUploading, progress]);
+    }, [isUploading]);
 
     const handleDragOver = (e: DragEvent<HTMLDivElement>) => { e.preventDefault(); };
 
@@ -67,55 +67,75 @@ export default function FileUploader({ setExtractedData, progress, setProgress }
 
         setIsUploading(true);
         setMessage(null);
-        setProgress(0); 
+        setProgress(1); 
         setExtractedData(null); 
 
-        const formData = new FormData();
-        files.forEach((file) => {
-            formData.append("files", file); 
-        });
-        formData.append("engine", ocrEngine);
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
+        const token = localStorage.getItem("token"); 
+        const allResults: any[] = [];
+        const totalFiles = files.length;
 
         try {
-            const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5003";
-            const token = localStorage.getItem("token"); 
+            for (let i = 0; i < totalFiles; i++) {
+                const currentFile = files[i];
+                setMessage({ 
+                    text: `กำลังให้ AI ประมวลผลไฟล์ที่ ${i + 1}/${totalFiles} (${currentFile.name})...`, 
+                    type: "success" 
+                });
 
-            const response = await axios.post(`${backendUrl}/api/v1/documents/process`, formData, {
-                headers: { 
-                    "Content-Type": "multipart/form-data",
-                    "Authorization": `Bearer ${token}` 
-                },
-                onUploadProgress: (progressEvent) => {
-                    if (progressEvent.total) {
-                        const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                        setProgress(percentCompleted);
-                        
-                        if (percentCompleted === 100) {
-                            setMessage({ text: "กำลังให้ AI ประมวลผลและสกัดข้อมูล...", type: "success" });
+                const formData = new FormData();
+                formData.append("files", currentFile); 
+                formData.append("engine", ocrEngine);
+
+                try {
+                    const response = await axios.post(`${backendUrl}/api/v1/documents/process`, formData, {
+                        headers: { 
+                            "Content-Type": "multipart/form-data",
+                            "Authorization": `Bearer ${token}` 
                         }
-                    }
-                }
-            });
+                    });
 
-            if (response.status === 200) {
-                const results = response.data.results;
-                const hasError = results && results.some((r: any) => r.status === "error");
-                
-                if (hasError) {
-                    const errorMsg = results.find((r: any) => r.status === "error")?.error;
-                    setMessage({ text: `พบข้อผิดพลาด: ${errorMsg}`, type: "error" });
+                    if (response.status === 200 && response.data?.results) {
+                        allResults.push(...response.data.results);
+                    }
+                } catch (fileError: any) {
+                    console.error(`Error processing file ${currentFile.name}:`, fileError);
+                    allResults.push({
+                        filename: currentFile.name,
+                        status: "error",
+                        error: fileError.response?.data?.message || fileError.message || "เกิดข้อผิดพลาดในการประมวลผล"
+                    });
+                }
+
+                // คำนวณความคืบหน้ารวมตามจำนวนไฟล์
+                const currentPercent = Math.round(((i + 1) / totalFiles) * 100);
+                setProgress(currentPercent);
+            }
+
+            const successResults = allResults.filter((r: any) => r.status === "success");
+            const errorResults = allResults.filter((r: any) => r.status === "error");
+
+            if (successResults.length > 0) {
+                if (errorResults.length > 0) {
+                    setMessage({ 
+                        text: `สแกนสำเร็จ ${successResults.length}/${totalFiles} ไฟล์ (มี ${errorResults.length} ไฟล์ล้มเหลว)`, 
+                        type: "success" 
+                    });
                 } else {
-                    setMessage({ text: "แสกนข้อมูลสำเร็จ! กรุณาตรวจสอบและมอบหมายงานทางขวามือ", type: "success" });
+                    setMessage({ 
+                        text: `แสกนข้อมูลสำเร็จครบทั้ง ${totalFiles} ไฟล์! กรุณาตรวจสอบและมอบหมายงานทางขวามือ`, 
+                        type: "success" 
+                    });
                 }
-                
                 setFiles([]); 
-                if (results) {
-                    setExtractedData(results);
-                }
+                setExtractedData(allResults);
+            } else {
+                const firstErrMsg = errorResults[0]?.error || "ไม่สามารถเชื่อมต่อได้";
+                setMessage({ text: `เกิดข้อผิดพลาด: ${firstErrMsg}`, type: "error" });
             }
         } catch (error: any) {
             console.error("Upload error:", error);
-            setMessage({ text: `เกิดข้อผิดพลาด: ${error.response?.data?.message || "ไม่สามารถเชื่อมต่อได้"}`, type: "error" });
+            setMessage({ text: `เกิดข้อผิดพลาด: ${error.response?.data?.message || error.message || "ไม่สามารถเชื่อมต่อได้"}`, type: "error" });
         } finally {
             setIsUploading(false);
             setProgress(0); 
@@ -182,9 +202,9 @@ export default function FileUploader({ setExtractedData, progress, setProgress }
                             <div className="bg-green-600 h-2.5 rounded-full" style={{ width: `100%` }}></div>
                         )}
                     </div>
-                    {isUploading && progress === 100 && (
+                    {isUploading && (
                         <div className="text-xs text-center text-gray-500 mt-1">
-                            ผ่านไปแล้ว {elapsedTime} วินาที (การใช้ AI บนเครื่องของคุณอาจใช้เวลา 1-3 นาที)
+                            กำลังประมวลผล... ผ่านไปแล้ว {elapsedTime} วินาที
                         </div>
                     )}
                 </div>
