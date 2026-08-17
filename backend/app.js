@@ -45,8 +45,8 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    // Allow all Vercel domains (e.g. projectpolice-iota.vercel.app, projectpolice-um54.vercel.app)
-    if (origin.endsWith('.vercel.app')) {
+    // Allow all Vercel and Render domains (e.g. projectpolice-iota.vercel.app, projectpolice-um54.vercel.app)
+    if (origin.endsWith('.vercel.app') || origin.includes('.vercel.app') || origin.includes('.onrender.com')) {
       return callback(null, true);
     }
 
@@ -62,13 +62,18 @@ const corsOptions = {
     // Default fallback to allow origin
     return callback(null, true);
   },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+  exposedHeaders: ["Content-Range", "X-Content-Range"],
   credentials: true,
+  optionsSuccessStatus: 200,
 };
 app.use(cors(corsOptions));
+app.options("*", cors(corsOptions));
 
 if (process.env.NODE_ENV !== "test") app.use(morgan("dev"));
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(cookieParser());
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 app.use(xss());
@@ -77,7 +82,8 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 200,
+  skip: (req) => req.method === "OPTIONS",
   handler: (req, res) => {
     res.status(429).json({ success: false, message: "Too Many Requests" });
   },
@@ -86,6 +92,7 @@ const generalLimiter = rateLimit({
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
+  skip: (req) => req.method === "OPTIONS",
   handler: (req, res) => {
     res.status(429).json({ success: false, message: "Too Many Requests" });
   },
@@ -94,7 +101,8 @@ const authLimiter = rateLimit({
 // 🔒 เพิ่ม Limiter สำหรับการใช้งานไฟล์หนักๆ (ป้องกัน Resource Exhaustion/DoS)
 const documentLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 30, // จำกัดการอัปโหลดไฟล์/ดึงไฟล์ ต่อ IP
+  max: 200, // จำกัดการอัปโหลดไฟล์/ดึงไฟล์ ต่อ IP
+  skip: (req) => req.method === "OPTIONS",
   handler: (req, res) => {
     res.status(429).json({ success: false, message: "Too many document requests. Please try again later." });
   },

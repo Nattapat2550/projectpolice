@@ -3,16 +3,32 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
-// ฟังก์ชันสำหรับเลือกโฟลเดอร์อัปโหลดที่เขียนไฟล์ได้จริง (รองรับ Read-only filesystem / Serverless)
+// ฟังก์ชันสำหรับเลือกโฟลเดอร์อัปโหลดที่เขียนไฟล์ได้จริง (รองรับ Read-only filesystem / Serverless / Vercel)
 const getUploadDir = () => {
+  // หากรันอยู่บน Vercel หรือ AWS Lambda / Serverless ให้ใช้ OS Temp Directory (/tmp) เสมอ
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NOW_REGION) {
+    const tmpDir = path.join(os.tmpdir(), 'uploads');
+    try {
+      if (!fs.existsSync(tmpDir)) {
+        fs.mkdirSync(tmpDir, { recursive: true });
+      }
+      return tmpDir;
+    } catch (e) {
+      console.error('Failed to create tmp upload directory:', e);
+      return os.tmpdir();
+    }
+  }
+
   const primaryDir = path.join(process.cwd(), 'uploads');
   try {
     if (!fs.existsSync(primaryDir)) {
       fs.mkdirSync(primaryDir, { recursive: true });
     }
+    // ทดสอบสิทธิ์การเขียนไฟล์ลงโฟลเดอร์
+    fs.accessSync(primaryDir, fs.constants.W_OK);
     return primaryDir;
   } catch (err) {
-    // หากเป็น read-only filesystem (เช่น AWS Lambda, Vercel) ให้ fallback ไปใช้ OS temp directory (/tmp)
+    // หากเป็น read-only filesystem ให้ fallback ไปใช้ OS temp directory (/tmp)
     const fallbackDir = path.join(os.tmpdir(), 'uploads');
     try {
       if (!fs.existsSync(fallbackDir)) {

@@ -5,10 +5,12 @@ const { extractDataWithGemini } = require('../services/ocrService');
 const { parseFilenameInfo } = require('../utils/filenameParser');
 const { calculateFiscalRoundAndYear } = require('../utils/fiscalYearHelper');
 
+const { getUploadDir } = require('../middleware/upload');
+
 // 🧹 ฟังก์ชันอัตโนมัติสำหรับลบไฟล์สแกนชั่วคราวที่ตกค้างในโฟลเดอร์ uploads เกิน 15 นาที
 async function cleanStaleUploads() {
   try {
-    const uploadsDir = path.join(process.cwd(), 'uploads');
+    const uploadsDir = getUploadDir();
     const files = await fs.readdir(uploadsDir);
     const now = Date.now();
     const maxAgeMs = 15 * 60 * 1000; // 15 minutes
@@ -31,7 +33,9 @@ async function cleanStaleUploads() {
 
 // เรียกทำงานทำความสะอาดไฟล์ตกค้างทันทีเมื่อเริ่มเซิร์ฟเวอร์ และรันซ้ำทุกๆ 15 นาที
 cleanStaleUploads();
-setInterval(cleanStaleUploads, 15 * 60 * 1000);
+if (!process.env.VERCEL) {
+  setInterval(cleanStaleUploads, 15 * 60 * 1000);
+}
 
 exports.processDocuments = async (req, res) => {
   const files = req.files;
