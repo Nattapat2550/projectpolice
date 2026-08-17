@@ -269,11 +269,6 @@ const fetchTaskDataForSheet = async (taskIdOrIds) => {
 
   const processed = rows.map(row => {
     let docs = (row.attachment_info && row.attachment_info.trim()) ? row.attachment_info.trim() : (row.additional_docs || '').trim();
-    if (docs) {
-      docs = docs.split(/(?:,\s*|\r?\n)+/)
-                 .filter(part => !part.includes('เอกสารต้นฉบับ'))
-                 .join(', ');
-    }
     row.additional_docs = docs;
     return row;
   });
@@ -1448,6 +1443,21 @@ exports.attachTaskDocument = async (req, res) => {
       try { await fs.unlink(safePath); } catch (e) {}
     }
 
+    // 📌 อัปเดตฟิลด์ additional_docs ในตาราง tasks ให้ตรงกับ task_documents ล่าสุด
+    const attRes = await client.query(
+      `SELECT string_agg(
+        CONCAT(
+          filename,
+          CASE WHEN notes IS NOT NULL AND notes != '' THEN CONCAT(' (', notes, ')') ELSE '' END,
+          CASE WHEN drive_web_view_link IS NOT NULL AND drive_web_view_link != '' THEN CONCAT(': ', drive_web_view_link) ELSE '' END
+        ),
+        ', '
+      ) as att_str FROM task_documents WHERE task_id = $1 AND filename != 'เอกสารต้นฉบับ' AND LOWER(filename) NOT LIKE '%เอกสารต้นฉบับ%'`,
+      [id]
+    );
+    const newAttStr = (attRes.rows.length > 0 && attRes.rows[0].att_str) ? attRes.rows[0].att_str : null;
+    await client.query('UPDATE tasks SET additional_docs = $1, updated_at = NOW() WHERE id = $2', [newAttStr, id]);
+
     await logTaskAction(client, id, req.user ? req.user.id : null, 'attached_document', { count: files.length });
 
     await client.query('COMMIT');
@@ -1490,6 +1500,21 @@ exports.deleteTaskAttachment = async (req, res) => {
     }
     await pool.query('DELETE FROM task_documents WHERE id = $1', [docId]);
 
+    // 📌 อัปเดตฟิลด์ additional_docs ในตาราง tasks
+    const attRes = await pool.query(
+      `SELECT string_agg(
+        CONCAT(
+          filename,
+          CASE WHEN notes IS NOT NULL AND notes != '' THEN CONCAT(' (', notes, ')') ELSE '' END,
+          CASE WHEN drive_web_view_link IS NOT NULL AND drive_web_view_link != '' THEN CONCAT(': ', drive_web_view_link) ELSE '' END
+        ),
+        ', '
+      ) as att_str FROM task_documents WHERE task_id = $1 AND filename != 'เอกสารต้นฉบับ' AND LOWER(filename) NOT LIKE '%เอกสารต้นฉบับ%'`,
+      [id]
+    );
+    const newAttStr = (attRes.rows.length > 0 && attRes.rows[0].att_str) ? attRes.rows[0].att_str : null;
+    await pool.query('UPDATE tasks SET additional_docs = $1, updated_at = NOW() WHERE id = $2', [newAttStr, id]);
+
     // 🚀 Sync Sheet หลังลบเอกสารแนบ
     try {
       const row = await fetchTaskDataForSheet(id);
@@ -1522,6 +1547,21 @@ exports.updateTaskAttachmentNote = async (req, res) => {
     }
 
     await pool.query('UPDATE task_documents SET notes = $1 WHERE id = $2', [notes !== undefined ? notes : null, docId]);
+
+    // 📌 อัปเดตฟิลด์ additional_docs ในตาราง tasks
+    const attRes = await pool.query(
+      `SELECT string_agg(
+        CONCAT(
+          filename,
+          CASE WHEN notes IS NOT NULL AND notes != '' THEN CONCAT(' (', notes, ')') ELSE '' END,
+          CASE WHEN drive_web_view_link IS NOT NULL AND drive_web_view_link != '' THEN CONCAT(': ', drive_web_view_link) ELSE '' END
+        ),
+        ', '
+      ) as att_str FROM task_documents WHERE task_id = $1 AND filename != 'เอกสารต้นฉบับ' AND LOWER(filename) NOT LIKE '%เอกสารต้นฉบับ%'`,
+      [id]
+    );
+    const newAttStr = (attRes.rows.length > 0 && attRes.rows[0].att_str) ? attRes.rows[0].att_str : null;
+    await pool.query('UPDATE tasks SET additional_docs = $1, updated_at = NOW() WHERE id = $2', [newAttStr, id]);
 
     await logTaskAction(pool, id, req.user ? req.user.id : null, 'updated_attachment_note', { docId, notes });
 

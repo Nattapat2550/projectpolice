@@ -289,6 +289,10 @@ exports.uploadExcelTasks = async (req, res) => {
                         }
                     }
 
+                    if (strVal && typeof strVal === 'string') {
+                        strVal = strVal.replace(/^'+/, '').trim();
+                    }
+
                     // 1. จาก / ผู้ส่ง
                     if (cleanKey === "จาก" || cleanKey === "ส่วนราชการ" || cleanKey === "ผู้ส่ง" || cleanKey === "หน่วยงาน" || cleanKey === "หน่วยงานผู้ส่ง") {
                         if (!excelSender) excelSender = strVal;
@@ -297,23 +301,40 @@ exports.uploadExcelTasks = async (req, res) => {
                     if (cleanKey === "ถึง" || cleanKey === "เรียน" || cleanKey === "ผู้รับ" || cleanKey === "หน่วยงานรับ") {
                         if (!excelRecipientTo) excelRecipientTo = strVal;
                     }
-                    // 3. เอกสารข้อมูลเพิ่มเติม / เอกสารเพิ่มเติม / เอกสารแนบ / สิ่งที่ส่งมาด้วย
+                    // 3. เอกสารข้อมูลเพิ่มเติม / เอกสารเพิ่มเติม / เอกสารแนบ / สิ่งที่ส่งมาด้วย / ข้อมูลเพิ่มเติม / ไฟล์แนบ
+                    const lowerKey = cleanKey.toLowerCase();
                     if (
                         cleanKey === "เอกสารข้อมูลเพิ่มเติม" || 
                         cleanKey === "เอกสารเพิ่มเติม" || 
+                        cleanKey === "ข้อมูลเพิ่มเติม" ||
+                        cleanKey === "รายละเอียดเพิ่มเติม" ||
                         cleanKey === "สิ่งที่ส่งมาด้วย" || 
                         cleanKey === "สิ่งที่ส่งมา" || 
+                        cleanKey === "สิ่งที่แนบมาด้วย" ||
                         cleanKey === "เอกสารแนบ" || 
+                        cleanKey === "เอกสารแนบเพิ่มเติม" ||
                         cleanKey === "เอกสารประกอบ" ||
-                        cleanKey === "รายละเอียดเพิ่มเติม" ||
+                        cleanKey === "ไฟล์แนบ" ||
+                        cleanKey === "เอกสาร" ||
                         cleanKey === "เพิ่มเติม" ||
+                        lowerKey === "additional_docs" ||
+                        lowerKey === "additionaldocs" ||
+                        lowerKey === "attachments" ||
+                        lowerKey === "attachment" ||
+                        cleanKey.includes("ข้อมูลเพิ่มเติม") ||
                         cleanKey.includes("เอกสารเพิ่มเติม") ||
                         cleanKey.includes("สิ่งที่ส่งมา") ||
+                        cleanKey.includes("สิ่งที่แนบ") ||
                         cleanKey.includes("เอกสารแนบ") ||
-                        cleanKey.includes("เอกสารประกอบ")
+                        cleanKey.includes("เอกสารประกอบ") ||
+                        cleanKey.includes("ไฟล์แนบ")
                     ) {
                         if (!excelAdditionalDocs) {
-                            excelAdditionalDocs = strVal || linkVal;
+                            if (strVal && linkVal && !strVal.includes(linkVal)) {
+                                excelAdditionalDocs = `${strVal}: ${linkVal}`;
+                            } else {
+                                excelAdditionalDocs = strVal || linkVal;
+                            }
                         }
                     }
                     // 4. ลิงก์ไฟล์ต้นฉบับ / ลิงก์เอกสาร / Google Drive Link
@@ -326,12 +347,13 @@ exports.uploadExcelTasks = async (req, res) => {
                         cleanKey === "ลิงก์ไฟล์" || 
                         cleanKey === "ลิงก์" || 
                         cleanKey === "URL" || 
-                        cleanKey === "document_link" || 
-                        cleanKey === "drive_web_view_link" ||
+                        cleanKey === "link" ||
+                        lowerKey === "document_link" || 
+                        lowerKey === "drive_web_view_link" ||
                         cleanKey.includes("ลิงก์") ||
                         cleanKey.includes("ต้นฉบับ") ||
-                        cleanKey.includes("document_link") ||
-                        cleanKey.includes("drive_link")
+                        lowerKey.includes("document_link") ||
+                        lowerKey.includes("drive_link")
                     ) {
                         if (!excelDocumentLink) {
                             excelDocumentLink = linkVal || strVal;

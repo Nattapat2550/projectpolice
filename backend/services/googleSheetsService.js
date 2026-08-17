@@ -39,8 +39,9 @@ const getSheetName = (yearAD) => {
 async function ensureSheetExists(sheets, spreadsheetId, sheetName) {
   try {
       const response = await sheets.spreadsheets.get({ spreadsheetId });
-      const exists = response.data.sheets.some(s => s.properties.title === sheetName);
-      if (!exists) {
+      const sheet = response.data.sheets.find(s => s.properties.title === sheetName);
+      const headers = ['ID', 'เลขทะเบียน', 'ปีทะเบียน', 'วันที่รับ', 'ที่หนังสือ', 'ลงวันที่', 'จาก', 'ถึง', 'เรื่อง', 'ผู้ปฏิบัติ', 'วันที่', 'ข้อสั่งการ', 'วันที่ลงนาม', 'วันประชุม', 'กำหนดส่งตอบรับ', 'หมายเหตุ', 'เอกสารข้อมูลเพิ่มเติม', 'ชั้นความเร็ว', 'ชั้นความลับ', 'ลิงก์ไฟล์ต้นฉบับ'];
+      if (!sheet) {
           // 1. Create the sheet
           await sheets.spreadsheets.batchUpdate({
               spreadsheetId,
@@ -51,7 +52,6 @@ async function ensureSheetExists(sheets, spreadsheetId, sheetName) {
           console.log(`[Google Sheets] Created new sheet: ${sheetName}`);
           
           // 2. Add headers to the newly created sheet
-          const headers = ['ID', 'เลขทะเบียน', 'ปีทะเบียน', 'วันที่รับ', 'ที่หนังสือ', 'ลงวันที่', 'จาก', 'ถึง', 'เรื่อง', 'ผู้ปฏิบัติ', 'วันที่', 'ข้อสั่งการ', 'วันที่ลงนาม', 'วันประชุม', 'กำหนดส่งตอบรับ', 'หมายเหตุ', 'เอกสารข้อมูลเพิ่มเติม', 'ชั้นความเร็ว', 'ชั้นความลับ', 'ลิงก์ไฟล์ต้นฉบับ'];
           await sheets.spreadsheets.values.append({
               spreadsheetId,
               range: `${sheetName}!A1:T1`,
@@ -59,6 +59,26 @@ async function ensureSheetExists(sheets, spreadsheetId, sheetName) {
               resource: { values: [headers] }
           });
           console.log(`[Google Sheets] Added headers to new sheet: ${sheetName}`);
+      } else {
+          // 3. Check if existing sheet header needs update to 20 columns
+          try {
+              const headerRes = await sheets.spreadsheets.values.get({
+                  spreadsheetId,
+                  range: `${sheetName}!A1:T1`
+              });
+              const existingHeaders = (headerRes.data.values && headerRes.data.values[0]) || [];
+              if (existingHeaders.length < headers.length || !existingHeaders.includes('วันประชุม')) {
+                  await sheets.spreadsheets.values.update({
+                      spreadsheetId,
+                      range: `${sheetName}!A1:T1`,
+                      valueInputOption: 'RAW',
+                      resource: { values: [headers] }
+                  });
+                  console.log(`[Google Sheets] Auto-updated header for sheet ${sheetName} to 20 columns.`);
+              }
+          } catch (err) {
+              console.warn(`[Google Sheets] Header check warning for ${sheetName}:`, err.message);
+          }
       }
   } catch (e) {
       console.error("[Google Sheets] Error checking/creating sheet:", e.message);
@@ -225,7 +245,7 @@ exports.appendTaskToSheet = async (taskData) => {
     try {
       const getRes = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheetName}!A:R`,
+        range: `${sheetName}!A:T`,
       });
       rows = getRes.data.values || [];
     } catch (e) {
@@ -240,7 +260,7 @@ exports.appendTaskToSheet = async (taskData) => {
       const sheetRowNumber = rowIndex + 1;
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheetName}!A${sheetRowNumber}:R${sheetRowNumber}`,
+        range: `${sheetName}!A${sheetRowNumber}:T${sheetRowNumber}`,
         valueInputOption: 'RAW',
         resource: {
           values: [rowData],
@@ -251,7 +271,7 @@ exports.appendTaskToSheet = async (taskData) => {
       // Append new row
       await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheetName}!A:R`,
+        range: `${sheetName}!A:T`,
         valueInputOption: 'RAW',
         resource: {
           values: [rowData],
@@ -284,7 +304,7 @@ exports.appendMultipleTasksToSheet = async (tasksArray) => {
         try {
           const getRes = await sheets.spreadsheets.values.get({
             spreadsheetId: SPREADSHEET_ID,
-            range: `${sheetName}!A:R`,
+            range: `${sheetName}!A:T`,
           });
           existingRows = getRes.data.values || [];
         } catch (e) {
@@ -301,7 +321,7 @@ exports.appendMultipleTasksToSheet = async (tasksArray) => {
           if (rowIndex !== -1) {
             const sheetRowNumber = rowIndex + 1;
             updateData.push({
-              range: `${sheetName}!A${sheetRowNumber}:R${sheetRowNumber}`,
+              range: `${sheetName}!A${sheetRowNumber}:T${sheetRowNumber}`,
               values: [rowData]
             });
             existingRows[rowIndex] = rowData;
@@ -323,7 +343,7 @@ exports.appendMultipleTasksToSheet = async (tasksArray) => {
         if (rowsToAppend.length > 0) {
           await sheets.spreadsheets.values.append({
             spreadsheetId: SPREADSHEET_ID,
-            range: `${sheetName}!A:R`,
+            range: `${sheetName}!A:T`,
             valueInputOption: 'RAW',
             resource: { values: rowsToAppend },
           });
@@ -348,7 +368,7 @@ exports.updateTaskInSheet = async (taskData) => {
     try {
         getRes = await sheets.spreadsheets.values.get({
           spreadsheetId: SPREADSHEET_ID,
-          range: `${sheetName}!A:R`, 
+          range: `${sheetName}!A:T`, 
         });
     } catch (err) {
         console.warn(`[Google Sheets] Could not read sheet ${sheetName}. It might not exist.`);
@@ -371,7 +391,7 @@ exports.updateTaskInSheet = async (taskData) => {
 
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A${sheetRowNumber}:R${sheetRowNumber}`,
+      range: `${sheetName}!A${sheetRowNumber}:T${sheetRowNumber}`,
       valueInputOption: 'RAW',
       resource: {
         values: [rowData],
@@ -399,7 +419,7 @@ exports.deleteTaskFromSheet = async (taskId, receiveYear, receiveNo = '') => {
 
     const getRes = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${sheetName}!A:R`,
+      range: `${sheetName}!A:T`,
     });
 
     const rows = getRes.data.values;
@@ -447,7 +467,7 @@ exports.clearTaskLinksInSheet = async (taskId, receiveYear, receiveNo = '') => {
     try {
       getRes = await sheets.spreadsheets.values.get({
         spreadsheetId: SPREADSHEET_ID,
-        range: `${sheetName}!A:R`,
+        range: `${sheetName}!A:T`,
       });
     } catch (err) {
       console.warn(`[Google Sheets] Could not read sheet ${sheetName}`);
@@ -467,19 +487,19 @@ exports.clearTaskLinksInSheet = async (taskId, receiveYear, receiveNo = '') => {
 
     const sheetRowNumber = rowIndex + 1;
 
-    // Clear Column O (เอกสารข้อมูลเพิ่มเติม) and Column R (ลิงก์ไฟล์ต้นฉบับ)
+    // Clear Column Q (เอกสารข้อมูลเพิ่มเติม) and Column T (ลิงก์ไฟล์ต้นฉบับ)
     await sheets.spreadsheets.values.batchUpdate({
       spreadsheetId: SPREADSHEET_ID,
       resource: {
         valueInputOption: 'RAW',
         data: [
-          { range: `${sheetName}!O${sheetRowNumber}`, values: [['']] },
-          { range: `${sheetName}!R${sheetRowNumber}`, values: [['']] }
+          { range: `${sheetName}!Q${sheetRowNumber}`, values: [['']] },
+          { range: `${sheetName}!T${sheetRowNumber}`, values: [['']] }
         ]
       }
     });
 
-    console.log(`[Google Sheets] Successfully cleared document links (Col O & R) for task ID ${taskId} at row ${sheetRowNumber}`);
+    console.log(`[Google Sheets] Successfully cleared document links (Col Q & T) for task ID ${taskId} at row ${sheetRowNumber}`);
   } catch (error) {
     console.error("[Google Sheets] Clear Links Error:", error.message);
   }

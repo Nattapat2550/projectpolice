@@ -378,9 +378,9 @@ export default function TaskExcelUploadPage() {
                             <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[ลงวันที่]</span> <span className="font-semibold">{formatToThaiDate(row.memo_date) || renderNull()}</span></div>
                             <div className="text-sm sm:text-base"><span className="text-[var(--header)]/60 font-semibold mr-1.5">[เลขรับ]</span> <span className="font-semibold">{row.receive_no ? `${row.receive_no}/${row.receive_year}` : renderNull()}</span></div>
                             
-                            {row.parsed_docs && row.parsed_docs.length > 0 && (
+                            {row.parsed_docs && row.parsed_docs.length > 0 ? (
                               <div className="mt-2 p-3 rounded-lg bg-[var(--wrapper)]/40 border border-[var(--wrapper)]">
-                                <span className="font-bold text-sm text-[var(--blueText)] block mb-1">📎 เอกสารประกอบเพิ่มเติม ({row.parsed_docs.length} รายการ):</span>
+                                <span className="font-bold text-sm text-[var(--blueText)] block mb-1">📎 เอกสารข้อมูลเพิ่มเติม ({row.parsed_docs.length} รายการ):</span>
                                 <ul className="space-y-1.5 text-xs sm:text-sm">
                                   {row.parsed_docs.map((doc: any, docIdx: number) => (
                                     <li key={docIdx} className="flex items-center flex-wrap gap-1.5">
@@ -395,7 +395,12 @@ export default function TaskExcelUploadPage() {
                                   ))}
                                 </ul>
                               </div>
-                            )}
+                            ) : row.additional_docs ? (
+                              <div className="mt-2 p-3 rounded-lg bg-[var(--wrapper)]/40 border border-[var(--wrapper)]">
+                                <span className="font-bold text-sm text-[var(--blueText)] block mb-1">📎 เอกสารข้อมูลเพิ่มเติม:</span>
+                                <div className="text-xs sm:text-sm font-semibold">{row.additional_docs}</div>
+                              </div>
+                            ) : null}
                           </div>
 
                           <div className="space-y-1.5">
