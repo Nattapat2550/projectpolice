@@ -234,7 +234,7 @@ const handleReceiveNoAndYear = async (client, inputReceiveNo, parsedReceiveDate)
     }
     
     let receiveNo = parseInt(receiveNoInput, 10) || null;
-    const { round, fiscalYear } = calculateFiscalRoundAndYear(parsedReceiveDate);
+    const { round, fiscalYearBE: fiscalYear } = calculateFiscalRoundAndYear(parsedReceiveDate);
     let receiveYear = fiscalYear;
 
     if (!receiveNo) {
@@ -1586,7 +1586,7 @@ exports.getNextReserveNo = async (req, res) => {
   const client = await pool.connect();
   try {
     const dateInput = req.query.date ? parseThaiDateToIso(req.query.date) : new Date();
-    const { round, fiscalYear } = calculateFiscalRoundAndYear(dateInput);
+    const { round, fiscalYearBE: fiscalYear } = calculateFiscalRoundAndYear(dateInput);
     const resCount = await client.query('SELECT MAX(receive_no) as max_no FROM tasks WHERE receive_year = $1 AND COALESCE(round, 1) = $2', [fiscalYear, round]);
     const nextReceiveNo = (resCount.rows[0].max_no || 0) + 1;
     res.status(200).json({ success: true, nextReceiveNo, currentYear: fiscalYear, round });
@@ -1604,7 +1604,7 @@ exports.reserveTask = async (req, res) => {
     
     let validCreatorId = req.user?.id || null;
     const dateInput = req.body.date ? parseThaiDateToIso(req.body.date) : new Date();
-    const { round, fiscalYear } = calculateFiscalRoundAndYear(dateInput);
+    const { round, fiscalYearBE: fiscalYear } = calculateFiscalRoundAndYear(dateInput);
     
     let { range } = req.body; 
     

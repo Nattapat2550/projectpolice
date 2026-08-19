@@ -55,7 +55,7 @@ async function ensureSheetExists(sheets, spreadsheetId, sheetName) {
           await sheets.spreadsheets.values.append({
               spreadsheetId,
               range: `${sheetName}!A1:T1`,
-              valueInputOption: 'RAW',
+              valueInputOption: 'USER_ENTERED',
               resource: { values: [headers] }
           });
           console.log(`[Google Sheets] Added headers to new sheet: ${sheetName}`);
@@ -71,7 +71,7 @@ async function ensureSheetExists(sheets, spreadsheetId, sheetName) {
                   await sheets.spreadsheets.values.update({
                       spreadsheetId,
                       range: `${sheetName}!A1:T1`,
-                      valueInputOption: 'RAW',
+                      valueInputOption: 'USER_ENTERED',
                       resource: { values: [headers] }
                   });
                   console.log(`[Google Sheets] Auto-updated header for sheet ${sheetName} to 20 columns.`);
@@ -261,7 +261,7 @@ exports.appendTaskToSheet = async (taskData) => {
       await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
         range: `${sheetName}!A${sheetRowNumber}:T${sheetRowNumber}`,
-        valueInputOption: 'RAW',
+        valueInputOption: 'USER_ENTERED',
         resource: {
           values: [rowData],
         },
@@ -272,7 +272,7 @@ exports.appendTaskToSheet = async (taskData) => {
       await sheets.spreadsheets.values.append({
         spreadsheetId: SPREADSHEET_ID,
         range: `${sheetName}!A:T`,
-        valueInputOption: 'RAW',
+        valueInputOption: 'USER_ENTERED',
         resource: {
           values: [rowData],
         },
@@ -334,7 +334,7 @@ exports.appendMultipleTasksToSheet = async (tasksArray) => {
           await sheets.spreadsheets.values.batchUpdate({
             spreadsheetId: SPREADSHEET_ID,
             resource: {
-              valueInputOption: 'RAW',
+              valueInputOption: 'USER_ENTERED',
               data: updateData
             }
           });
@@ -344,7 +344,7 @@ exports.appendMultipleTasksToSheet = async (tasksArray) => {
           await sheets.spreadsheets.values.append({
             spreadsheetId: SPREADSHEET_ID,
             range: `${sheetName}!A:T`,
-            valueInputOption: 'RAW',
+            valueInputOption: 'USER_ENTERED',
             resource: { values: rowsToAppend },
           });
         }
@@ -392,7 +392,7 @@ exports.updateTaskInSheet = async (taskData) => {
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
       range: `${sheetName}!A${sheetRowNumber}:T${sheetRowNumber}`,
-      valueInputOption: 'RAW',
+      valueInputOption: 'USER_ENTERED',
       resource: {
         values: [rowData],
       },
@@ -491,7 +491,7 @@ exports.clearTaskLinksInSheet = async (taskId, receiveYear, receiveNo = '') => {
     await sheets.spreadsheets.values.batchUpdate({
       spreadsheetId: SPREADSHEET_ID,
       resource: {
-        valueInputOption: 'RAW',
+        valueInputOption: 'USER_ENTERED',
         data: [
           { range: `${sheetName}!Q${sheetRowNumber}`, values: [['']] },
           { range: `${sheetName}!T${sheetRowNumber}`, values: [['']] }
